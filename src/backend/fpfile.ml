@@ -493,6 +493,8 @@ let fp_writes
         (fp: string)
         (results: Types.status_type6 list):
             unit =
+  Timing.start Timing.fp_saving ;
+  Std.finally Timing.stop begin fun () ->
   let fp: string = fp_to_Vx fp in
   let date = get_date (-1) in
   let zv = Params.get_zenon_verfp () in
@@ -519,16 +521,20 @@ let fp_writes
   Marshal.to_channel oc (fp, l) [];
   flush oc;
   add_to_table fp l
+  end ()
 
 let num_fingerprints_loaded = ref 0
 
 let fp_close_and_consolidate file oc =
-  close_out oc;
-  let tmpfile = file ^ ".tmp" in
-  let noc = open_out_bin tmpfile in
-  write_fp_table noc;
-  close_out noc;
-  Sys.rename tmpfile file;
+  Timing.start Timing.fp_saving ;
+  Std.finally Timing.stop begin fun () ->
+    close_out oc;
+    let tmpfile = file ^ ".tmp" in
+    let noc = open_out_bin tmpfile in
+    write_fp_table noc;
+    close_out noc;
+    Sys.rename tmpfile file
+  end ();
   Util.printf "(* fingerprints written in %S *)" file;
   if Hashtbl.length !fptbl < !num_fingerprints_loaded then begin
     Errors.err "The fingerprints file %s has fewer entries than its \
