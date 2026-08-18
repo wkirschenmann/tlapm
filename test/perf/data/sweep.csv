@@ -1,0 +1,26 @@
+n,sha,subject,binary,syn_m0_ms,syn_m1_ms,syn_rss_kb,syn_m2_ms,abs_m0_ms,abs_m1_ms,abs_m2_ms
+0,4600b24,doc: align Download/Binaries pages with README (#288),built,2133,61480,1809524,2366,2431,TO,2443
+1,b9d0341,doc: performance analysis and internal review checklist,same,2108,58540,1809116,2349,1923,TO,2497
+2,0da9c50,test/perf: solver-free measurement harness and obligation-dump checker,same,2155,57560,1809232,2284,2066,TO,2444
+3,ec8d753,util/timing: make clock accounting nestable,built,2168,53300,1809944,2275,1859,TO,2403
+4,342afa1,util/timing: host the named pipeline clocks,built,2112,51880,1809804,2201,1904,TO,2311
+5,7c3c387,timing: attribute generation; fingerprinting and fp saving to their clocks,built,2099,51840,1809240,2157,1833,TO,2404
+6,0a6e6e4,doc: record the phase-0 baseline measurements,same,2118,50980,1809096,2288,1896,TO,2235
+7,5a2a89e,util/Deque: cheaper nth; first_n and equal on rear-heavy deques,built,317,44810,1808612,356,591,TO,911
+8,8fb8139,test/perf: truncate dump files before splitting,same,315,43900,1808584,337,546,TO,946
+9,20f8f4e,Ctx: logarithmic index lookup,built,348,46070,1808884,363,674,TO,968
+10,e3c6370,backend/Smtlib: compile identifier-escaping regexes once,built,371,47400,1808576,349,585,TO,943
+11,82f93a5,expr/Subst: walk substitution spines in app_ix without allocating,built,346,45890,1814864,375,593,TO,929
+12,03fe6c6,backend+encode: skip identity rebuilds when flattening extracts nothing,built,339,44630,1814628,356,572,TO,930
+13,e583b54,backend/prep: emit obligation comments into solver files only when kept,built,327,46350,1814804,366,584,TO,1013
+14,82447b7,backend/schedule: reap finished provers early; refresh deadline clock,built,333,45390,1814628,339,588,TO,976
+15,9a2ba59,module/Elab: make ENABLED-axioms detection linear in context size,built,262,43590,1814060,283,462,TO,947
+16,f17ba06,expr/Levels: resolve de Bruijn reference levels without slicing the context,built,273,45610,1828940,308,510,TO,844
+17,2a70341,backend/prep: expand visible definitions in a single pass,built,291,30150,1502236,283,517,99004,598
+18,1e34062,doc: record measured effects of the phase-1 changes,same,249,27320,1502148,275,520,102968,587
+19,bb889bb,backend/prep: prune hidden definitions unreachable from the goal,built,255,28480,1460120,281,520,97678,601
+20,13094aa,backend/prep: prune unreferenced hidden facts from obligation contexts,built,267,11230,172764,279,566,55126,521
+21,762d0fa,backend/prep: reuse preparation work across obligations sharing a context prefix,built,272,8530,173880,258,523,25653,560
+22,a864bab,tlapm_lib: env-gated per-module obligation-context statistics,built,270,8810,173976,269,528,26107,544
+23,eafcb64,doc: record end-to-end phase-1 measurements,same,272,8640,173892,276,550,26011,548
+24,9d186c8,doc: record real-corpus calibration measurements,same,261,8500,173808,257,511,26000,501
