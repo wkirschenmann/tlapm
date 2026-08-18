@@ -39,6 +39,29 @@ FingerprintVariablesParameters, WFTRUE, higher_order_statement) — they are
 environmental, not caused by any change on this branch. Any change that
 alters this fail set is a regression.
 
+## Measured effects of the phase-1 changes (same protocol, idle machine)
+
+L300 = Synth_L300_S5_D50_C3, 1800 obligations. "micro" = the seven
+9f9c5cf-derived micro-fixes; "tier2" = micro + linear ENABLED scan +
+level fast path + single-pass expand_defs.
+
+| metric | baseline | after tier2 | gain |
+|---|---:|---:|---:|
+| M0 parse+elab (L300) | 2.82 s | 0.28 s | ×9.9 |
+| M0 scaling L300/L100 | ×11.7 | ×2.2 | superquadratic → ~linear |
+| M1 full prep, no solver (L300) | 48.0 s | 22.0 s | ×2.2 |
+| M2 fingertip (L300) | 2.90 s | 0.25 s | ×11.8 |
+| M3 max RSS (L300) | 1.80 GB | 1.50 GB | −17 % |
+| analysis clock inside M1 (L300) | 2.52 s | 0.05 s | ×49 |
+
+Most of the M0/M2 gain landed with the micro-fixes alone (Deque.nth /
+first_n stopped allocating inside the ENABLED scan's lookups); the
+tier-2 rewrites then removed the remaining super-linear terms.
+After tier2, M1 is still dominated by per-obligation preparation
+(interaction 19.6 s of 22.0 s) — consistent with the next levers being
+context pruning and cross-obligation prep reuse, and eventually
+streaming/retention (ANALYSIS.md Tier 3/4).
+
 ## Decision consequences (per ANALYSIS.md §6.4)
 
 1. Track B first-order target confirmed: expansion/prep per obligation
