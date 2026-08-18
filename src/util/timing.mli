@@ -28,10 +28,13 @@ type clock = {
 
 val start: clock -> unit
 (** [start c]
-    Stop the current clock and start clock [c]. *)
+    Suspend the current clock and start clock [c]. Clocked regions nest:
+    time spent in [c] is not charged to the suspended clock. *)
 
 val stop: unit -> unit
-(** Stop the current clock and start the ambient clock. *)
+(** Stop the current clock and resume the clock that was running when it
+    was started (the ambient clock once all started clocks are stopped).
+    Calling [stop] with no started clock is a no-op. *)
 
 val new_clock: string -> clock
 (** [new_clock desc] Create a new clock with description [desc] and
