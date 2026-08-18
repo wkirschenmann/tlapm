@@ -410,6 +410,7 @@ let process_module
                 final_status = (Incomplete, summ) } in
         t.core.stage <- Final fin ;
         Module.Save.store_module ~clock:Clocks.elab t ;
+        Clocks.stop () ;  (* close the [prep] clock started above *)
         (mcx, t)
     in
     if !Params.summary && t.core.important then
@@ -518,14 +519,14 @@ let process_module
             } in
         Array.fill fin.final_obs 0 (Array.length fin.final_obs) dummy_ob;
 
-        if t.core.important && not (Toolbox.is_stopped () || Backend.Interrupted.is_interrupted ()) then begin
+        if t.core.important && !Params.check
+           && not (Toolbox.is_stopped ()
+                   || Backend.Interrupted.is_interrupted ()) then begin
             Clocks.start Clocks.check ;
             let modname = t.core.name.core in
             let nmiss = List.length missing in
-            if !Params.check then
-                Std.finally Clocks.stop Isabelle.recheck (modname, nmiss, thyf)
+            Std.finally Clocks.stop Isabelle.recheck (modname, nmiss, thyf)
         end;
-        Clocks.stop ();
         (mcx, t)
         end
     | _ -> (mcx, t)
