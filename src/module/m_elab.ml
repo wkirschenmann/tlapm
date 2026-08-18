@@ -1292,7 +1292,10 @@ let rec normalize mcx cx m =
   let prefix = List.map maybe_salt prefix in
   let m = { m.core with body = prefix } @@ m in
   let (m, obs, summ) =
-    if m.core.important then M_gen.generate gencx m
+    if m.core.important then begin
+      Timing.start Timing.gen ;
+      Std.finally Timing.stop (M_gen.generate gencx) m
+    end
     else (m, [], {
             sum_total = 0 ;
             sum_absent = 0, [] ;

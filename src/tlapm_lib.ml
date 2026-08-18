@@ -675,12 +675,13 @@ let modctx_of_string ~(content : string) ~(filename : string) ~loader_paths ~pre
         let mcx = Sm.add mule.core.name.core mule mcx in
         let mcx = Module.Save.complete_load ~clock:Clocks.parsing mcx in
         let (mcx, mods) = Module.Dep.schedule mcx in
-        let mcx, mule = List.fold_left (fun (mcx, found) m ->
+        Clocks.start Clocks.elab ;
+        let mcx, mule = Std.finally Clocks.stop (List.fold_left (fun (mcx, found) m ->
             let (mcx, m, _summ) = Module.Elab.normalize mcx Deque.empty m in
             match m.core.name.core = mule.core.name.core with
             | true -> (mcx, Some m)
             | false -> (mcx, found)
-        ) (mcx, None) mods in
+        ) (mcx, None)) mods in
         match mule with
         | Some mule -> Ok (mcx, mule)
         | None -> failwith "modctx_of_string, found no module we tried to parse."
