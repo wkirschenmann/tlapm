@@ -29,16 +29,32 @@ let ambient = new_clock "other"
 
 let beginning_of_the_world = Unix.gettimeofday ()
 
-let last_start = ref (ambient, beginning_of_the_world)
+(* Stack of running clocks, bottom element is [ambient]. The interval
+   since [last_event] is always attributed to the clock on top, so a
+   clocked region nested inside another one (e.g. fingerprinting inside
+   the backend phase) is subtracted from the enclosing clock and, when
+   it stops, the enclosing clock resumes instead of [ambient]. *)
+let stack = ref [ambient]
+
+let last_event = ref beginning_of_the_world
+
+let account now =
+  begin match !stack with
+  | cl :: _ -> cl.time <- cl.time +. now -. !last_event
+  | [] -> ()
+  end;
+  last_event := now
 
 let start cl =
-  let now = Unix.gettimeofday () in
+  account (Unix.gettimeofday ());
   cl.count <- cl.count + 1;
-  let (ocl, before) = !last_start in
-  ocl.time <- ocl.time +. now -. before;
-  last_start := (cl, now)
+  stack := cl :: !stack
 
-let stop () = start ambient
+let stop () =
+  account (Unix.gettimeofday ());
+  match !stack with
+  | _ :: (_ :: _ as rest) -> stack := rest
+  | _ -> ()  (* unbalanced [stop]: keep [ambient] at the bottom *)
 
 let total desc = {
     desc = desc;
@@ -47,5 +63,10 @@ let total desc = {
   }
 
 let string_of_clock cl =
-  if (fst !last_start).desc == cl.desc then start cl ;
+  (* Flush the running interval if [cl] is the clock being timed, so the
+     report includes time accrued since the last event. *)
+  begin match !stack with
+  | top :: _ when top.desc == cl.desc -> account (Unix.gettimeofday ())
+  | _ -> ()
+  end;
   Printf.sprintf "%s | %-13.6f" cl.desc cl.time
