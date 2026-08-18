@@ -24,17 +24,9 @@ open Module.T
 
 module Clocks = struct
   include Timing
-
-  let parsing = new_clock "parsing"
-  let print   = new_clock "formatting"
-  let elab    = new_clock "analysis"
-  let gen     = new_clock "generation"
-  let prep    = new_clock "simplification"
-  let backend = new_clock "interaction"
-  let check   = new_clock "checking"
-  let fp_loading = new_clock "fp_loading"
-  let fp_saving = new_clock "fp_saving"
-  let fp_compute = new_clock "fp_compute"
+  (* The named clocks (parsing, elab, gen, ...) are defined in Timing so
+     that subsystem code can attribute time to them; [include] re-exports
+     them here. *)
 
 
   let pad_left md str = Printf.sprintf "%*s" md str
