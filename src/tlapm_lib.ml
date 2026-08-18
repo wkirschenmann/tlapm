@@ -401,6 +401,73 @@ let process_module
                 fin with final_obs = Array.of_list obs ;
                 final_status = (Incomplete, summ) } in
         t.core.stage <- Final fin ;
+        (* Measurement probe: with TLAPM_TRACE_DEFS set, print one line per
+           processed module tallying the hypotheses of every obligation
+           context — count, total/max size, and the Defn breakdown by
+           visibility and export — the quantities that drive backend
+           preparation cost. Set it to a comma-separated list of name
+           fragments (e.g. instance prefixes such as "Foo!") to also tally
+           how many context definitions each fragment accounts for. Inert
+           when the variable is unset. *)
+        (match Sys.getenv_opt "TLAPM_TRACE_DEFS" with
+         | None -> ()
+         | Some arg ->
+            let open Expr.T in
+            let n_obl = Array.length fin.final_obs in
+            let t_defn = ref 0 and t_vis_op = ref 0 and t_hid_op = ref 0
+            and t_bpragma = ref 0 and t_local = ref 0 and t_export = ref 0
+            and t_ctx = ref 0 and max_ctx = ref 0 in
+            let fragments =
+              List.filter (fun s -> s <> "" && s <> "1")
+                (String.split_on_char ',' arg) in
+            let by_frag = List.map (fun p -> (p, ref 0)) fragments in
+            let contains hay needle =
+              let nh = String.length needle and lh = String.length hay in
+              let rec go i =
+                i + nh <= lh
+                && (String.sub hay i nh = needle || go (i + 1)) in
+              go 0 in
+            let bump_frag nm =
+              List.iter (fun (p, r) -> if contains nm p then incr r) by_frag
+            in
+            Array.iter (fun ob ->
+              let ctx = ob.Proof.T.obl.core.context in
+              let this_ctx = Deque.size ctx in
+              t_ctx := !t_ctx + this_ctx ;
+              if this_ctx > !max_ctx then max_ctx := this_ctx ;
+              Deque.iter (fun _ h ->
+                match h.core with
+                | Defn (df, _wd, vis, ex) ->
+                    incr t_defn ;
+                    (match ex with
+                     | Local -> incr t_local
+                     | Export -> incr t_export) ;
+                    (match df.core, vis with
+                     | Operator (nm, _), Visible ->
+                        incr t_vis_op ; bump_frag nm.core
+                     | Operator (nm, _), Hidden ->
+                        incr t_hid_op ; bump_frag nm.core
+                     | Bpragma (nm, _, _), _ ->
+                        incr t_bpragma ; bump_frag nm.core
+                     | _ -> ())
+                | _ -> ()
+              ) ctx
+            ) fin.final_obs ;
+            Printf.eprintf
+              "[TRACE_DEFS] module=%s important=%b obligations=%d \
+               total_ctx_hyps=%d max_ctx_hyps=%d Defn=%d \
+               (Visible_op=%d Hidden_op=%d Bpragma=%d) \
+               export[Local=%d Export=%d] expandable~=%d\n%!"
+              t.core.name.core t.core.important n_obl
+              !t_ctx !max_ctx !t_defn
+              !t_vis_op !t_hid_op !t_bpragma
+              !t_local !t_export (!t_vis_op + !t_bpragma) ;
+            if by_frag <> [] then
+              Printf.eprintf
+                "[TRACE_DEFS]   by-fragment (ctx-def occurrences): %s\n%!"
+                (String.concat "  "
+                   (List.map (fun (p, r) -> Printf.sprintf "%s=%d" p !r)
+                      by_frag))) ;
         Module.Save.store_module ~clock:Clocks.elab t ;
         Clocks.stop () ;  (* close the [prep] clock started above *)
         (mcx, t)
