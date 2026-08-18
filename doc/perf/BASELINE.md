@@ -1,0 +1,52 @@
+# Baseline measurements — 2026-08-18
+
+Binary: commit `755c0fa` (base `4600b24` + measurement harness + clock
+fixes; all output-preserving, golden dumps strict-identical to base).
+Machine: Linux container, 16 cores (shared), OCaml 5.1.0, no Isabelle.
+Corpus: `test/perf/gen_synth.py` family, steps=5 defs=50 cite=3.
+Protocol: `test/perf/bench.sh`, median of 3 (M0/M1), no solver anywhere.
+
+## Scaling with lemma count (M0 = parse+elab+generation, `-N`)
+
+| lemmas | lines | obligations | M0 wall | M1 wall (full prep) | M1 max RSS | M2 fingertip |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 754 | 600 | 0.24 s | 3.8 s | 232 MB | 0.27 s |
+| 300 | 2154 | 1800 | 2.8 s | 48.0 s | 1.76 GB | 2.9 s |
+| 600 | 4254 | 3600 | 22.9 s* | — (>10 min)* | — | — |
+
+\* single early run before the binary snapshot; to be re-measured, but the
+order of magnitude is stable.
+
+Two decisive shapes:
+
+* **M0 is super-quadratic ≈ cubic**: ×3 lemmas → ×11.7, ×2 → ×8.2.
+  Consistent with the O(B·T·D) elaboration terms of ANALYSIS.md §3.1
+  (B, T, D all grow with the lemma count in this family).
+* **M1 is dominated by per-obligation preparation**: `--timing` on L300
+  gives interaction 47.9 s (93 %), analysis 2.5 s, fp_compute 0.24 s,
+  parsing 0.08 s — with *zero* prover time (`--noproving`). This is the
+  Θ(N·D) expansion cost (ANALYSIS.md B2) plus the eager task
+  materialization (B1).
+* **Fingertip latency tracks whole-file cost** (0.27 s → 2.9 s), not the
+  size of the requested range — the interactive complaint reproduced.
+
+## Test-suite reference
+
+`test/fast` with this environment (no Isabelle installed): 40/48 pass;
+the 8 failures are identical with the stock base binary (Isabelle-needing
+tests: isa_true, setEuclid, ENABLED_INSTANCE*, NestedENABLED,
+FingerprintVariablesParameters, WFTRUE, higher_order_statement) — they are
+environmental, not caused by any change on this branch. Any change that
+alters this fail set is a regression.
+
+## Decision consequences (per ANALYSIS.md §6.4)
+
+1. Track B first-order target confirmed: expansion/prep per obligation
+   (Tier 2: expand_defs single pass; then Tier 3: streaming + fp
+   short-circuit; prefix cache go/no-go re-measured after those).
+2. Track A first-order target confirmed: the elaboration O(N²⁺)
+   (Tier 2: F1 linear ENABLED scan, F3 name map, De Bruijn level fast
+   path) — M0's cubic shape gives a crisp acceptance criterion
+   (curve must flatten toward linear).
+3. Fingertip needs range gating (L3) on top of the above: even a perfectly
+   linear whole-file pass keeps fingertip ∝ file size.
