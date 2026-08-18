@@ -31,13 +31,17 @@ stdbuf -oL -eL $CAP "$TLAPM" --toolbox 0 0 --nofp "$@" "$SPEC" < /dev/null 2>&1 
   >> "$OUT.verdicts.csv" &
 FILTER_PID=$!
 
-# RSS sampler: find the tlapm child of this shell (the pipeline head).
+# RSS sampler. The pipeline head may be a wrapper chain (stdbuf, timeout)
+# around the actual tlapm process, so a parent-pid lookup lands on a 1 MB
+# wrapper; instead sample the LARGEST process whose command line carries
+# the binary path — that is tlapm itself, never a wrapper.
 sleep 1
-TPID=$(pgrep -P $$ -f "$(basename "$TLAPM")" | head -1)
-[ -z "$TPID" ] && TPID=$(pgrep -f "$(basename "$TLAPM").*$(basename "$SPEC")" | head -1)
-while [ -n "$TPID" ] && kill -0 "$TPID" 2> /dev/null; do
-    RSS=$(( $(ps -o rss= -p "$TPID" 2>/dev/null || echo 0) / 1024 ))
-    echo "$(date +%s),$RSS" >> "$OUT.rss.csv"
+while kill -0 $FILTER_PID 2> /dev/null; do
+    RSS_KB=$(ps -eo rss,args | grep -F "$TLAPM" \
+             | grep -vE "grep|stdbuf|timeout|monitor_run" \
+             | awk '{print $1}' | sort -rn | head -1)
+    [ -z "$RSS_KB" ] && RSS_KB=0
+    echo "$(date +%s),$(( RSS_KB / 1024 ))" >> "$OUT.rss.csv"
     sleep "$INT"
 done
 
