@@ -81,3 +81,46 @@ Doc-only commits and the timing-clock commits move nothing beyond the
 ±3–6 % noise floor, as expected. Ctx/smtlib/app_ix/flatten/tempfiles/
 schedule are neutral on these corpora — their targets (SMT print time,
 verdict stability under load) are not exercised by M0–M2.
+
+## Addendum — throughput curves and the memory wall, reproduced (2026-08-18)
+
+Follow-up measurements requested during review of the sweep.
+
+**No intermediate M1 unlock before #17.** The base binary and the
+commit-16 binary (everything up to the de Bruijn fast path, i.e. the
+reference fork minus its four backend commits) both exceed a 40-minute
+timeout on the FfiGrpc solver-free prep. The unlock is entirely
+`expand_defs` (#17): >2400 s → 458 s (≥5.2× as a hard lower bound).
+Commits 7–16 improve parse/fingertip (33 s → 2.2 s) but not the prep wall.
+
+**Per-verdict timestamped runs** (`test/perf/monitor_run.sh`, real
+solvers, FfiGrpc, quartiles of the verdict index):
+
+| binary | throughput by quartile | RSS by quartile | outcome |
+|---|---|---|---|
+| final (#24) | 67.7 → 52.2 → 48.2 → 37.4 verdicts/s | 1.6 → 2.4 → 3.6 → 4.9 GB | completed, 204 s |
+| #17 only | 19.1 → 15.4 → 11.3 → 10.5 verdicts/s | 3.5 → 6.6 → 10.2 → 13.6 GB | **OOM-killed at verdict 4440/9927** (memcg kill at 13.9 GB anon-RSS, confirmed in dmesg) |
+
+Both curves decline monotonically as the live heap grows (÷1.8 within a
+single run, on a machine with ample RAM, no swap and no Isabelle — the
+user's 7.7 GB machine shows ÷3 on a 26k-verdict monolith run, with the
+same shape). This is the memory→speed coupling measured directly:
+throughput is a function of live-heap size, and the wall is real — the
+pre-pruning binary dies mid-run even on a 15 GB container once solver
+processes are running alongside.
+
+**External datapoints (user's monolith, ~30k obligations, 7.7 GB
+machine, reference fork):** unpatched: RSS slope 380 KB/verdict,
+OOM at 17.5k; with chunked `Gc.compact`: post-compaction floor
+177 KB/verdict (live, uncollectable), OOM at 26k; throughput ÷3 across
+the run in both cases. The 380/177 ≈ 2.15 ratio matches OCaml's default
+GC space overhead, separating GC lag (fixable by tuning) from live
+retention (fixable only by dropping references).
+
+**Consequence for the next phase (task streaming + obligation release):**
+acceptance is not a wall-clock number but two curve properties measured
+by `monitor_run.sh`: (a) RSS flat (bounded by the in-flight window) for
+the whole run, and (b) throughput independent of the verdict index,
+lower-bounded by today's small-chunk throughput. On the user's monolith
+that projects the 30k-obligation single pass at roughly the chunked
+throughput (~43 verdicts/s) instead of dying at 26k.
