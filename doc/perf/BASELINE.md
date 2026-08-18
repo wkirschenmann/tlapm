@@ -94,3 +94,32 @@ for fingertip (L3), and the module/dependency caches (F6).
    (curve must flatten toward linear).
 3. Fingertip needs range gating (L3) on top of the above: even a perfectly
    linear whole-file pass keeps fingertip ∝ file size.
+
+## Calibration on a real corpus (ArmoniK gRPC FFI specs, 2026-08-18)
+
+Two real proof modules provided by the user (same container, 16 cores,
+zenon + z3 4.8.9 available; ls4 built locally but returning immediate
+"false" — treat its failures as environmental; Isabelle absent).
+
+| corpus | obligations | ctx hyps avg/max | parse+elab (`-N`) | M1 prep, no solver | real single-pass wall | verdicts |
+|---|---:|---:|---:|---:|---:|---|
+| AbstractGrpcTheorems_proofs (2.9k lines) | 1632 | 758 / 861 | 0.9 s | stock: killed >11 min CPU · fork 26.9 s · **ours 28.1 s** | 29 s | 1172 trivial + 350 proved + 110 env-failed |
+| FfiGrpcTheorems_proofs (14.5k lines) | 9927 | 1288 / 1661 | 3.3 s | fork 4 m 55 · **ours 4 m 59** | 3 m 58 (max RSS **5.07 GB**) | 7263 trivial + 2010 proved + 758 env-failed |
+
+Key facts established:
+
+* **Verdict parity is exact**: per-obligation (loc, status) sets are
+  identical between this branch and the reference fork on both corpora
+  (1632/1632 and 9927/9927).
+* **The phase-1 set delivers the fork's speedup on real specs**: on the
+  1632-obligation module, upstream stock could not finish the solver-free
+  prep pass in 11 CPU-minutes where both optimized binaries take ~27 s
+  (≥45×, unfinished baseline).
+* All remaining failures are environmental (ls4 mis-built locally,
+  Isabelle not installed) and identical across binaries; ~52 obligations
+  fall through the default smt→zenon→isabelle chain here.
+* **The single-pass memory wall is confirmed on the real corpus**:
+  5.07 GB max RSS for 9927 obligations (~500 KB/obligation live), even
+  with all phase-1 optimizations — Tier-3 (task streaming + release of
+  Props.goal/Props.obs; ANALYSIS.md B1/B5) is the next lever, exactly as
+  the plan predicts.
