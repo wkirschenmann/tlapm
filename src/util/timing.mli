@@ -52,6 +52,21 @@ val ambient: clock
 (** The default clock that runs before any other clock is started.
     It also runs when [stop] is called. *)
 
+(** The named pipeline clocks, re-exported by [Tlapm_lib.Clocks].
+    Defined here so subsystem code can attribute time to them without
+    depending on tlapm_lib. *)
+
+val parsing: clock
+val print: clock
+val elab: clock
+val gen: clock
+val prep: clock
+val backend: clock
+val check: clock
+val fp_loading: clock
+val fp_saving: clock
+val fp_compute: clock
+
 val string_of_clock: clock -> string
 (** [string_of_clock c]
     Return a printable representation of [c] that includes its description

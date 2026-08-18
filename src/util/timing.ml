@@ -27,6 +27,21 @@ let new_clock desc = { desc = desc ;
 
 let ambient = new_clock "other"
 
+(* The named pipeline clocks. They are defined here rather than in
+   Tlapm_lib.Clocks (which re-exports them through [include Timing]) so
+   that subsystem code — module elaboration, backend preparation — can
+   attribute time to them without depending on tlapm_lib. *)
+let parsing = new_clock "parsing"
+let print   = new_clock "formatting"
+let elab    = new_clock "analysis"
+let gen     = new_clock "generation"
+let prep    = new_clock "simplification"
+let backend = new_clock "interaction"
+let check   = new_clock "checking"
+let fp_loading = new_clock "fp_loading"
+let fp_saving = new_clock "fp_saving"
+let fp_compute = new_clock "fp_compute"
+
 let beginning_of_the_world = Unix.gettimeofday ()
 
 (* Stack of running clocks, bottom element is [ambient]. The interval
