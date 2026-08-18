@@ -57,10 +57,31 @@ level fast path + single-pass expand_defs.
 Most of the M0/M2 gain landed with the micro-fixes alone (Deque.nth /
 first_n stopped allocating inside the ENABLED scan's lookups); the
 tier-2 rewrites then removed the remaining super-linear terms.
-After tier2, M1 is still dominated by per-obligation preparation
-(interaction 19.6 s of 22.0 s) — consistent with the next levers being
-context pruning and cross-obligation prep reuse, and eventually
-streaming/retention (ANALYSIS.md Tier 3/4).
+After tier2, M1 was still dominated by per-obligation preparation
+(interaction 19.6 s of 22.0 s), which the next two steps attacked:
+
+| M1 (L300, no solver) | wall |
+|---|---:|
+| baseline | 48.0 s |
+| + micro + tier2 | 22.0 s |
+| + prune hidden defs | 23.5 s (no bite on this corpus: small hidden-def contexts) |
+| + prune hidden facts | 9.1 s |
+| + prefix-resume caches | **7.3 s** (`--debug noprepcache`: 8.9 s) |
+
+End-to-end phase-1 result on this corpus: **M1 ×6.6** (48.0 → 7.3 s on
+1800 obligations; L100: 3.84 → 1.10 s), **M0 ×9.9**, **fingertip
+×11.8**, with byte-identical golden dumps at every step, the test/fast
+fail set unchanged (environmental only), the cram/inline suites green,
+and a full real-solver run proving 600/600. The hidden-facts pruning is
+the biggest single win here because the synthetic family reproduces the
+named-lemma context growth (F8); on INSTANCE-heavy specs the reference
+implementation additionally credits the hidden-defs pruning and the
+prefix caches with the larger share (issue #286: full check 5.9×–46×).
+
+Still open after phase 1 (Tier 3 of ANALYSIS.md): streaming the task
+list and making obligation release real (B1/B5 — the single-pass memory
+wall), the fingerprint-hit short-circuit (B3), range-gated elaboration
+for fingertip (L3), and the module/dependency caches (F6).
 
 ## Decision consequences (per ANALYSIS.md §6.4)
 
