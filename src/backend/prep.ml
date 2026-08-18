@@ -1510,7 +1510,11 @@ let ship ob fpout thyout record =
         proof directives.
         *)
     let const_fp_ob =
-      lazy (Fingerprints.write_fingerprint (add_constness ob))
+      lazy begin
+        let ob = add_constness ob in
+        Timing.start Timing.fp_compute ;
+        Std.finally Timing.stop Fingerprints.write_fingerprint ob
+      end
     in
     let p = lazy (normalize_expand (Lazy.force const_fp_ob)
             fpout thyout record
