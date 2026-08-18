@@ -24,6 +24,10 @@ fi
 
 TLAPM="$1"; SPEC="$2"; OUT="$3"; shift 3
 mkdir -p "$OUT"
+# awk appends; truncate previous dumps so re-running into the same
+# directory does not duplicate every block.
+: > "$OUT/generated.txt"
+: > "$OUT/shipped.txt"
 
 "$TLAPM" --toolbox 0 0 --printallobs --noproving --nofp --threads 1 \
          "$@" "$SPEC" 2> "$OUT/raw.log" > /dev/null || {
