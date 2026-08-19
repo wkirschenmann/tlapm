@@ -2065,6 +2065,32 @@ let ship ob fpout thyout record =
                 end
             end
         in
+        (* Decision probe (TLAPM_TRIVIAL_SPIKE=1): would the SAME
+           triviality test, run on the PRE-expansion form, agree with
+           the ground truth just computed on the expanded, normalized
+           one?  Its precision is structural (pre-expansion equality
+           implies post-expansion equality); the open question deciding
+           the early-pruning design is its RECALL.  Logs one line per
+           support obligation; inert without the env var. *)
+        if Sys.getenv_opt "TLAPM_TRIVIAL_SPIKE" <> None then begin
+          let real =
+            (match result with Some (Schedule.Immediate true) -> true
+                             | _ -> false) in
+          let cand pob =
+            match pob.kind with
+            | Ob_support ->
+                let sq = pob.obl.core in
+                trying_to_prove_true sq.active.core
+                || (match find_fact sq.context sq.active [] with
+                    | _ -> true
+                    | exception Nontrivial -> false)
+            | _ -> false in
+          let pre = (try cand (Lazy.force const_fp_ob)
+                     with _ -> false) in
+          if (match ob.kind with Ob_support -> true | _ -> false) then
+            Printf.eprintf "[TRIVIAL_SPIKE] %s real=%b pre=%b\n%!"
+              (Util.location ~cap:false ob.obl) real pre
+        end;
         match result with
         | Some schedule -> schedule  (* is trivial *)
         | None -> (* nontrivial *)
