@@ -110,6 +110,55 @@ acceptance suite (B2), the streaming scheduler and light reporting
 records (phase 4). C3 then reduces to: a lazy DFS generator over the
 proof tree + the four sub-problems above.
 
+## Phase B — what actually happened (2026-08-19)
+
+The probe-first discipline rewrote this plan twice in one day. Results
+on the 30k-obligation monolith, solver-free M1, per-3000-obligation
+tranches (`TLAPM_PREP_BUCKETS`):
+
+* **B0** (two probe commits) — findings: the O(D) *rediscovery* inside
+  the existing prefix caches is negligible (8.6 s total), so **B1.0 and
+  B1.1 as designed were dropped without writing them**; all the growth
+  is semantic work on the divergent suffix (×15–29 per stage), whose
+  average length itself grows ×4 (33 → 143 hypotheses, `TLAPM_PREP_SHARE`
+  distribution); the fingerprint is position-flat (earlier suspicion
+  withdrawn); `elab_normalize` had **no cache at all** and dominated.
+* **B1.2** — prefix-resume cache for `Elab.normalize` (both passes
+  exposed per hypothesis from `Expr.Elab`, folded in prep with the
+  expand-cache pattern, separate slots for temporal/non-temporal):
+  normalize 157 → 31.6 s (×5); the physically-shared normalized prefix
+  also drops trivial_check 36 → 13 s and find_meth 15 → 7 s. Wall
+  9:45 → 7:08.
+* **Memo substitutions** — `app_ix` walks the Cons/Bump spine linearly,
+  so the ~400-deep expansion substitution cost O(spine) per variable
+  occurrence (GDB-sampled at e_subst's `go`). A `Memo` constructor
+  (index→core cache on the substitution *value*, shared across
+  obligations through the prefix cache) takes exp:tail 80 → 37 s and
+  the wall to **6:26 (−34 % from the phase-B baseline)**.
+* **Parked with mechanisms identified**: `const:tail` (59 s, grows ×18 —
+  the constness visitor re-annotates genuinely-new suffix hypotheses
+  with `Deque.nth` O(distance) `Ix` lookups; needs its own micro-probe
+  before surgery); `action_frontend` (73 s, position-flat — runs on the
+  *pruned* obligation whose nodes are rebuilt per obligation, so no
+  cross-obligation sharing is available; ~2.4 ms/obligation of
+  apparently intrinsic work).
+* Standing gates passed at each commit: strict golden dumps (synthetic
+  + AbstractGrpc, old binary vs new), fast-suite fail-set unchanged,
+  real-solver verdicts loc+status-identical on FfiGrpc (9927/9927).
+
+**B2-minimal is blocked as scoped, by the triviality check.** The plan
+said «move the existing prune upstream of the expensive stages». The
+code says no, twice: pruning runs on the backend path only because the
+triviality check discharges support obligations by finding a fact —
+*hidden ones included* — equal to the goal (comment at the prune call
+site), and «the triviality check must be done after expanding
+definitions» (comment at the trivial_ob site). Early selection would
+flip some of today's `trivial` verdicts into solver runs: verdict
+parity breaks and the solvers *receive obligations they do not receive
+today* — against the hard subset criterion. A viable B2 needs a
+pre-expansion, selection-compatible replacement for the triviality
+scan; that is a design item for the C3 discussion, not a quick move.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →
