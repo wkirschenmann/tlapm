@@ -285,6 +285,116 @@ What the numbers establish for the DFS decision: the tree is shallow
 stack of the design note's step 1 would need at most ~11 slots — its
 premise is validated on all three corpora.
 
+### B2-lite: implemented, measured ≈ 0, withdrawn (2026-08-19)
+
+Following the recall numbers above, the safe form of B2 was implemented
+and measured: call the *unchanged* `trying_to_prove_true`/`find_fact`
+predicates on `const_fp_ob` (the pre-expansion sequent that already
+exists for fingerprinting) before forcing `normalize_expand`; on a hit,
+`save_result` + `Immediate true` without ever expanding; on a miss,
+fall through to the unchanged post-expansion check. Bypassed under
+`--printallobs` (the printed body must keep its expanded form). The
+short-circuit demonstrably fired (~17 k obligations on the monolith:
+`exp:discover` 6.15 → 2.35 s, `trivial_check` 0.97 → 0.54 s) with
+perfect verdict parity (49 408 toolbox result lines identical at loc
+level). **Wall clock: 5:13 → 5:09 — no gain.** Every heavy stage was
+unchanged: `exp:tail` ~44 s, `const:tail` ~58 s, `elab_normalize`
+~43 s, `action_frontend` ~93 s.
+
+The mechanism is instructive and now measured: with the phase-B prefix
+caches, a support obligation's preparation cost is *marginal* — only
+its Δ (~3 hypotheses) beyond the shared prefix. Skipping it does not
+save the prefix work, because the next prepared obligation (the main,
+whose context extends the supports') resumes from an older cache entry
+and absorbs exactly the tail the skipped supports would have paid. The
+work is conserved; only its attribution moves. In other words: **the
+prefix caches already capture what B2-lite was after.** The code was
+withdrawn (C1 precedent — negative results don't stay in the tree),
+and the conclusion recorded here: skipping *preparation* of obligations
+whose context is a prefix of a later obligation's context saves nothing
+in a prefix-cached pipeline; per-obligation savings only exist for
+work done *before* the caches (constness + fingerprint, ~86 s on the
+monolith — the L1 lever) or in a world where the skipped subtree is
+never *generated* (the lazy-DFS étape 3). B2's residual value is
+therefore entirely inside the C3/DFS design, not on the current
+pipeline.
+
+### DFS prerequisite landed: obligation ids in document order
+
+`P_gen.collect` used to visit a step list's QED subtree *before* the
+steps, so obligation ids (positional in `final_obs`) were not in
+document order — contradicting the lazy-DFS design note's premise that
+"DFS pre-order = current numbering order". No lazy generator can
+produce the QED first (its sequent is built from the context the steps
+accumulate), so the collection order was aligned with generation order
+instead: steps before QED. Verified: creation order (TREE probe, now
+logging locs) equals id order position-by-position; strict golden
+dumps byte-identical (`oblcheck` keys by loc); fast suite green.
+Per-run obligation ids are renumbered by this change; fingerprints are
+content-keyed and unaffected.
+
+## Lazy DFS, étape 3 — concrete design (2026-08-19)
+
+State of the note's plan after this session's measurements: étape 1
+(depth-indexed cache stack) is subsumed — the single-slot prefix caches
+already resume from the common ancestor prefix (consecutive DFS
+contexts nest), and B0 measured the rediscovery they'd remove at 8.6 s.
+Étape 2 (refcount release) is obsolete — phase 4's streaming scheduler
+and light reporting records already hold RSS flat at 1.39 GB. What
+étape 3 (lazy generation) still buys, stated honestly after the B2-lite
+lesson: (i) the ~30 k retained sequents in `final_obs` (the bulk of the
+remaining 1.39 GB), (ii) proving starts after the first theorem instead
+of after full elaboration (~6 s on the monolith, more on bigger specs),
+and (iii) the structural prerequisite for C3 (incremental LSP) and
+étape 4 (tree-addressed context selection) — NOT single-pass wall time,
+which is now dominated by main obligations' intrinsic tail work.
+
+Where everything flows today: `M_gen.generate` visits module units;
+per theorem it runs `P_gen.generate` (attaches obs to the proof tree)
+then `P_gen.collect` (detaches them, now in document order), and
+appends to a module-level list that `m_elab.normalize` freezes into
+`final_obs`; `tlapm_lib` numbers it and feeds the phase-4 stream. Two
+prerequisites are now in place: ids = document order (see above), and
+the single choke point (`M_gen`'s accumulator) through which every
+`final_obs` obligation passes — including the module-level `USE`
+obligations from `mutate`, which never go through `collect` (so the
+in-proof suppression filter (`Props.supp`) stays where it is; emission
+at this boundary inherits it for free).
+
+**Shape A (recommended): resumable generation at theorem granularity.**
+Rewrite `M_gen.visit` as an explicit stepper: state = remaining units ×
+accumulated context × partial body × summary; `step` processes units
+until one yields obligations (a theorem or a mutate) and returns them.
+The scheduler's `next()` pulls: when its buffer is empty, it advances
+the stepper. No effects, no threads, no refcounts — the in-flight set
+is bounded by one theorem's obligations plus the scheduler window
+(monolith: ~72 obs/theorem mean). The `Final` module stage is assembled
+when the stepper is exhausted, which happens before the last verdicts
+return; the proof-tree DFS below a theorem stays eager. The LSP path
+keeps a trivial accumulate-everything driver and is unaffected.
+
+**Shape B (fallback): push-driven.** Generation keeps its current shape
+and pushes into the scheduler through a bounded window. More invasive
+in `schedule.ml` (a second entry discipline) and couples elaboration to
+prover lifecycle; only worth it if Shape A's stepper rewrite of
+`M_gen.visit` proves too disruptive.
+
+Open decision points for the team/maintainer discussion:
+1. `module.mli`: `final_obs` becomes empty (or optional) on the CLI
+   proving path — type/API choice.
+2. The toolbox protocol announces the obligation count up front
+   (`tlapm_lib` prints it from `Array.length final_obs`); with lazy
+   generation the total is only known at the end. Either a cheap
+   counting pre-pass (re-runs generation without retaining, ~6 s on
+   the monolith), a late count message (protocol/UI change), or
+   accepting the count after the stepper drains (it finishes well
+   before proving does — the progress denominator arrives a few
+   seconds late).
+3. Per-theorem granularity is proposed as final — going per-obligation
+   inside a theorem would require re-splitting `generate`/`collect`
+   (the supp filter and the Steps/QED dependency make creation-time
+   emission subtle) for no measured benefit.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →
