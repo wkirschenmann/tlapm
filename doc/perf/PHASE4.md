@@ -245,3 +245,36 @@ checks (~116 s), a candidate for a later, separately-gated skip.
 `fp_saving` totals **0.265 s** for 10 031 verdicts — the audit's
 "flush + re-sort per result" reading overstated the mechanism (the sort
 is per-fingerprint on a tiny list, not the whole table).
+
+## The residual within-run slope, attributed (monolith, 2026-08-19)
+
+Every completed monolith run — phase 4 included, heap flat — declines
+÷4 in throughput from Q1 to Q4 (163 → 41 v/s). Since the shape is
+identical at 1.4 GB and at 12.8 GB of heap, GC was already excluded;
+the remaining candidates were preparation cost (the context prefix
+grows with document position) versus solver difficulty (later
+obligations harder). The discriminating measurement: a solver-free M1
+(`--noproving --printallobs --nofp --threads 1`) with per-block
+timestamps.
+
+**Verdict: preparation.** The prep-only pipeline reproduces and exceeds
+the slope — **500 → 62 blocks/s (÷8)** across the document, wall
+9 min 39 s single-threaded, RSS flat at 1.17 GB. Stage totals
+(`TLAPM_PREP_TIMES`): elab_normalize 155.6 s, expand_defs 80.1 s,
+action_frontend 72.9 s, add_constness 60.5 s, trivial_check 35.8 s,
+fingerprint 17.3 s, find_meth 14.8 s, prune_context 14.4 s — 457 s of
+579 s attributed. Note where the money is: **pruning itself costs
+14 s; everything upstream of it walks the un-pruned context** (~815
+hypotheses per obligation on this corpus, the statements of all prior
+lemmas included, cited or not — see the user's lazy-obligation-tree
+design note for the `hyps_of_modunit` mechanism that puts every named
+theorem's statement in every later context as a Visible Defn).
+
+Levers for the next phase, in measured order of promise: prune (or
+select) the context **before** the expensive stages instead of after;
+extend the prefix-resume idea to the stages that don't have it
+(elab_normalize and action_frontend are the two biggest and neither
+resumes); prune uncited visible definitions (phase 5); and the
+structural fix — the depth-indexed cache stack from the
+lazy-obligation-tree note (its step 1, isolable and
+semantics-preserving).
