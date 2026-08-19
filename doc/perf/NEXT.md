@@ -192,9 +192,25 @@ document version).
   ~85-90 % inside per-obligation **fingerprinting** — the LSP
   re-fingerprints every obligation of the document at every version
   (ANALYSIS observation L1). That is the next interactive lever, ahead
-  of everything else: skip re-fingerprinting (or re-generating)
-  obligations whose statement region did not change, or gate
-  generation to the edited range (C2/L3).
+  of everything else. Two designs, complementary:
+  - **Fingerprint prefix cache** (CLI + LSP): the fingerprint string
+    is a serialization of the context + goal, and consecutive
+    obligations share the same physically-identical context prefix the
+    prep caches exploit. Subtlety that shapes the implementation: the
+    printer (`Backend.Fingerprints`'s `spin`) emits hypotheses in
+    POST-order — the shared prefix lands at the *end* of the buffer —
+    and threads mutable state (a Stack, De Bruijn counters), so the
+    checkpoint is (state at divergence point, tail string), not a
+    buffer prefix. Gate: fingerprint files byte-identical; a
+    both-ways oracle like TLAPM_CHECK_ELABCACHE.
+  - **Version-diff gating** (LSP only): after an edit strictly inside
+    a proof body, only that proof's obligations can change their
+    fingerprints; everything else can carry the previous version's
+    identity without recomputation. Needs the edit range (the server
+    already receives it) mapped to the proof-step tree, and a careful
+    staleness story for the proof-state carry-over. C2/L3 (gating
+    generation itself to the range) then falls out of the same
+    machinery.
 * **C1 (elaborated-dependency cache): negative result, withdrawn.**
   The cache worked mechanically (15 dependencies seeded per keystroke,
   digest-validated) but made the loop *slower*: 10 s vs 6.1 s per
