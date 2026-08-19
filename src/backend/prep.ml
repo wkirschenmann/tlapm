@@ -1252,6 +1252,28 @@ let normalize_expr ob =
             let cx = Deque.empty in
             prep_time t_normalize (Expr.Elab.normalize cx) expr in
         obl_from_expr expr ob
+      end else if Sys.getenv_opt "TLAPM_CHECK_ELABCACHE" <> None then begin
+        (* Differential oracle: run BOTH the cached fold and the original
+           whole-sequent normalization on every obligation and compare
+           the resulting terms structurally (not their print).  Any
+           divergence is fatal and locates the obligation.  Validation
+           mode only — twice the normalization cost. *)
+        let cached = elab_normalize_cached ob in
+        let whole =
+          obl_from_expr
+            (Expr.Elab.normalize Deque.empty (expr_from_obl ob)) ob in
+        let eq =
+          Expr.Eq.expr
+            (noprops (Expr.T.Sequent cached.obl.core))
+            (noprops (Expr.T.Sequent whole.obl.core)) in
+        if not eq then begin
+          Util.eprintf ~at:ob.obl
+            "TLAPM_CHECK_ELABCACHE: cached normalization diverges from \
+             the whole-sequent one on obligation %d"
+            (Option.default (-1) ob.id);
+          failwith "Backend.Prep.elab_normalize_cached: oracle mismatch"
+        end;
+        cached
       end else
         prep_time t_normalize elab_normalize_cached ob
     in
