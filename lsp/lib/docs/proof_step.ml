@@ -519,6 +519,17 @@ let as_lsp_tlaps_proof_step_details uri ps =
 module Builder : sig
   val of_module :
     TL.Module.T.mule -> t option -> (string * string) option -> t option
+
+  val gen_scope_lines : t -> string -> string -> (int * int) option
+  (** [gen_scope_lines prev old_text new_text] is the line window of the
+      current version whose proofs must be generated — the edited
+      top-level step, in new coordinates — when the edit satisfies the
+      body-only criterion; [None] otherwise (generate everything). *)
+
+  val last_carried : unit -> int
+  (** How many fingerprints the last [of_module] carried over from the
+      previous version instead of recomputing (scoped fingerprinting;
+      for tests and probes). *)
 end = struct
   let in_file file wrapped =
     match Tlapm_lib.Util.query_locus wrapped with
@@ -579,6 +590,7 @@ end = struct
   let fp_time = ref 0.
   let fp_count = ref 0
   let fp_carried = ref 0
+  let last_carried () = !fp_carried
 
   (* Scoped fingerprinting (TLAPM_LSP_SCOPED=1).  When the edit between
      the previous and the current version is confined to the proof BODY
@@ -595,7 +607,22 @@ end = struct
      statement, module-level material, several steps, no positional
      match — falls back to a real fingerprint computation, so a carry
      only ever skips recomputing an identical value. *)
-  let compute_carry (prev : t) (old_text : string) (new_text : string) =
+  type edit_scope = {
+    es_wl : int;        (* edited window, old 1-based line coordinates *)
+    es_wh_old : int;    (* end of the old window (may be < es_wl) *)
+    es_delta : int;     (* new line count minus old line count *)
+    es_hz_lo : int;     (* the edited (host) step, old coordinates *)
+    es_hz_hi : int;
+  }
+
+  (* The soundness criterion shared by both carry-over modes: the edit
+     between the two versions must be confined to the proof BODY of a
+     single top-level step of the previous version.  Statements — the
+     only thing later material sees — are then untouched, so everything
+     outside that step keeps a sequent identical up to line positions.
+     Returns [None] whenever the criterion does not hold (statement
+     touched, module-level edit, several steps, no previous tree). *)
+  let compute_scope (prev : t) (old_text : string) (new_text : string) =
     let ol = Array.of_list (String.split_on_char '\n' old_text) in
     let nl = Array.of_list (String.split_on_char '\n' new_text) in
     let no = Array.length ol and nn = Array.length nl in
@@ -608,7 +635,6 @@ end = struct
       incr s
     done;
     let delta = nn - no in
-    (* the edited window, in old 1-based line coordinates *)
     let wl = !p + 1 in
     let wh_true = no - !s in
     let wh = max wh_true wl in
@@ -620,32 +646,62 @@ end = struct
           && wl > Range.line_till st.head_range)
         prev.sub
     in
-    match host with
-    | None -> None
-    | Some host ->
-        let hz_lo = Range.line_from host.full_range in
-        let hz_hi = Range.line_till host.full_range in
-        let tbl = Hashtbl.create 4096 in
-        let add r (o : Obl.t) =
-          match Obl.fingerprint o with
-          | None -> ()
-          | Some fp ->
-              let rf = Range.line_from r and rt = Range.line_till r in
-              if rt >= hz_lo && rf <= hz_hi then ()
-                (* the edited step: recompute *)
-              else
-                let lf, cf = Range.Position.as_pair (Range.from r) in
-                let lt, ct = Range.Position.as_pair (Range.till r) in
-                if rt < wl then Hashtbl.replace tbl (lf, cf, lt, ct) fp
-                else if rf > wh_true then
-                  Hashtbl.replace tbl (lf + delta, cf, lt + delta, ct) fp
-        in
-        let rec traverse ps =
-          RangeMap.iter add ps.obs;
-          List.iter traverse ps.sub
-        in
-        traverse prev;
-        Some tbl
+    Option.map
+      (fun host ->
+        { es_wl = wl; es_wh_old = wh_true; es_delta = delta;
+          es_hz_lo = Range.line_from host.full_range;
+          es_hz_hi = Range.line_till host.full_range })
+      host
+
+  (* Previous-version material outside the edited step, keyed by its
+     expected range in the NEW version: identical before the edit,
+     line-shifted after it.  [carry_fold] drives both carry modes. *)
+  let carry_fold (prev : t) sc f acc =
+    let acc = ref acc in
+    let each r (o : Obl.t) =
+      let rf = Range.line_from r and rt = Range.line_till r in
+      if rt >= sc.es_hz_lo && rf <= sc.es_hz_hi then ()
+      else
+        let lf, cf = Range.Position.as_pair (Range.from r) in
+        let lt, ct = Range.Position.as_pair (Range.till r) in
+        if rt < sc.es_wl then acc := f !acc (lf, cf, lt, ct) o
+        else if rf > sc.es_wh_old then
+          acc :=
+            f !acc (lf + sc.es_delta, cf, lt + sc.es_delta, ct) o
+    in
+    let rec traverse ps =
+      RangeMap.iter each ps.obs;
+      List.iter traverse ps.sub
+    in
+    traverse prev;
+    !acc
+
+  (* Mode 1 (fingerprints only): expected-new-range -> fingerprint. *)
+  let carry_table (prev : t) sc =
+    let tbl = Hashtbl.create 4096 in
+    carry_fold prev sc
+      (fun () k o ->
+        match Obl.fingerprint o with
+        | None -> ()
+        | Some fp -> Hashtbl.replace tbl k fp)
+      ();
+    tbl
+
+  (* Mode 2 (scoped generation): the whole previous obligations, at
+     their expected new ranges, ready to enter the pool.  Their inner
+     locations are the previous version's (stale by [es_delta] lines
+     after the edit) — the tree ranges come from the fresh parse, so
+     markers and statuses are unaffected. *)
+  let carried_obligations (prev : t) sc =
+    carry_fold prev sc
+      (fun acc (lf, cf, lt, ct) o ->
+        (Range.of_ints ~lf ~cf ~lt ~ct, o) :: acc)
+      []
+
+  let gen_scope_lines prev old_text new_text =
+    Option.map
+      (fun sc -> (sc.es_hz_lo, sc.es_hz_hi + sc.es_delta))
+      (compute_scope prev old_text new_text)
 
   class step_visitor (file : string) =
     object (self : 'self)
@@ -663,6 +719,11 @@ end = struct
         None
 
       method set_carry c = carry <- c
+
+      (* Scoped generation: previous-version obligations for the steps
+         whose proofs were not generated this time. *)
+      val mutable extra_obs : (Range.t * Obl.t) list = []
+      method set_extra l = extra_obs <- l
 
       method private take_mu () =
         let mu = Option.get mu_curr in
@@ -744,7 +805,8 @@ end = struct
               | TL.Module.T.Parsed -> []
               | TL.Module.T.Flat -> []
               | TL.Module.T.Final final -> Array.to_list final.final_obs)
-            |> List.filter_map mule_obl |> pool_of_list;
+            |> List.filter_map mule_obl
+            |> (fun l -> pool_of_list (l @ extra_obs));
           ignore (self#tla_module_root mule);
           assert (pool_all_taken obs);
           match acc_steps with
@@ -886,15 +948,21 @@ end = struct
     fp_probe := Sys.getenv_opt "TLAPM_LSP_PHASES" <> None ;
     fp_time := 0. ;
     fp_count := 0 ;
-    fp_carried := 0 ;
-    let carry =
+    let carry, extra =
       match (Sys.getenv_opt "TLAPM_LSP_SCOPED", prev, texts) with
-      | Some _, Some prev_ps, Some (old_text, new_text) ->
-          compute_carry prev_ps old_text new_text
-      | _ -> None
+      | Some lvl, Some prev_ps, Some (old_text, new_text) -> (
+          match compute_scope prev_ps old_text new_text with
+          | None -> (None, [])
+          | Some sc ->
+              if String.trim lvl = "2" then
+                (None, carried_obligations prev_ps sc)
+              else (Some (carry_table prev_ps sc), []))
+      | _ -> (None, [])
     in
+    fp_carried := List.length extra ;
     let v = new step_visitor file in
     v#set_carry carry ;
+    v#set_extra extra ;
     let r = v#process mule prev_obs in
     if !fp_probe then
       Printf.eprintf "[LSP_PHASES] fingerprints=%.2fs (n=%d carried=%d)\n%!"
@@ -903,6 +971,9 @@ end = struct
 end
 
 let of_module ?prev ?texts mule = Builder.of_module mule prev texts
+
+let gen_scope_lines ~prev ~old_text ~new_text =
+  Builder.gen_scope_lines prev old_text new_text
 
 (* ========================================================================== *)
 
@@ -1018,6 +1089,65 @@ let%test_unit "determine proof steps for USE statements" =
   | pss ->
       failwith
         (Format.sprintf "unexpected, number of steps=%d" (List.length pss))
+
+let%test_unit "scoped fingerprint carry-over: exact, and scoped correctly" =
+  let mod_file = "test_scoped_carry.tla" in
+  let text_of body2 =
+    Printf.sprintf
+      {|
+      ---- MODULE test_scoped_carry ----
+      THEOREM ThmA == TRUE
+          <1>1. TRUE OBVIOUS
+          <1>q. QED BY <1>1
+      THEOREM ThmB == TRUE
+          %s
+          <1>q. QED BY <1>1
+      ====
+    |}
+      body2
+  in
+  let parse text =
+    Result.get_ok
+      (Parser.module_of_string ~content:text ~filename:mod_file
+         ~loader_paths:[])
+  in
+  let fps ps =
+    let acc = ref [] in
+    let rec go ps =
+      acc :=
+        fold_obs (fun l o -> (Obl.loc o, Obl.fingerprint o) :: l) !acc ps;
+      List.iter go ps.sub
+    in
+    Option.iter go ps;
+    List.sort compare !acc
+  in
+  let t_a = text_of "<1>1. TRUE OBVIOUS" in
+  (* a body-only edit inside ThmB's proof *)
+  let t_b = text_of "<1>1. TRUE  OBVIOUS" in
+  let ps_a = of_module (parse t_a) in
+  Unix.putenv "TLAPM_LSP_SCOPED" "1";
+  let ps_scoped = of_module ?prev:ps_a ~texts:(t_a, t_b) (parse t_b) in
+  let carried_scoped = Builder.last_carried () in
+  Unix.putenv "TLAPM_LSP_SCOPED" "";
+  Sys.getenv "TLAPM_LSP_SCOPED" |> ignore;
+  let ps_full = of_module ?prev:ps_a (parse t_b) in
+  let carried_full = Builder.last_carried () in
+  (* the carry must have fired for the body edit, and be byte-exact *)
+  assert (carried_scoped > 0);
+  assert (carried_full = 0);
+  assert (fps ps_scoped = fps ps_full);
+  (* a statement edit must fall back to full recomputation *)
+  let t_c =
+    Str.global_replace (Str.regexp_string "THEOREM ThmB == TRUE")
+      "THEOREM ThmB == TRUE /\\ TRUE" t_b
+  in
+  Unix.putenv "TLAPM_LSP_SCOPED" "1";
+  let ps_c_scoped = of_module ?prev:ps_scoped ~texts:(t_b, t_c) (parse t_c) in
+  let carried_stmt = Builder.last_carried () in
+  Unix.putenv "TLAPM_LSP_SCOPED" "";
+  let ps_c_full = of_module ?prev:ps_scoped (parse t_c) in
+  assert (carried_stmt = 0);
+  assert (fps ps_c_scoped = fps ps_c_full)
 
 let%test_unit "check if parsing works with nested local instances." =
   let mod_file = "test_loc_ins.tla" in

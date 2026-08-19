@@ -21,11 +21,29 @@ module Parsed = struct
        proof-step tree build (which fingerprints every obligation).
        Inert without the environment variable. *)
     let phases = Sys.getenv_opt "TLAPM_LSP_PHASES" <> None in
+    (* Scoped generation (TLAPM_LSP_SCOPED=2): when the edit satisfies
+       the body-only criterion, tell the pipeline to generate proofs
+       only for the edited step's line window; the missing obligations
+       are carried from the previous version in Proof_step. *)
+    let gen_scope =
+      match Sys.getenv_opt "TLAPM_LSP_SCOPED" with
+      | Some lvl when String.trim lvl = "2" -> (
+          match (ps_prev, prev_text) with
+          | Some ps, Some ot ->
+              Proof_step.gen_scope_lines ~prev:ps ~old_text:ot
+                ~new_text:(Doc_vsn.text doc_vsn)
+          | _ -> None)
+      | _ -> None
+    in
     let t0 = if phases then Unix.gettimeofday () else 0. in
     match
       Eio.Mutex.use_rw ~protect:true prover_mutex @@ fun () ->
-      parser ~content:(Doc_vsn.text doc_vsn)
-        ~filename:(LspT.DocumentUri.to_path uri)
+      Tlapm_lib.lsp_gen_scope := gen_scope;
+      Fun.protect
+        ~finally:(fun () -> Tlapm_lib.lsp_gen_scope := None)
+        (fun () ->
+          parser ~content:(Doc_vsn.text doc_vsn)
+            ~filename:(LspT.DocumentUri.to_path uri))
     with
     | Ok mule ->
         let t1 = if phases then Unix.gettimeofday () else 0. in
