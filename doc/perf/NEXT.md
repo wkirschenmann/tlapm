@@ -516,6 +516,38 @@ incremental-elaboration target; and the next cheap win is the
 child-prover side (the on-demand prove request re-elaborates in the
 child too).
 
+### Track 1, third result: scoped generation — keystroke 3.3 s on the
+### monolith (×18 overall), still byte-identical
+
+`TLAPM_LSP_SCOPED=2` closes the loop the second result opened: when
+the edit-scope analysis proves the edit is confined to one proof body,
+the LSP now also *generates* only that step's obligations. The module
+generator (`M_gen`) gained an optional per-unit filter
+(`generate ?only` / `gen_stepper ?only`): a theorem whose locus falls
+outside the edited window contributes its statement to the running
+context — the only thing later material sees — but its proof is
+neither elaborated nor collected. The LSP supplies the skipped
+obligations itself, by carrying the previous version's obligations
+whole (sequents included) at line-shifted ranges into the step-tree
+pool. On the monolith: **21 obligations generated, 30 850 carried**,
+elab_main(+gen) 2.5 → 1.6 s, keystroke 4.2 → **3.3 s** — ×18 from the
+59.7 s starting point. Gate: the full 2-edit notification stream is
+**byte-identical** to the mode-0 full recomputation
+(`GEN2_STREAM_IDENTICAL`), and the 23 LSP inline tests (including a
+new carry-over regression test) pass. (A one-obligation difference in
+the carried/recomputed split vs mode 1 — 30 850+21 vs 30 851+21 — is a
+boundary-counting artifact of which side claims the host step's edge;
+stream identity makes it observably irrelevant.)
+
+Keystroke attribution after mode 2: parse_main ~1.35 s, deps
+~0.04 s, elab_main(+gen) ~1.6 s, tree+fp ~0.3 s. The floor is now the
+*parse and context elaboration of the whole file*, which C3 proper
+(incremental module contexts) would attack. The other measured target
+is the child prover: one on-demand prove request costs **3.5 s**
+launch-to-first-result, because the child re-parses and re-elaborates
+the file from scratch — an in-process prove path (or a warm child)
+is the next cheap multiple.
+
 ### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
 
 Stack-sampling the whole monolith preparation (60 samples, innermost
