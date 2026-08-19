@@ -14,15 +14,21 @@ module Parsed = struct
             are received from the prover. *)
   }
 
-  let make ~uri ~(doc_vsn : Doc_vsn.t) ~(ps_prev : Proof_step.t option) ~parser
-      =
+  let make ~uri ~(doc_vsn : Doc_vsn.t) ~(ps_prev : Proof_step.t option)
+      ?prev_text ~parser () =
     match
       Eio.Mutex.use_rw ~protect:true prover_mutex @@ fun () ->
       parser ~content:(Doc_vsn.text doc_vsn)
         ~filename:(LspT.DocumentUri.to_path uri)
     with
     | Ok mule ->
-        let ps = Proof_step.of_module mule ?prev:ps_prev in
+        let texts =
+          (* Only usable when [ps_prev] was built from exactly this
+             text (see [make] below): the positional fingerprint
+             carry-over needs the matching baseline. *)
+          Option.map (fun ot -> (ot, Doc_vsn.text doc_vsn)) prev_text
+        in
+        let ps = Proof_step.of_module mule ?prev:ps_prev ?texts in
         { mule = Ok mule; nts = []; ps }
     | Error (loc_opt, msg) ->
         let nts = [ Toolbox.notif_of_loc_msg loc_opt msg ] in
@@ -51,17 +57,22 @@ let make uri doc_vsn prev_act parser =
   | None ->
       (* There is no previous active document, we will not try
          to move the proof state from there. *)
-      let parsed = lazy (Parsed.make ~uri ~doc_vsn ~ps_prev:None ~parser) in
+      let parsed =
+        lazy (Parsed.make ~uri ~doc_vsn ~ps_prev:None ~parser ()) in
       { uri; doc_vsn; p_ref = 0; ps_prev = None; parser; parsed }
   | Some prev_act ->
       (* We have the previous actual document, thus either use its
          parsed data, or the data it got from its previous. *)
-      let ps_prev =
+      let ps_prev, prev_text =
         match Parsed.ps_if_ready prev_act.parsed with
-        | None -> prev_act.ps_prev
-        | some -> some
+        | None ->
+            (* An older tree, from an unknown text: no positional
+               carry-over baseline. *)
+            (prev_act.ps_prev, None)
+        | some -> (some, Some (Doc_vsn.text prev_act.doc_vsn))
       in
-      let parsed = lazy (Parsed.make ~uri ~doc_vsn ~ps_prev ~parser) in
+      let parsed =
+        lazy (Parsed.make ~uri ~doc_vsn ~ps_prev ?prev_text ~parser ()) in
       { uri; doc_vsn; p_ref = prev_act.p_ref; ps_prev; parser; parsed }
 
 let with_parser act parser = make act.uri act.doc_vsn (Some act) parser
