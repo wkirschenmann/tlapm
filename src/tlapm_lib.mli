@@ -15,6 +15,8 @@ module Builtin = Builtin
 val main : string list -> unit
 val init : unit -> unit
 
+val lsp_gen_scope : (int * int) option ref
+
 val modctx_of_string :
   content:string ->
   filename:string ->
