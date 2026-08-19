@@ -76,23 +76,61 @@ at **1–2 instantiated copies per obligation context** (`!Len`, `!+`,
 a large slice of issue #286's "huge contexts of INSTANCE/refinement-
 heavy specs".
 
-## Improvement avenue (to bring to the team/maintainers)
+## Improvement avenue: hoist parameter-free extendees to the
+## instantiation root (proposal 2026-08-19, refined)
 
-During instantiation (`M_subst.app_modunits`), a definition whose body
-has **no dependence on any substituted parameter** (transitively: nor
-on another re-emitted definition) is semantically identical to the
-already-present original. Instead of re-emitting it under the instance
-prefix, remap references to point at the original — index surgery of
-the same nature as what `app_modunits` already performs. Expected
-effect: remove the closed copies (~20 % of all context definitions on
-FfiGrpc) from every obligation context, shrinking `expand_defs` /
-`add_constness` / fingerprint traversal proportionally on
-INSTANCE-heavy specs; strictly a context-subset change (same
-obligations, fewer redundant definitions in scope).
+Why the copy exists at all: an implementation-order artifact, not a
+semantic need. `M_flatten` splices the extendees' units into the
+module body *before* elaboration, and `instantiate`
+(src/module/m_elab.ml:521-527) then uniformly shifts, substitutes and
+`localize`s the **whole** flattened body under the instance prefix —
+it never sees the boundary between inherited material and the module's
+own units.
+
+The proposed alternative — *"repasser les EXTENDS à la racine
+courante"* — is sound under one criterion, and the criterion is
+per-module, not per-definition: **an extendee (transitively) declaring
+no CONSTANTS and no VARIABLES is invariant under any `WITH`
+substitution** — the substitution maps the instantiated module's
+parameters, an extendee's definitions can only reference parameters
+declared upstream of themselves, and a parameter-free module chain has
+none. Such extendees can be spliced ONCE at the instantiation root
+(deduplicated against the root's own extension by the same `seen`
+logic `M_flatten` already uses) instead of copied per instance. The
+subtlety is *not* semantic but representational: (i) the extension
+boundary inside a flattened body must be recorded (or recomputed) at
+flatten time; (ii) the instantiated own-units' De Bruijn references
+into the hoisted prefix must be remapped to the root copies (index
+surgery of the family `app_modunits` already performs); (iii) legal
+but rare references like `I!+` or `I!SomeLibLemma` must still resolve
+— either one-cell alias definitions (`I!op == <Ix to root op>`, keeps
+the context count but kills the body copies) or a side table in the
+anonymization pass (full win).
+
+The criterion does real work on the corpus. On FfiGrpc, ALL 1 826 568
+instantiated occurrences come from a single
+`L0 == INSTANCE AbstractGrpcTheorems` (~184 `L0!…` definitions per
+obligation context). Of the instantiated module's chain, the
+parameter-carrying part (`AbstractGrpcState`'s CONSTANTS/VARIABLES and
+the definitions over them — `AbstractGrpc_defs`, the theorems' own
+statements, ~50-70 units) must legitimately be instantiated; the
+parameter-free part — Naturals, Sequences, FiniteSets,
+SequenceTheorems (40 theorem statements), NaturalsInduction (16),
+FunctionTheorems, TLAPS…, ~110-130 units — is hoistable, and it is
+precisely the *big-bodied* material (inherited theorem statements),
+most of which the root module extends anyway (so after dedup the
+copies vanish outright). Estimated effect: remove ~60-70 % of the
+instantiated occurrences ≈ 12-14 % of all context-definition
+occurrences on FfiGrpc, concentrated in the largest bodies.
+
+Fingerprint impact: expected invariant for obligations that never
+reference the copies (the digest only prints *used* hypotheses,
+numbered by first use), and structurally identical bodies for those
+that do — to be confirmed with the differential oracle before any
+delivery.
 
 In the tree-addressed world (C3/étape 4) the same idea is structural:
 an INSTANCE node holds a reference to the instantiated module plus the
 substitution, and only parameter-dependent definitions ever
-materialize; the closed-copy elimination above is the flattened-world
-approximation of that, implementable now and upstream-reviewable on
-its own.
+materialize; the hoisting above is the flattened-world approximation
+of that, implementable now and upstream-reviewable on its own.
