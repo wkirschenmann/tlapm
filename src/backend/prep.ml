@@ -94,6 +94,16 @@ let () = at_exit begin fun () ->
   end
 end
 let t_findmeth = prep_timer "find_meth"
+(* Sub-timers of expand_defs / add_constness (they overlap their parents):
+   _discover = context materialization + prefix scan + bookkeeping (the
+   rediscovery cost a path-indexed cache would remove); _tail = the
+   semantic work on the divergent suffix; _active = the goal pass. *)
+let t_exp_discover = prep_timer "exp:discover"
+let t_exp_tail = prep_timer "exp:tail"
+let t_exp_active = prep_timer "exp:active"
+let t_const_discover = prep_timer "const:discover"
+let t_const_tail = prep_timer "const:tail"
+let t_const_active = prep_timer "const:active"
 let t_constness = prep_timer "add_constness"
 let t_fingerprint = prep_timer "fingerprint"
 let t_expand = prep_timer "expand_defs"
@@ -160,15 +170,19 @@ let expand_cache
 
 let expand_defs_cached ob =
   let sq = ob.obl.core in
-  let raw = Array.of_list (Deque.to_list sq.context) in
+  let (raw, l, states) = prep_time t_exp_discover begin fun () ->
+    let raw = Array.of_list (Deque.to_list sq.context) in
+    let n = Array.length raw in
+    let (craw, cstates) = !expand_cache in
+    let m = min n (Array.length craw) in
+    let l = ref 0 in
+    while !l < m && raw.(!l) == craw.(!l) do incr l done;
+    let l = !l in
+    let states = Array.make (n + 1) (shift 0, Deque.empty) in
+    Array.blit cstates 0 states 0 (min (l + 1) (Array.length cstates));
+    (raw, l, states)
+  end () in
   let n = Array.length raw in
-  let (craw, cstates) = !expand_cache in
-  let m = min n (Array.length craw) in
-  let l = ref 0 in
-  while !l < m && raw.(!l) == craw.(!l) do incr l done;
-  let l = !l in
-  let states = Array.make (n + 1) (shift 0, Deque.empty) in
-  Array.blit cstates 0 states 0 (min (l + 1) (Array.length cstates));
   let rec fold i ((s, kept) as st) =
     if i = n then st
     else begin
@@ -185,8 +199,8 @@ let expand_defs_cached ob =
       fold (i + 1) st
     end
   in
-  let (s, context) = fold l states.(l) in
-  let active = app_expr s sq.active in
+  let (s, context) = prep_time t_exp_tail (fold l) states.(l) in
+  let active = prep_time t_exp_active (app_expr s) sq.active in
   expand_cache := (raw, states);
   { ob with obl = { ob.obl with core = { context ; active } } }
 
@@ -1736,31 +1750,38 @@ let add_constness ob =
   if Params.debugging "noprepcache" then add_constness_nocache ob
   else begin
     let sq = ob.obl.core in
-    let raw = Array.of_list (Deque.to_list sq.context) in
-    let n = Array.length raw in
-    let (craw, cann) = !constness_cache in
-    let m = min n (Array.length craw) in
-    let l = ref 0 in
-    while !l < m && raw.(!l) == craw.(!l) do incr l done;
-    let l = !l in
-    if Sys.getenv_opt "TLAPM_PREP_SHARE" <> None then
-      Printf.eprintf "[CONST_CACHE] hit=%d/%d\n%!" l n;
-    let rec take k lst =
-      if k = 0 then []
-      else match lst with
-        | x :: xs -> x :: take (k - 1) xs
-        | [] -> assert false
-    in
-    let ann_prefix = take l cann in
+    let (raw, scx, suffix, ann_prefix) = prep_time t_const_discover
+    begin fun () ->
+      let raw = Array.of_list (Deque.to_list sq.context) in
+      let n = Array.length raw in
+      let (craw, cann) = !constness_cache in
+      let m = min n (Array.length craw) in
+      let l = ref 0 in
+      while !l < m && raw.(!l) == craw.(!l) do incr l done;
+      let l = !l in
+      if Sys.getenv_opt "TLAPM_PREP_SHARE" <> None then
+        Printf.eprintf "[CONST_CACHE] hit=%d/%d\n%!" l n;
+      let rec take k lst =
+        if k = 0 then []
+        else match lst with
+          | x :: xs -> x :: take (k - 1) xs
+          | [] -> assert false
+      in
+      let ann_prefix = take l cann in
+      let scx = ((), Deque.of_list ann_prefix) in
+      let suffix = Deque.of_list (Array.to_list (Array.sub raw l (n - l))) in
+      (raw, scx, suffix, ann_prefix)
+    end () in
     let visitor = object (self: 'self)
       inherit Expr.Constness.const_visitor
     end in
-    let scx = ((), Deque.of_list ann_prefix) in
-    let suffix = Deque.of_list (Array.to_list (Array.sub raw l (n - l))) in
-    let (scx, ann_suffix) = visitor#hyps scx suffix in
-    let context = Deque.append (Deque.of_list ann_prefix) ann_suffix in
-    let active = visitor#expr scx sq.active in
-    constness_cache := (raw, Deque.to_list context);
+    let (scx, ann_suffix) = prep_time t_const_tail (visitor#hyps scx) suffix in
+    let active = prep_time t_const_active (visitor#expr scx) sq.active in
+    let context = prep_time t_const_discover begin fun () ->
+      let context = Deque.append (Deque.of_list ann_prefix) ann_suffix in
+      constness_cache := (raw, Deque.to_list context);
+      context
+    end () in
     {ob with obl = { context ; active } @@ ob.obl}
   end
 
