@@ -1298,8 +1298,31 @@ let rec normalize mcx cx m =
   let m = { m.core with body = prefix } @@ m in
   let (m, obs, summ) =
     if m.core.important then begin
+      (* Probe (TLAPM_COUNT_CHECK=1): time the syntactic obligation
+         count — the counting pre-pass of the lazy-generation track —
+         and check it against the real generation.  Inert without the
+         environment variable. *)
+      let expected =
+        match Sys.getenv_opt "TLAPM_COUNT_CHECK" with
+        | None -> None
+        | Some _ ->
+            let t0 = Unix.gettimeofday () in
+            let n = M_gen.count_obligations m in
+            Printf.eprintf "[COUNT] %s: syntactic=%d in %.4f s\n%!"
+              m.core.name.core n (Unix.gettimeofday () -. t0) ;
+            Some n
+      in
       Timing.start Timing.gen ;
-      Std.finally Timing.stop (M_gen.generate gencx) m
+      let r = Std.finally Timing.stop (M_gen.generate gencx) m in
+      (match expected with
+       | None -> ()
+       | Some n ->
+           let (_, obs, _) = r in
+           let g = List.length obs in
+           Printf.eprintf "[COUNT] %s: generated=%d %s\n%!"
+             m.core.name.core g
+             (if n = g then "(match)" else "(MISMATCH)")) ;
+      r
     end
     else (m, [], {
             sum_total = 0 ;

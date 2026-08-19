@@ -477,3 +477,34 @@ let collect prf =
   end in
   let prf = obgetter#proof ((), Deque.empty) prf in
   (List.rev !coll, prf)
+
+(* Count the obligations that [generate] followed by [collect] would
+   produce for [prf], without building any sequent: the same file/range
+   gating as [generate], the same suppression filtering as [collect].
+   This lets a caller announce the obligation total before a (lazy)
+   generation pass has run, at proof-tree-walk cost. *)
+let rec count_proof prf =
+  let loc = Util.get_locus prf in
+  let file_basename = Filename.basename loc.Loc.file in
+  if not (List.mem file_basename !Params.input_files)
+     || Loc.line loc.Loc.stop < !Params.tb_sl
+     || Loc.line loc.Loc.start > !Params.tb_el
+  then 0
+  else begin
+    match prf.core with
+    | Obvious | Omitted _ | Error _ ->
+        if has prf Props.supp then 0 else 1
+    | By _ ->
+        Errors.bug ~at:prf "Proof.Gen.count_proof"
+    | Steps (inits, qed) ->
+        List.fold_left (fun n st -> n + count_step st) 0 inits
+          + count_proof (get_qed_proof qed)
+  end
+
+and count_step stp =
+  match stp.core with
+  | Use ({defs = []; facts = [_]}, _) ->
+      if has stp Props.supp then 0 else 1
+  | Assert (_, prf) | Suffices (_, prf) ->
+      count_proof prf
+  | _ -> 0

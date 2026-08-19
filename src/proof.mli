@@ -138,6 +138,7 @@ module Gen : sig
   val get_steps_proof : proof -> step list
   val generate : sequent -> proof -> time -> proof
   val collect  : proof -> obligation list * proof
+  val count_proof : proof -> int
   val mutate : hyp Deque.dq ->
     [`Use of bool | `Hide] -> usable wrapped -> time -> hyp Deque.dq * obligation list
   type stats = {

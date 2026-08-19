@@ -122,6 +122,22 @@ let rec gen_step st =
           end
     end
 
+(* Count the obligations [generate] would return, without running it:
+   a pure walk of the module units and proof trees — no contexts, no
+   sequents.  Lets the caller announce the obligation total before a
+   lazy generation pass has produced anything; kept in lockstep with
+   [gen_step] above (checked by the TLAPM_COUNT_CHECK probe in
+   Module.Elab.normalize). *)
+let rec count_obligations m =
+  List.fold_left begin fun n mu ->
+    match mu.core with
+    | Theorem (_, _, _, prf, _, _) -> n + Proof.Gen.count_proof prf
+    | Submod sm -> n + count_obligations sm
+    | Mutate (`Use _, us) -> n + List.length us.facts
+    | Mutate (`Hide, _) -> n
+    | _ -> n
+  end 0 m.core.body
+
 let generate cx m =
   let st = gen_stepper cx m in
   let rec drain acc = match gen_step st with
