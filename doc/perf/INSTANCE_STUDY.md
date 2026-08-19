@@ -199,11 +199,20 @@ it, the resolver (`e_anon`/`p_anon` — the frontend's known hot and
 fragile pass, cf. F3) must learn a per-instance export table; with
 it, resolution stays a plain context-name lookup and printouts keep
 the source-faithful `I!op` spelling, at the cost of one `Ix`-bodied
-context cell per used name. Decision: ship the flattened-world change
-*with* aliases; the tree world (C3) natively does the use-site
-collapsing (an INSTANCE node carries its export table by
-construction, no context entries at all), so the aliases are the
-low-risk bridge, not the destination. Caveat kept: for
-*parameter-carrying* used definitions the sharing point remains one
-materialized entry at the INSTANCE unit — inlining at use sites would
-duplicate bodies per use.
+context cell per used name. Caveat kept: for *parameter-carrying*
+used definitions the sharing point remains one materialized entry at
+the INSTANCE unit — inlining at use sites would duplicate bodies per
+use.
+
+### Final decision (PO, 2026-08-19): the flat pipeline stays as it is
+
+No hoisting and no aliases in the flattened world — `M_flatten` and
+`instantiate` keep their current logic unchanged. The whole study
+(the INSTANCE×EXTENDS copying, its 20.5 % share, the parameter-free
+criterion, the usage-filtered materialization, the use-site
+collapsing) is a **design input for the lazy tree (C3)**: there, an
+INSTANCE node carries a reference to the instantiated module, the
+substitution, and its export table by construction, and only the
+parameter-dependent, actually-used definitions ever materialize. The
+numbers above size what that node design saves on an INSTANCE-heavy
+corpus; nothing is to be implemented on the current pipeline.
