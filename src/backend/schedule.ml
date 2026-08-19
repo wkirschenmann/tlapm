@@ -107,13 +107,25 @@ let kill_and_start_next now reason d =
 (* This function launches the proof tasks and calls their continuation
    functions when their deadlines expire and when they terminate.
 
+   Tasks are pulled one at a time from [next]: [tl] only carries the
+   requeued alternatives of killed processes, so at most one fresh task
+   is materialized ahead of the provers. Building a whole module's task
+   list up front paid every task's eager preparation before the first
+   prover started, and pinned every consumed task closure for the whole
+   run.
+
    Note that this uses lists and is inefficient if there are
    many processes.  Optimize it if you have max_threads > 100.
 *)
-let run max_threads tl =
+let run_stream max_threads next =
   assert (max_threads >= 1);
   assert (max_threads < 100);
   let rec spin running tl =
+    (* Refill: keep at most one pulled-ahead task in [tl]. *)
+    let tl =
+      if tl = [] then (match next () with Some t -> [t] | None -> [])
+      else tl
+    in
     let now = Unix.gettimeofday () in
     (* First check stdin for commands from the toolbox. *)
     (* "stop" command *)
@@ -211,7 +223,19 @@ let run max_threads tl =
     end (* else we are done. *)
   in
   try
-    spin [] tl;
+    spin [] [];
     System.harvest_zombies ()
   with Exit ->
     System.harvest_zombies ()
+
+
+let run max_threads tasks =
+  (* List interface kept for existing callers: feed the stream from a
+     reference to the remaining tail, so consumed cells become garbage
+     as the run progresses instead of staying rooted in this frame. *)
+  let rem = ref tasks in
+  run_stream max_threads begin fun () ->
+    match !rem with
+    | [] -> None
+    | t :: rest -> rem := rest; Some t
+  end

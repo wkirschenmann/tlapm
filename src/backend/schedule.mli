@@ -54,3 +54,11 @@ Run the tasks described by [tasks],
 launching at most [max_threads]
 simultatenous processes.
 *)
+
+val run_stream: int -> (unit -> task option) -> unit
+(* [run_stream max_threads next]
+Like [run], pulling tasks from [next] until it returns [None].
+At most one fresh task is materialized ahead of the running
+processes, so task construction cost and memory stay interleaved
+with proving instead of being paid and retained up front.
+*)
