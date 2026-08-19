@@ -91,3 +91,22 @@ Writes `<outdir>/bench.csv` (`spec,level,metric,value` rows) and keeps the
 Generated specs and results live outside the source tree (suggested:
 `_perf/`, gitignored). Do **not** name generated files `*_test.tla`: the
 `test/` harness picks that suffix up.
+
+## Private real-spec corpus (not committed)
+
+The synthetic family is calibrated against real INSTANCE/refinement-heavy
+specs that cannot be published. They live under `_perf/` (gitignored) on
+the measurement machine; only summarized numbers enter `doc/perf/`.
+Layout used by the measurement docs:
+
+* `_perf/abstractgrpc/` — AbstractGrpc + FfiGrpc proof stacks
+  (~1.6k and ~10k obligations); the corpus behind SWEEP.md's tables.
+* `_perf/oom_repro/` — the 30 294-line, ~30k-obligation monolith that
+  reproduces the single-pass memory wall (see its README for provenance
+  and the exact repro commands). Two caveats from its README: SANY cannot
+  parse it (tlapm's parser is what verified it), and peak RSS — not
+  wall-clock — is the measurement.
+
+For per-verdict throughput/RSS curves on any of these, use
+`monitor_run.sh`; for A/B verdict parity, extract `loc status` pairs from
+the toolbox stream and compare sorted sets.
