@@ -225,6 +225,66 @@ document version).
   today's per-node mutable state — a fresh argument for the
   tree-with-addressing model over value-sharing caches.
 
+## Ahead-of-phase decision probes (2026-08-19)
+
+Optimization tracks are paused pending the team/maintainer discussion;
+these two probes were run to put numbers on the table for that
+discussion. Both are env-gated and inert by default; strict golden
+dumps pass with the probes in the tree.
+
+### Probe 1 — pre-expansion triviality recall (TLAPM_TRIVIAL_SPIKE)
+
+B2 (context selection before expansion) is blocked by the triviality
+check: today an `Ob_support` obligation is discharged as trivial by
+`find_fact`, which matches the goal against *expanded* hidden facts.
+Any pre-expansion selection must reproduce that check or lose it. The
+probe evaluates the same triviality candidate (goal is TRUE, or
+`find_fact` on the *unexpanded* const-annotated sequent) against the
+ground truth (the real `Immediate true` result), per support
+obligation, M1 mode:
+
+| corpus | supports | pre∧real | missed pre | false pos | recall |
+|---|---|---|---|---|---|
+| monolith (timer_wheel) | 19 442 | 17 381 | 2 061 | 0 | 89.4 % |
+| AbstractGrpc | 1 172 | 888 | 284 | 0 | 75.8 % |
+| FfiGrpc | 7 263 | 5 225 | 2 038 | 0 | 71.9 % |
+
+Two facts for the B2 discussion: (i) the pre-expansion check has
+**perfect precision** — it never claims trivial what is not — so it can
+safely *short-circuit* (discharge early, skip expansion entirely) with
+no correctness risk; (ii) its recall is 72–89 %, so a B2 that replaces
+the post-expansion check with it would send the 10–28 % remainder to
+the solvers — a subset-criterion violation unless the post-expansion
+check is kept as a second chance on the selected context. Also
+noteworthy: on all three corpora **every** `Ob_support` obligation is
+really trivial (zero non-trivial supports), i.e. the entire support
+population is today pure preparation overhead with no solver work.
+
+### Probe 2 — proof-tree shape (TLAPM_TREE_STATS)
+
+The lazy-DFS design note's step-1 premise is that per-obligation
+context cost N×D dwarfs the tree's incremental growth Σ Δ. The probe
+logs, at generation time (`-N`, seconds per corpus), each obligation's
+tree depth and context size, and each step list's entry size and added
+hypotheses. `test/perf/treestats.py` summarizes:
+
+| corpus | obligations | max depth | mean ctx | mean Δ/node | flat = Σ ctx | dfs = Σ Δ + base | ratio |
+|---|---|---|---|---|---|---|---|
+| monolith | 30 872 | 11 | 814 | 3.4 | 25 141 494 | 47 473 | **530×** |
+| AbstractGrpc | 1 635 | 6 | 758 | 3.2 | 1 239 280 | 2 802 | **442×** |
+| FfiGrpc | 9 967 | 7 | 1 288 | 3.5 | 12 832 657 | 13 931 | **921×** |
+
+Reading: a proof step adds on average ~3.4 hypotheses to a context of
+~800–1300 — the flattened pipeline re-traverses the whole context per
+obligation while the tree only ever grows by Δ. The ratio is a bound
+on the *redundancy in context traversal*, not a promised speedup: the
+phase-B prefix caches already recover the sequential share of it (that
+is exactly why they pay), and per-hypothesis costs are not uniform.
+What the numbers establish for the DFS decision: the tree is shallow
+(≤ 11), Δ is tiny and flat across corpora, and the depth-indexed cache
+stack of the design note's step 1 would need at most ~11 slots — its
+premise is validated on all three corpora.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →
