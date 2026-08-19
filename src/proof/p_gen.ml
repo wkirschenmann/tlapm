@@ -102,8 +102,26 @@ let set_expr vis f cx =
       failwith "proof.Gen.set_expr"
     end
 
+(* Proof-tree shape probe (TLAPM_TREE_STATS): logs, for every generated
+   obligation, its nesting depth in the proof tree and its context size,
+   and for every step list (`Steps`), the context size at entry and the
+   number of hypotheses added while traversing it.  Inert (two dead ints)
+   unless the environment variable is set. *)
+let tree_stats = Sys.getenv_opt "TLAPM_TREE_STATS" <> None
+let tree_depth = ref 0
+
 let obligate sq kind =
   incr Stats.total;
+  if tree_stats then begin
+    let k = match kind with
+      | Ob_main -> "main"
+      | Ob_support -> "support"
+      | Ob_error _ -> "error"
+      | Ob_omitted _ -> "omitted"
+    in
+    Printf.eprintf "[TREE] ob depth=%d ctx=%d kind=%s\n"
+      !tree_depth (Deque.size sq.core.context) k
+  end;
   {
    id = None;
    obl = sq;
@@ -270,9 +288,19 @@ let rec generate (sq : sequent) prf time_flag =
           let ob = obligate (sq @@ prf) (Ob_omitted h) in
           assign prf Props.obs [ob]
       | Steps (inits, qed) ->
+          let base = if tree_stats then Deque.size sq.context else 0 in
+          if tree_stats then begin
+            Printf.eprintf "[TREE] enter depth=%d base=%d\n" !tree_depth base;
+            incr tree_depth
+          end;
           let (sq, inits, time_flag) = List.fold_left gen_step (sq, [], time_flag) inits in
           let inits = List.rev inits in
           let qed_prf = generate sq (get_qed_proof qed) time_flag in
+          if tree_stats then begin
+            decr tree_depth;
+            Printf.eprintf "[TREE] exit depth=%d delta=%d\n"
+              !tree_depth (Deque.size sq.context - base)
+          end;
           Steps (inits, {core = Qed qed_prf; props = qed_prf.props}) @@ prf
       | By _ ->
           Errors.bug ~at:prf "Proof.Gen.generate"
