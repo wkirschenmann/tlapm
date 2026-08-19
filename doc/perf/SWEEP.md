@@ -137,3 +137,50 @@ attribution table (E1–E8), the ~20-line fix, and the gate measurements
 (FfiGrpc real-solver RSS 4.9 GB → 439 MB flat, wall unchanged) are in
 doc/perf/PHASE4.md «Results». This is exactly why phase 4 was gated on
 a probe before any surgery.
+
+## Addendum 3 — the full monitored campaign, transitions only (2026-08-19)
+
+Real solvers on FfiGrpc (9 967 obligations, 10 031 verdict events),
+`test/perf/monitor_run.sh` with the fixed RSS sampler, 900 s cap,
+binaries chosen just before and just after each expected transition
+(re-running every commit would have added nothing but wall-clock).
+Throughput per quartile of the verdict index; RSS at 25/50/75/100 % of
+the samples.
+
+| binary | verdicts | wall | rate (v/s) | rate Q1→Q4 | RSS max | outcome |
+|---|---|---|---|---|---|---|
+| #00 base | 1 413 | cap 900 s | 1.6 | 2.1/2.1/1.5/1.2 | 6.0 GB ↗ | truncated |
+| #05 (before Deque) | 1 400 | cap 900 s | 1.6 | 2.0/2.1/1.5/1.3 | 6.0 GB ↗ | truncated |
+| #07 (after Deque) | 1 506 | cap 900 s | 1.7 | 2.2/2.1/1.5/1.3 | 6.2 GB ↗ | truncated |
+| #16 (before expand_defs) | 1 554 | cap 900 s | 1.7 | 2.4/2.1/1.5/1.3 | 6.4 GB ↗ | truncated |
+| #17 expand_defs | 4 440 | 335 s | 13.3 | 19.1/15.4/11.3/10.5 | 13.6 GB ↗ | **OOM-killed** |
+| #19 prune hidden defs | 4 452 | 396 s | 11.2 | 18.2/12.5/9.4/8.7 | 13.6 GB ↗ | **OOM-killed** |
+| #20 prune hidden facts | 10 031 | 739 s | 13.6 | 23.6/15.9/12.4/9.2 | 5.1 GB ↗ | **first to complete** |
+| #21 prefix caches | 10 031 | 211 s | 47.5 | 62.6/48.2/48.2/38.0 | 4.9 GB ↗ | completed |
+| #24 final (pre-phase-4) | 10 031 | 204 s | 49.2 | 67.7/52.2/48.2/37.4 | 4.9 GB ↗ | completed |
+| phase 4 (e_levels fix) | 10 031 | 209 s | 48.0 | 62.6/49.1/48.2/38.0 | **439 MB, flat** | completed |
+
+Readings:
+
+* **Nothing moves before #17 on this metric** — the parse/fingertip
+  wins of #7 (P1: ×6.7–8.9) are invisible to a solver run dominated by
+  per-obligation preparation, exactly as the M-hierarchy predicted.
+* **#17 is the unlock, not the fix**: ×8 throughput, then death by
+  memory at verdict ~4 450 (memcg kill at 13.9 GB anon-RSS, both #17
+  and #19 — dmesg-confirmed). Pruning hidden *defs* (#19) does not
+  change the wall; pruning hidden *facts* (#20) is what makes the run
+  finish (13.6 → 5.1 GB).
+* **#21 buys ×3.5 throughput** on top (739 → 211 s): the prefix caches
+  amortize find_meth/constness/expansion across the shared context.
+* **Phase 4 converts the RSS curve from ↗ 4.9 GB into a flat 439 MB**
+  at unchanged wall — on the user's 7.7 GB machine this is the
+  difference between OOM at 26 k/30 k obligations and finishing.
+* End to end on this corpus: the base binary sustains 1.6 v/s and
+  cannot finish inside any realistic budget (the user measured 95 min
+  single-pass on their machine with the reference fork's baseline);
+  the branch finishes in **3.5 min at 439 MB**, sustaining 48 v/s —
+  above the user's 43 v/s chunked-run target — with the Q4 decline
+  attributable to obligation weight, not heap (unchanged across a ×11
+  heap reduction).
+* The warm path (all fingerprints cached) is a separate story fixed
+  separately: see PHASE4.md «4c/4d» — 14 min 46 s → 3 min 25 s.
