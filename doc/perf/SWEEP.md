@@ -124,3 +124,16 @@ the whole run, and (b) throughput independent of the verdict index,
 lower-bounded by today's small-chunk throughput. On the user's monolith
 that projects the 30k-obligation single pass at roughly the chunked
 throughput (~43 verdicts/s) instead of dying at 26k.
+
+## Addendum 2 — the retention hypothesis, corrected (2026-08-19)
+
+The line above («the remaining 4.7 GB on Ffi is the B1/B5 retention»)
+was the audit's guess, and the phase-4 probe **disproved it**: with
+no-op tasks the obligation array plus the proof tree hold a constant
+~25 MB, and the entire linear accumulation comes from the
+level-memoization cache in `src/expr/e_levels.ml` pinning one
+preparation context per obligation on shared syntax nodes. The
+attribution table (E1–E8), the ~20-line fix, and the gate measurements
+(FfiGrpc real-solver RSS 4.9 GB → 439 MB flat, wall unchanged) are in
+doc/perf/PHASE4.md «Results». This is exactly why phase 4 was gated on
+a probe before any surgery.

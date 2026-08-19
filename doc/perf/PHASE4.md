@@ -1,6 +1,10 @@
 # Phase 4 design — bounding single-pass memory (task streaming + obligation release)
 
-Status: design note, pre-implementation. Evidence base: doc/perf/SWEEP.md
+Status: implemented and measured — see «Results» at the end of this file.
+The probe-first bisection overturned the audit's prime suspects: the
+accumulation was neither the task list nor the retained obligations but
+the **level-memoization cache** (`src/expr/e_levels.ml`) pinning one
+preparation context per obligation on long-lived shared syntax nodes. Evidence base: doc/perf/SWEEP.md
 (addendum), doc/perf/BASELINE.md, and the user's monolith curves
 (380 KB/verdict unpatched; 177 KB/verdict live floor surviving forced
 `Gc.compact`; OOM at 17.5k/26k of 30k obligations on 7.7 GB; throughput
@@ -107,3 +111,93 @@ and finally the user's monolith on the user's machine:
 today's small-chunk throughput. Plus the standing invariants: strict
 golden dumps, unchanged test fail-set, full real-solver proof of the
 synthetic corpus.
+
+---
+
+# Results
+
+## 4.0 — attribution by differential bisection
+
+The probe is `TLAPM_LIVE_STATS=<N>` (commit «tlapm_lib: env-gated
+live-heap probe»): on every Nth verdict the record callback prints
+`Gc.stat` live words and heap words. Cost: one `Gc.stat` per N verdicts,
+inert without the env var. All runs below are M1
+(`--noproving --printallobs --nofp --threads 1`) unless noted.
+
+| exp | corpus | variable removed | live @900 (Abs) / @7000 (Ffi) | verdict |
+|---|---|---|---|---|
+| E2 (ref) | Abs | — | 142 MB, linear | baseline slope |
+| E3 | Ffi | `--printallobs` (display retention) | 1546 MB, linear | exonerated |
+| E1 | Ffi | prefix caches (`--debug noprepcache`) | 1598 MB, linear | exonerated |
+| E5 | Abs | prefix caches | 145 MB, linear | exonerated |
+| E4 | Abs | display retention | 142 MB, linear | exonerated |
+| E6 | Abs | constness annotation + fingerprint computation | 136 MB, linear | exonerated |
+| E7 | Abs | the whole `ship` body (no-op tasks) | **24.8 MB, flat** | growth is inside per-obligation preparation |
+| E8 | Abs | level-cache **writes** (`e_levels`) | **27 MB, flat** | **culprit** |
+
+E7 bounds the search: the obligation array, the proof tree
+(`Props.goal`, step obs), the scheduler and the toolbox stream together
+hold a *constant* ~25 MB on AbstractGrpc — none of them is the leak, so
+the 4a cut list (release Props.goal / step obs / proved slots) is
+**unnecessary and is parked**. E8 names the mechanism:
+
+`E_levels.compute_level` memoizes each node's level in a mutable cell
+(`exprlevel_cache` property) as `ELCache_full (cx, e.core, level)` — it
+stores the **query context** `cx` for the hit-check. The cells live on
+syntax nodes shared by the whole module, so they survive the obligation;
+each prepared obligation re-fills thousands of cells with *its* context,
+and those contexts (hundreds of KB each, chained through the module
+graph) can never be collected. That is the ~150-500 KB/verdict live
+slope, and it explains why the user's forced-`Gc.compact` experiment
+could not reclaim it: the pins are reachable.
+
+## The fix (commit «expr/Levels: stop the level cache pinning …»)
+
+A registry of filled cells + `reset_caches ()` called at the top of
+`Prep.ship`: within one obligation the memoization still hits (that is
+where the sharing pays); between obligations the cells are emptied so no
+context outlives its obligation. ~20 lines, no interface change beyond
+the new `reset_caches` entry.
+
+Bonus datum: on Abs M1, disabling the cache writes entirely (E8 binary)
+is *faster* than the resetting cache (19.3 s vs 23.0 s) — the
+memoization is a net loss in batch mode at today's hit pattern. The
+conservative reset is what upstream should take first (strictly safer);
+whether the cache pays anywhere (LSP?) is a separate question left open.
+
+## 4b — streaming (commit «backend/schedule: pull tasks from a stream»)
+
+`Schedule.run_stream` + a generator in `process_obs` replacing the eager
+`Array.to_list (Array.map make_task obs)`. After the e_levels fix this
+is a second-order saving (task closures were E7-exonerated as a *live*
+holder), but it removes the up-front materialization latency before the
+first launch and keeps at most one prepared task of lookahead.
+
+## Gate measurements (FfiGrpc, real solvers, monitor_run.sh)
+
+10 031 verdicts both sides; verdict stream parity checked by loc+status.
+
+| | before (branch @ sweep-24) | after (phase 4) |
+|---|---|---|
+| wall | 204 s | 209 s (±noise) |
+| RSS max | 4 903 MB | **439 MB (×11 lower)** |
+| RSS at 25/50/75/100 % of run | 1738 / 2774 / 3847 / 4903 MB | 407 / 438 / 438 / 439 MB — **flat** |
+| throughput Q1→Q4 (v/s) | 67.7 / 52.2 / 48.2 / 37.4 | 62.6 / 49.1 / 48.2 / 38.0 |
+
+M1 live curves: FfiGrpc 195→1546 MB before, **97→100 MB flat** after;
+AbstractGrpc 142 MB@900 before, **27 MB flat** after.
+
+Two readings for upstream:
+* Gate (a) is met with **no forced GC anywhere** — the fix is reference
+  surgery, exactly what the chunk+compact experiment could not achieve.
+  The user's 30k-obligation monolith OOM (7.7 GB) is projected to fit in
+  well under 1 GB.
+* The Q1→Q4 throughput decline is **unchanged** by a ×11 smaller heap,
+  so on *this* corpus it is obligation-weight-driven (later obligations
+  are heavier), not GC-driven. The GC-coupling story (rate ÷3) from the
+  user's monolith should be re-measured there; the heap that caused it
+  is gone.
+
+Validation: strict golden dumps identical (smoke + Synth_L100), fast
+suite same fail-set (40/48, all environmental), cram OK, real-solver
+verdict sets loc+status-identical on FfiGrpc and AbstractGrpc.
