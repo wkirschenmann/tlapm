@@ -193,16 +193,18 @@ document version).
   re-fingerprints every obligation of the document at every version
   (ANALYSIS observation L1). That is the next interactive lever, ahead
   of everything else. Two designs, complementary:
-  - **Fingerprint prefix cache** (CLI + LSP): the fingerprint string
-    is a serialization of the context + goal, and consecutive
-    obligations share the same physically-identical context prefix the
-    prep caches exploit. Subtlety that shapes the implementation: the
-    printer (`Backend.Fingerprints`'s `spin`) emits hypotheses in
-    POST-order — the shared prefix lands at the *end* of the buffer —
-    and threads mutable state (a Stack, De Bruijn counters), so the
-    checkpoint is (state at divergence point, tail string), not a
-    buffer prefix. Gate: fingerprint files byte-identical; a
-    both-ways oracle like TLAPM_CHECK_ELABCACHE.
+  - **Fingerprint prefix cache — INVALIDATED by code reading
+    (2026-08-19), do not attempt.** The serialization is not
+    prefix-compositional, by the digest's own definition: hypothesis
+    numbers are assigned at *first use* during the traversal (goal
+    emitted first, `counthyp` mutating the stack entries), and only
+    *used* hypotheses print their bodies — so the prefix's segment of
+    the string is a function of the whole obligation (goal + tail
+    included), not of the physical prefix. Caching it per prefix would
+    change digests, which the .tlacache-compatibility gate forbids.
+    Also checked: the printer's stack is already array-backed O(1) —
+    no mechanical pathology to fix. The per-obligation cost (O(D) walk
+    + used bodies, ~0.6 ms) is intrinsic to the digest definition.
   - **Version-diff gating** (LSP only): after an edit strictly inside
     a proof body, only that proof's obligations can change their
     fingerprints; everything else can carry the previous version's
