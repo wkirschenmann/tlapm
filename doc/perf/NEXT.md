@@ -498,6 +498,24 @@ elab ~4 s + fingerprints ~7 s + tree ~0.2 s; the scoped-fingerprint
 step of the track now targets the ~7 s, and incremental elaboration
 (C3) the rest.
 
+### Track 1, second result: scoped fingerprint carry-over — keystroke
+### 4.2 s on the monolith (×14 overall), and the carry is EXACT
+
+With `TLAPM_LSP_SCOPED=1`, an edit confined to one proof body carries
+the previous version's fingerprints positionally for everything
+outside the edited top-level step (30 851 of 30 872 on the monolith;
+21 recomputed), because statements — the only thing later material
+sees — are untouched and fingerprints are position-independent. The
+keystroke drops 11.5 s → **4.2 s**, and the entire notification stream
+is **byte-identical** to the full recomputation: for proof-body edits
+the "optimistic display" question dissolves — the carry is sound, not
+optimistic. Statement edits and module-level edits fall back to the
+full computation (correct, still 11.5 s). What remains of the
+keystroke is parse+elab+generation (~3.8 s) — exactly the C3
+incremental-elaboration target; and the next cheap win is the
+child-prover side (the on-demand prove request re-elaborates in the
+child too).
+
 ### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
 
 Stack-sampling the whole monolith preparation (60 samples, innermost
