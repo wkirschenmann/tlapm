@@ -12,5 +12,6 @@ open M_t
 
 
 val normalize:
+    ?stream:(M_gen.gen_stepper -> unit) ->
     modctx -> Expr.T.ctx -> mule ->
         modctx * mule * summary

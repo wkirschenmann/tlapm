@@ -153,8 +153,17 @@ let print_unproved_obligations
     end
 
 
-(* Note that when process_obs is called, all obligations have id fields *)
+let toolbox_consider ob =
+    let loc = Option.get (Util.query_locus ob.Proof.T.obl) in
+    !Params.tb_sl <= Loc.line loc.Loc.start
+    && Loc.line loc.Loc.stop <= !Params.tb_el
+
+
+(* Note that when process_obs is called, all obligations have id fields
+   (eager mode; in lazy mode, ?stepper, ids are assigned at emission in
+   the same document order). *)
 let process_obs
+        ?stepper
         (t: Module.T.mule)
         (obs: Proof.T.obligation array)
         (modname: string)
@@ -165,6 +174,16 @@ let process_obs
     let treated = ref IntSet.empty in
     (* initialize table of proved obligations *)
     let proved_ids = ref IntSet.empty in
+    (* Lazy generation (?stepper): obligations are pulled from the
+       generation stepper as the scheduler demands them instead of from
+       the pre-materialized [obs] array (empty in that mode).  Every
+       dispatched obligation is retained in [seen] for the final
+       report; its sequent is dropped as soon as a success verdict is
+       recorded — only unproved obligations are ever reprinted. *)
+    let seen : (int, Proof.T.obligation) Hashtbl.t = Hashtbl.create 64 in
+    (* The array the final report iterates: [obs] in eager mode,
+       rebuilt from [seen] after the drain in lazy mode. *)
+    let report_obs = ref obs in
     (* Measurement probe: with TLAPM_LIVE_STATS=N set, print the live and
        total heap sizes every N recorded verdicts. This is the instrument
        that attributes the per-obligation live-memory floor observed on
@@ -184,10 +203,22 @@ let process_obs
         (* store the obligation id number in the internal table `treated` *)
         treated := IntSet.add obl_id !treated;
         (* if the prover (frontend or backend) succeeded, *)
-        if success then (* then store the obligation id number in
+        if success then begin (* then store the obligation id number in
                         the internal table `proved_ids`
                         *)
             proved_ids := IntSet.add obl_id !proved_ids;
+            (* lazy mode: the sequent of a proved obligation is not
+               needed anymore — keep only the wrapper (its properties
+               carry the location the report prints) *)
+            match Hashtbl.find_opt seen obl_id with
+            | Some sob ->
+                let dummy_seq = {
+                    Expr.T.context = Deque.empty ;
+                    Expr.T.active = {core = Expr.T.String ""; props = []} } in
+                Hashtbl.replace seen obl_id
+                    { sob with obl = { sob.obl with core = dummy_seq } }
+            | None -> ()
+        end;
         incr recorded;
         if live_every > 0 && !recorded mod live_every = 0 then begin
             let st = Gc.stat () in
@@ -208,7 +239,7 @@ let process_obs
             if not (IntSet.mem obl_id !treated) then
                 untreated := ob :: !untreated;
             in
-        Array.iter f obs
+        Array.iter f !report_obs
         in
     let collect_proved_obligations
             (proved: Proof.T.obligation list ref):
@@ -219,7 +250,7 @@ let process_obs
                 proved := ob :: !proved
             end
             in
-        Array.iter f obs
+        Array.iter f !report_obs
         in
     let collect_unproved_obligations
             (unproved: Proof.T.obligation list ref):
@@ -230,7 +261,7 @@ let process_obs
                 unproved := ob :: !unproved
             end
             in
-        Array.iter f obs
+        Array.iter f !report_obs
         in
     Clocks.start Clocks.backend ;
     (* initialize file for output of fingerprints
@@ -252,18 +283,84 @@ let process_obs
     let make_task = Prep.make_task fpout thyout record in
     let next_i = ref 0 in
     let aborted = ref false in
+    (* Lazy generation: the emission pump.  Ids are assigned to every
+       obligation the stepper yields, in document order — the same
+       numbering the eager path produces with [add_id] before its
+       filters — and the eager path's filters (toolbox range, omitted)
+       are applied per emission.  Kept obligations get their
+       "to be proved" toolbox message here, where the eager path
+       printed them all before proving. *)
+    let emitted = ref 0 in
+    let pending : Proof.T.obligation Queue.t = Queue.create () in
+    let stepper_done = ref false in
+    let rec refill st =
+        if Queue.is_empty pending && not !stepper_done then
+            match Module.Gen.gen_step st with
+            | None -> stepper_done := true
+            | Some new_obs ->
+                List.iter begin fun ob ->
+                    incr emitted ;
+                    let ob = { ob with id = Some !emitted } in
+                    let keep =
+                        (not !Params.toolbox || toolbox_consider ob)
+                        && (match ob.kind with
+                            | Ob_omitted _ -> false
+                            | _ -> true) in
+                    if keep then begin
+                        if !Params.toolbox then
+                            Backend.Toolbox.toolbox_print ob
+                                "to be proved" None None 0. None
+                                !Params.printallobs None "" None ;
+                        Hashtbl.replace seen !emitted ob ;
+                        Queue.add ob pending
+                    end
+                end new_obs ;
+                refill st
+    in
     let next_task () =
-        if !aborted || !next_i >= Array.length obs then None
-        else begin
-            try
-                let t = make_task obs.(!next_i) in
-                incr next_i;
-                Some t
-            with Exit -> aborted := true; None
-        end
+        if !aborted then None
+        else match stepper with
+        | None ->
+            if !next_i >= Array.length obs then None
+            else begin
+                try
+                    let t = make_task obs.(!next_i) in
+                    incr next_i;
+                    Some t
+                with Exit -> aborted := true; None
+            end
+        | Some st ->
+            refill st ;
+            begin match Queue.take_opt pending with
+            | None -> None
+            | Some ob ->
+                (try Some (make_task ob)
+                 with Exit -> aborted := true; None)
+            end
     in
     (* proving *)
     Schedule.run_stream !Params.max_threads next_task;
+    (* Lazy generation: finish the traversal (an abort or a stop can
+       leave it partial) so the final report sees every obligation the
+       run should have considered, patch the module's summary — which
+       eager generation had produced before proving — and rebuild the
+       report array from the retained records, in id order. *)
+    (match stepper with
+     | None -> ()
+     | Some st ->
+         while not !stepper_done do
+             refill st ;
+             Queue.clear pending
+         done ;
+         let summ = Module.Gen.gen_summary st in
+         (match t.core.stage with
+          | Final fin ->
+              t.core.stage <-
+                  Final { fin with final_status = (Incomplete, summ) }
+          | _ -> ()) ;
+         let l = Hashtbl.fold (fun _ ob acc -> ob :: acc) seen [] in
+         let l = List.sort ~cmp:(fun a b -> compare a.id b.id) l in
+         report_obs := Array.of_list l) ;
     Isabelle.thy_close thyf thyout;
     (* close fingerprints file *)
     Fpfile.fp_close_and_consolidate fpf fpout;
@@ -289,18 +386,14 @@ let process_obs
     let unproved = ref [] in
     collect_proved_obligations proved;
     collect_unproved_obligations unproved;
-    print_proved_obligations proved obs t;
-    print_unproved_obligations unproved obs t
+    print_proved_obligations proved !report_obs t;
+    print_unproved_obligations unproved !report_obs t
     end
 
 
 let add_id i ob = {ob with id = Some (i+1)}
 
 
-let toolbox_consider ob =
-    let loc = Option.get (Util.query_locus ob.Proof.T.obl) in
-    !Params.tb_sl <= Loc.line loc.Loc.start
-    && Loc.line loc.Loc.stop <= !Params.tb_el
 
 let toolbox_clean arr =
     if !Params.toolbox
@@ -326,6 +419,8 @@ let process_module
     in
     (* file for output of fingerprints *)
     (Params.fpf_out: string option ref) := Some fpf;
+    (* Lazy-generation stepper, set while normalizing (TLAPM_STREAM_GEN). *)
+    let stepper = ref None in
     (* cases of module (stage: Module.T.stage) =
         | Special
         | Final _
@@ -347,8 +442,40 @@ let process_module
             Util.printf "(* processing module %S *)" t.core.name.core
         end ;
         Clocks.start Clocks.elab ;
+        (* Lazy generation (TLAPM_STREAM_GEN=1): obligations are pulled
+           from a resumable generation stepper as the scheduler demands
+           them, instead of being materialized in final_obs before any
+           proving starts.  Restricted to plain proving runs: the modes
+           below consume the eager artifacts (per-theorem summaries in
+           the rewritten body, the module summary before proving, the
+           full obligation array), so they keep the historical path. *)
+        let stream_gen =
+            Sys.getenv_opt "TLAPM_STREAM_GEN" <> None
+            && not !Params.summary
+            && not !Params.check
+            && not !Params.stats
+            && not !Params.suppress_all
+            && not (Params.has_explicit_target ())
+        in
         (* Normalize the proofs in order to get proof obligations *)
-        let (mcx, t, summ) = Module.Elab.normalize mcx Deque.empty t in
+        let (mcx, t, summ) =
+            if stream_gen then
+                Module.Elab.normalize
+                    ~stream:(fun st -> stepper := Some st)
+                    mcx Deque.empty t
+            else
+                Module.Elab.normalize mcx Deque.empty t
+        in
+        (* In stream mode the summary is empty at this point; the
+           obligation count, where needed below, comes from the
+           syntactic pre-pass instead. *)
+        let counted =
+            lazy (fst (Module.Gen.count_obligations_split t)) in
+        let has_obligations () =
+            match !stepper with
+            | Some _ -> Lazy.force counted <> 0
+            | None -> summ.sum_total <> 0
+        in
         (*
         List.iter
             (fun u -> Module.Fmt.pp_print_module
@@ -397,7 +524,7 @@ let process_module
                     | None -> fpf  (* same as file for output of fingerprints *)
             end in
             if      Sys.file_exists fpf_in
-                    && (summ.sum_total <> 0)
+                    && has_obligations ()
                     && t.core.important
                 then begin
                 if !Params.no_fp then
@@ -518,6 +645,17 @@ let process_module
                 (Array.length fin.final_obs) ;
 
         if (!Params.toolbox) then begin
+            match !stepper with
+            | Some _ ->
+                (* Lazy generation: the per-obligation "to be proved"
+                   messages are printed at emission (see process_obs);
+                   the total comes from the syntactic pre-pass, minus
+                   the omitted obligations the eager path filters out
+                   of its announced count. *)
+                let (total, omitted) =
+                    Module.Gen.count_obligations_split t in
+                Backend.Toolbox.print_ob_number (total - omitted)
+            | None ->
             let f ob =
                 Backend.Toolbox.toolbox_print
                     ob
@@ -542,7 +680,7 @@ let process_module
         in
 
         (* `--strict` checks that are independent of the backends. *)
-        if !Params.strict then begin
+        let strict_checks (fin: Module.T.final) =
             (* #271: missing or omitted proof steps leave the proof incomplete,
                even though such steps generate no obligation and would otherwise
                be reported as a successful run. *)
@@ -579,12 +717,25 @@ let process_module
                     "No proof obligation found for the selected target.";
                 Params.note_strict_failure 12
             end
-        end;
+        in
+        (* Lazy generation: the summary the checks read is only complete
+           once the stepper has drained, so they run after process_obs
+           (same messages and exit codes, printed after the verdicts
+           instead of before). *)
+        (match !stepper with
+         | None when !Params.strict -> strict_checks fin
+         | _ -> ());
 
         begin
         if not !Params.suppress_all then
-            process_obs t fin.final_obs
+            process_obs ?stepper:!stepper t fin.final_obs
             t.core.name.core thyf fpf;
+        (match !stepper with
+         | Some _ when !Params.strict ->
+             (match t.core.stage with
+              | Final fin -> strict_checks fin
+              | _ -> ())
+         | _ -> ());
 
         (** Added by HV. It collects all facts and definitions used in the
         current proof tree into a one-line proof. *)

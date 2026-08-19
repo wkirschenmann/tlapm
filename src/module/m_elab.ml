@@ -1072,7 +1072,7 @@ let assert_module_exists name mcx mu =
 
 
 (* is_anon = false => not yet anonymised *)
-let rec normalize mcx cx m =
+let rec normalize ?stream mcx cx m =
   let origbody = m.core.body in
   let prefix = ref Deque.empty in
   let emit mu = prefix := Deque.snoc !prefix mu in
@@ -1298,6 +1298,25 @@ let rec normalize mcx cx m =
   let m = { m.core with body = prefix } @@ m in
   let (m, obs, summ) =
     if m.core.important then begin
+      match stream with
+      | Some hand ->
+          (* Lazy generation: hand the caller a resumable stepper over
+             this (elaborated, pre-generation) module instead of
+             generating eagerly.  The module keeps its pre-generation
+             body and an empty Final stage; the caller drives the
+             stepper, and owns patching the final status once the
+             traversal is drained.  Later modules only read statements
+             from this module's units (`hyps_of_modunit`,
+             `instantiate` via `remove_pf`), never the proofs that
+             generation rewrites. *)
+          hand (M_gen.gen_stepper gencx m) ;
+          (m, [], {
+             sum_total = 0 ;
+             sum_absent = 0, [] ;
+             sum_omitted = 0, [] ;
+             sum_suppressed = 0, []
+           })
+      | None ->
       (* Probe (TLAPM_COUNT_CHECK=1): time the syntactic obligation
          count — the counting pre-pass of the lazy-generation track —
          and check it against the real generation.  Inert without the

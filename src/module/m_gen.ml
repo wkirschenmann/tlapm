@@ -128,15 +128,21 @@ let rec gen_step st =
    lazy generation pass has produced anything; kept in lockstep with
    [gen_step] above (checked by the TLAPM_COUNT_CHECK probe in
    Module.Elab.normalize). *)
-let rec count_obligations m =
-  List.fold_left begin fun n mu ->
+let rec count_obligations_split m =
+  List.fold_left begin fun (n, o) mu ->
     match mu.core with
-    | Theorem (_, _, _, prf, _, _) -> n + Proof.Gen.count_proof prf
-    | Submod sm -> n + count_obligations sm
-    | Mutate (`Use _, us) -> n + List.length us.facts
-    | Mutate (`Hide, _) -> n
-    | _ -> n
-  end 0 m.core.body
+    | Theorem (_, _, _, prf, _, _) ->
+        let (n', o') = Proof.Gen.count_proof_split prf in (n + n', o + o')
+    | Submod sm ->
+        let (n', o') = count_obligations_split sm in (n + n', o + o')
+    | Mutate (`Use _, us) -> (n + List.length us.facts, o)
+    | Mutate (`Hide, _) -> (n, o)
+    | _ -> (n, o)
+  end (0, 0) m.core.body
+
+let count_obligations m = fst (count_obligations_split m)
+
+let gen_summary st = st.gs_summ
 
 let generate cx m =
   let st = gen_stepper cx m in
