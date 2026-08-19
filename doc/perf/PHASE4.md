@@ -201,3 +201,47 @@ Two readings for upstream:
 Validation: strict golden dumps identical (smoke + Synth_L100), fast
 suite same fail-set (40/48, all environmental), cram OK, real-solver
 verdict sets loc+status-identical on FfiGrpc and AbstractGrpc.
+
+## 4c/4d — measured, and mostly redefined by the warm-run profile
+
+Steps 4c and 4d were designed against the audit's model of the warm
+path. Measuring first (same discipline as 4.0) changed the picture.
+
+**The warm run was slower than the cold run.** With every fingerprint
+cached, FfiGrpc took **13 min 29 s** — versus 3 min 29 s for the cold
+run with real solvers. Per-stage attribution (`TLAPM_PREP_TIMES`, plus
+a new `find_meth` timer): all probed stages together account for 158 s;
+`--timing` charges 880 s to the backend region. GDB stack sampling of
+the live process attributed the missing ~700 s to
+**`Toolbox.expand_defs`** (src/backend/toolbox.ml:100, comment:
+«duplicates prep.ml»): the printer's private copy of definition
+expansion still used the **quadratic** one-definition-at-a-time
+algorithm that the phase-1 commit removed from `Prep.expand_defs`.
+`print_old_res` calls it on **every cached-failure verdict** to
+re-derive the obligation text for the toolbox message — 758 × a full
+quadratic expansion of an INSTANCE-heavy context.
+
+Fix: the same single-front-to-back-pass rewrite as `Prep.expand_defs`,
+restricted to the printer's historical filter (visible `Operator`
+definitions only) so the printed obligation is identical.
+Controlled A/B (both binaries started from a byte-identical fingerprint
+table): warm FfiGrpc **14 min 46 s → 3 min 25 s (×4.3)**, RSS 445 →
+423 MB, and the toolbox block streams — obligation bodies included —
+are **byte-identical**. This is also the L5 path from
+ANALYSIS.md — under `--printallobs` the same quadratic expansion ran
+for *successful* cached verdicts too, so interactive warm re-checks pay
+it on every obligation.
+
+**4c as designed (consult the table before find_meth) is parked.** The
+probe bounds its whole headroom at ~40 s/run on this corpus (find_meth
+7.1 s + add_constness 23.9 s + fingerprint 8.7 s), against a real
+soundness risk: the digest is computed after `find_meth` annotates the
+methods, so hoisting the lookup changes the digest's input — exactly
+the invalidation the gate forbids. Not worth it at this ratio; the
+remaining warm cost is now expansion for the cached-failure trivial
+checks (~116 s), a candidate for a later, separately-gated skip.
+
+**4d (buffered fingerprint writes) is parked as measured-unnecessary:**
+`fp_saving` totals **0.265 s** for 10 031 verdicts — the audit's
+"flush + re-sort per result" reading overstated the mechanism (the sort
+is per-fingerprint on a tiny list, not the whole table).
