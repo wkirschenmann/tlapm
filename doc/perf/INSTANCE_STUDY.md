@@ -184,3 +184,26 @@ invariance (unused hypotheses do not enter the digest, used ones keep
 structurally identical bodies through the alias — to be confirmed
 with the differential oracle); and the `TLAPM_TRIVIAL_SPIKE`-style
 validation run on the INSTANCE-heavy corpora.
+
+### Aliases vs use-site collapsing (arbitrated 2026-08-19)
+
+Semantically the aliases add nothing: name resolution could map
+`I!op` straight to the root's `op` entry, and `I!op(a) /\ op(b)` on
+one line is unambiguous — after anonymization both are the same
+De Bruijn index. The two variants remove exactly the same ~110–130
+unused copies; they differ only on the *used* inherited names
+(measured: one on the INSTANCE-heavy corpus).
+
+What the alias buys is implementation risk, not semantics: without
+it, the resolver (`e_anon`/`p_anon` — the frontend's known hot and
+fragile pass, cf. F3) must learn a per-instance export table; with
+it, resolution stays a plain context-name lookup and printouts keep
+the source-faithful `I!op` spelling, at the cost of one `Ix`-bodied
+context cell per used name. Decision: ship the flattened-world change
+*with* aliases; the tree world (C3) natively does the use-site
+collapsing (an INSTANCE node carries its export table by
+construction, no context entries at all), so the aliases are the
+low-risk bridge, not the destination. Caveat kept: for
+*parameter-carrying* used definitions the sharing point remains one
+materialized entry at the INSTANCE unit — inlining at use sites would
+duplicate bodies per use.
