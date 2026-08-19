@@ -434,6 +434,84 @@ LSP can drive — not a CLI performance lever. This mirrors the B2-lite
 lesson: on a structurally-shared pipeline, removing a *materialization*
 saves only its marginal footprint, which sharing already made small.
 
+## Strategic reviews with measurements (2026-08-19, tracks 1/2/4/5)
+
+### Track 2 — context selection for the solvers: LOW CEILING here,
+### needs user-infra data
+
+Two measurements close this locally. (i) Sensitivity exists: joining
+per-obligation solver `time-used` with shipped sizes on FfiGrpc (2 010
+solver-proved obligations), mean time rises monotonically from 0.044 s
+(smallest decile, 60 % instantaneous) to 0.190 s (largest decile,
+11 % instantaneous) — ×4.3. (ii) But the total is small: 152.7 s of
+solver CPU spread over 16 workers inside a 170 s wall = **~5 % of the
+budget**; the critical path is the (sequential) preparation.
+Composition check: a large shipped obligation is 39 top-level items —
+34 `NEW` declarations (3 % of the characters) and 5 facts carrying
+97 % — i.e. `prune_context` already cut hard, and what remains is the
+proof's working assumptions, not deadwood. Étape 4 therefore buys
+approximately nothing on this infrastructure. It can still matter on
+a solver-heavy environment (Isabelle in the loop, harder obligations):
+the decision measure to run there is the same time-used×size join on
+a production run — cost ≈ zero, it reads existing toolbox output.
+
+### Track 1 — incremental LSP: the pain quantified, the plan
+
+Measured with the scripted LSP client on the 30 k-line monolith
+(stdlib resolved, full-text sync): **didOpen → proof-step markers =
+50.4 s; keystroke → diagnostics = 65.4 s then 57.2 s.** Unusable, as
+reported — this is the axis where everything we built this phase pays.
+Attribution carries over from the AbstractGrpc measurement (85–90 % of
+the keystroke is fingerprinting every obligation of every version) and
+scales with N, which is why the monolith is 10× worse than the 6.1 s
+corpus. The plan, on the étape-3 platform: (1) drive the generation
+stepper over the subtree touched by the edit instead of regenerating
+everything — the stepper, document-order ids and the counting pre-pass
+were built for exactly this; (2) fingerprint only the emitted-in-range
+obligations; (3) carry proof state over for the rest — the optimistic-
+display product decision that is already on the team/maintainer
+agenda. Expected: keystroke bounded by parse+elab of the file
+(~8–10 s in-process on the monolith today) once fingerprinting is
+scoped, and by the touched subtree (~1–2 s) once generation is scoped:
+**÷6 to ÷30**. Parsing then becomes the next wall (2.2 s on the
+monolith even after the ×2.6 grammar fix).
+
+### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
+
+Stack-sampling the whole monolith preparation (60 samples, innermost
+attributed frame): `Property` 22 %, `E_visit` 17 %, `Prep` 12 %,
+`E_subst` 12 %, `Fingerprints` 10 %, then a long tail (`E_levels`,
+`E_tla_norm`, `E_constness`, `Coalesce`…). Verdict: the action
+frontend's 93 s hides no dominant fixable loop of its own — its cost
+is the same generic machinery as everywhere else. The one broad
+target the profile exposes is **property-list lookups** (`Property.query`
+walking per-node association lists on every visit): ~a fifth of
+preparation across all stages. A representation change (hot properties
+in dedicated slots, or interned pfuncs) could plausibly buy ×1.2–1.4
+on the whole preparation — but it touches the core wrapper type used
+by every file of the code base, the opposite of a granular reviewable
+change. Classified: upstream-discussion material, not a branch
+experiment. Everything else on this axis is confirmed intrinsic.
+
+### Track 5 — C3: what exists, what's next, expected shape
+
+Everything C3 needs as groundwork now exists and is measured: the
+resumable stepper with document-order ids (étape 3, landed), the
+proof-tree shape numbers (Δ≈3.4, depth ≤ 11, flat/tree 442–921×), the
+INSTANCE node design (export table, parameter-free hoisting — the
+study), the fingerprint semantics (usage-scoped invalidation, not
+prefix-compositional), and two negative results steering it (value
+caches across versions interact badly with per-node mutable state;
+de-materialization alone saves nothing that structural sharing hadn't
+already). The realistic expected gains, stated against those bounds:
+CLI single-pass ≈ nothing further (the caches already capture the
+sharing); interactive = the real prize, delivered through track 1
+which is C3's first vertical slice. Recommended next concrete step:
+prototype the LSP→stepper path (range-scoped generation +
+fingerprinting) as the C3-lite vertical, ahead of phase, feeding the
+optimistic-display discussion with a working demo instead of a design
+note.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →
