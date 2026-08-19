@@ -156,11 +156,78 @@ let with_sub ps sub =
   let status_derived = derived_status ps.status_parsed ps.obs sub in
   { ps with status_derived; sub }
 
-let with_obs ps obs_map =
-  let in_range obl_loc _ = Range.intersect obl_loc ps.full_range in
-  let obs, obs_map = RangeMap.partition in_range obs_map in
+(* The pool of obligations the visitor claims from, step by step.
+   [RangeMap.partition] over the whole remaining map for every step was
+   O(steps × obligations) and dominated the tree build on large files
+   (measured: ~45 s of a 59 s keystroke on a 30k-line module, 13 563
+   steps × 30 872 obligations).  The pool keeps the exact claiming
+   semantics — first claimer wins, a claim is a range intersection —
+   in O(log n + matches) per step: entries sorted by range, a binary
+   search to the window start, a forward scan over the window, and a
+   backward scan bounded by the longest obligation span (an entry
+   starting further back cannot reach the window). *)
+type obl_pool = {
+  entries : (Range.t * Obl.t) array;  (* sorted by [Range.compare] *)
+  taken : bool array;
+  max_span : int;  (* longest obligation span, in lines *)
+}
+
+let pool_of_list l =
+  (* Duplicate ranges collapse exactly as the historical
+     [RangeMap.of_list] collapsed them (last one wins), and the
+     bindings come out sorted. *)
+  let entries = Array.of_list (RangeMap.bindings (RangeMap.of_list l)) in
+  Array.sort (fun (a, _) (b, _) -> Range.compare a b) entries;
+  let max_span =
+    Array.fold_left
+      (fun m (r, _) -> max m (Range.line_till r - Range.line_from r))
+      0 entries
+  in
+  { entries; taken = Array.make (Array.length entries) false; max_span }
+
+let pool_claim pool w =
+  let n = Array.length pool.entries in
+  let wlo = Range.line_from w in
+  let whi = Range.line_till w in
+  (* first index whose range starts at line [wlo] or later *)
+  let rec bs a b =
+    if a >= b then a
+    else
+      let m = (a + b) / 2 in
+      if Range.line_from (fst pool.entries.(m)) < wlo then bs (m + 1) b
+      else bs a m
+  in
+  let lo = bs 0 n in
+  let acc = ref [] in
+  let claim i =
+    if not pool.taken.(i) then
+      let r, o = pool.entries.(i) in
+      if Range.intersect r w then begin
+        pool.taken.(i) <- true;
+        acc := (r, o) :: !acc
+      end
+  in
+  let i = ref (lo - 1) in
+  while
+    !i >= 0
+    && Range.line_from (fst pool.entries.(!i)) >= wlo - pool.max_span
+  do
+    claim !i;
+    decr i
+  done;
+  let j = ref lo in
+  while !j < n && Range.line_from (fst pool.entries.(!j)) <= whi do
+    claim !j;
+    incr j
+  done;
+  RangeMap.of_list !acc
+
+let pool_all_taken pool = Array.for_all (fun b -> b) pool.taken
+
+let with_obs ps pool =
+  let obs = pool_claim pool ps.full_range in
   let status_derived = derived_status ps.status_parsed obs ps.sub in
-  ({ ps with obs; status_derived }, obs_map)
+  { ps with obs; status_derived }
 
 let with_range ps range =
   { ps with full_range = Range.join_opt range ps.full_range }
@@ -505,6 +572,12 @@ end = struct
     | TL.Proof.T.Obvious | TL.Proof.T.By (_, _) | TL.Proof.T.Steps (_, _) ->
         None
 
+  (* Probe (TLAPM_LSP_PHASES=1): accumulate the time spent computing
+     obligation fingerprints while building the proof-step tree. *)
+  let fp_probe = ref false
+  let fp_time = ref 0.
+  let fp_count = ref 0
+
   class step_visitor (file : string) =
     object (self : 'self)
       inherit TL.Module.Visit.map as m_super
@@ -512,7 +585,7 @@ end = struct
       val mutable acc_steps : t list = []
       val mutable acc_range : Range.t option = None
       val mutable mu_curr : TL.Module.T.modunit option = None
-      val mutable obs : Obl.t RangeMap.t = RangeMap.empty
+      val mutable obs : obl_pool = pool_of_list []
 
       method private take_mu () =
         let mu = Option.get mu_curr in
@@ -545,10 +618,9 @@ end = struct
           | Some step ->
               let step = with_sub step (List.rev acc_steps) in
               let step = with_range step acc_range in
-              let step, obs_remaining = with_obs step obs in
+              let step = with_obs step obs in
               acc_steps <- step :: prev_steps;
-              acc_range <- Some (Range.join_opt prev_range step.full_range);
-              obs <- obs_remaining);
+              acc_range <- Some (Range.join_opt prev_range step.full_range));
           res
 
       (* That's the entry point to the visitor. *)
@@ -562,7 +634,16 @@ end = struct
             if_in_file_opt file o.obl @@ fun o_range ->
             let o =
               (match o.fingerprint with
-                | None -> Tlapm_lib.Backend.Fingerprints.write_fingerprint o
+                | None ->
+                    let t0 =
+                      if !fp_probe then Unix.gettimeofday () else 0. in
+                    let o =
+                      Tlapm_lib.Backend.Fingerprints.write_fingerprint o in
+                    if !fp_probe then begin
+                      fp_time := !fp_time +. (Unix.gettimeofday () -. t0) ;
+                      incr fp_count
+                    end;
+                    o
                 | Some _ -> o)
               |> Obl.of_parsed_obligation
               |> Obl.with_proof_state_from (Hashtbl.find_opt prev_obs)
@@ -575,9 +656,9 @@ end = struct
               | TL.Module.T.Parsed -> []
               | TL.Module.T.Flat -> []
               | TL.Module.T.Final final -> Array.to_list final.final_obs)
-            |> List.filter_map mule_obl |> RangeMap.of_list;
+            |> List.filter_map mule_obl |> pool_of_list;
           ignore (self#tla_module_root mule);
-          assert (RangeMap.is_empty obs);
+          assert (pool_all_taken obs);
           match acc_steps with
           | [] -> None
           | [ step ] -> Some step
@@ -713,8 +794,15 @@ end = struct
       | None -> failwith "of_module, has no file location"
       | Some m_locus -> m_locus.file
     in
+    fp_probe := Sys.getenv_opt "TLAPM_LSP_PHASES" <> None ;
+    fp_time := 0. ;
+    fp_count := 0 ;
     let v = new step_visitor file in
-    v#process mule prev_obs
+    let r = v#process mule prev_obs in
+    if !fp_probe then
+      Printf.eprintf "[LSP_PHASES] fingerprints=%.2fs (n=%d)\n%!"
+        !fp_time !fp_count ;
+    r
 end
 
 let of_module ?prev mule = Builder.of_module mule prev
