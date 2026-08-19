@@ -499,6 +499,8 @@ module Subst: sig
     type sub
     val shift:
         int -> sub
+    val memo:
+        sub -> sub
     val scons:
         expr -> sub ->
             sub

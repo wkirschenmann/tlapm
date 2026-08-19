@@ -15,11 +15,25 @@ type sub =
   | Cons of expr * sub
   | Compose of sub * sub
   | Bump of int * sub
+  | Memo of (int, expr_) Hashtbl.t * sub
+  (* [Memo (tbl, s)] behaves exactly like [s], caching the result core of
+     each index lookup in [tbl].  Index resolution ([app_ix]) walks the
+     [Cons]/[Bump] spine linearly, so applying a deep substitution — e.g.
+     the single-pass expansion substitution, one [Cons] per inlined
+     definition — costs O(spine) per variable occurrence.  A memoized
+     wrapper makes each distinct index resolve once per substitution
+     VALUE; since prefix caches share substitution values across
+     obligations, the table warms once for a whole run.  Purely an
+     evaluation cache: [Memo (tbl, s)] and [s] denote the same
+     substitution. *)
 
 let shift n = Shift n
 let scons e s = Cons (e, s)
 let ssnoc s e = Cons (e, s)
 let compose s t = Compose (s, t)
+let memo = function
+  | (Memo _ | Shift _) as s -> s
+  | s -> Memo (Hashtbl.create 16, s)
 
 let bumpn n = function
   | Bump (k, s) -> Bump (k + n, s)
@@ -176,6 +190,14 @@ and app_ix s n =
     | Bump (k, _) when i <= k -> Ix i @@ n
     | Bump (k, ss) -> app_expr (Shift k) (go ss (i - k))
       (* could call `app_ix` directly, instead of `app_expr` *)
+    | Memo (tbl, ss) -> begin
+        match Hashtbl.find_opt tbl i with
+        | Some core -> core @@ n
+        | None ->
+            let r = go ss i in
+            Hashtbl.add tbl i r.core;
+            r
+      end
   in
   go s n.core
 
@@ -242,6 +264,8 @@ let pp_print_sub cx ff =
         fprintf ff "(%a) o (%a)" handle s handle t
     | Bump (n, s) ->
         fprintf ff "%d(%a)" n handle s
+    | Memo (_, s) ->
+        handle ff s
   in
   fprintf ff "@[<b1>[%a]@]" handle
 

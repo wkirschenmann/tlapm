@@ -183,17 +183,20 @@ let expand_defs_cached ob =
     (raw, l, states)
   end () in
   let n = Array.length raw in
+  (* The states carry memoized substitutions: index resolution through
+     the deep expansion spine is cached on the substitution value, which
+     the prefix cache shares across obligations (see Expr.Subst.memo). *)
   let rec fold i ((s, kept) as st) =
     if i = n then st
     else begin
       let h = app_hyp s raw.(i) in
       let st = match h.core with
         | Defn ({core = Operator (_, e)}, _, Visible, _) ->
-            (scons e s, kept)
+            (memo (scons e s), kept)
         | Defn ({core = Bpragma (_, e, _)}, _, _, _) ->
-            (scons e s, kept)
+            (memo (scons e s), kept)
         | _ ->
-            (bump s, Deque.snoc kept h)
+            (memo (bump s), Deque.snoc kept h)
       in
       states.(i + 1) <- st;
       fold (i + 1) st
