@@ -184,3 +184,42 @@ Readings:
   heap reduction).
 * The warm path (all fingerprints cached) is a separate story fixed
   separately: see PHASE4.md «4c/4d» — 14 min 46 s → 3 min 25 s.
+
+## Addendum 4 — the 30k-obligation monolith, end to end (2026-08-19)
+
+The spec that motivated the whole effort (the user's L1 monolith:
+30 294 lines, 29 976 obligations, 418 lemmas — the single-pass OOM repro,
+now in the local corpus, see test/perf/README.md). Same protocol as
+addendum 3; container memory ceiling ~13.9 GB. The user's own prior
+measurements on a 7.7 GB machine: unpatched reference fork = 17 h to die
+at 17.5k obligations; fork + chunked `Gc.compact` = dead at 26k.
+
+| binary | verdicts | wall | rate Q1→Q4 (v/s) | RSS max | outcome |
+|---|---|---|---|---|---|
+| #16 (before unlock) | 6 284 | 795 s | 9.9/9.4/7.3/6.2 | 13.6 GB | OOM |
+| #17 expand_defs | 8 423 | 267 s | 40.5/33.9/31.9/24.2 | 13.6 GB | OOM |
+| #19 prune defs | 8 446 | 262 s | 40.6/37.7/31.5/24.3 | 13.5 GB | OOM |
+| #20 prune facts | 29 655 | 1 334 s | 77.2/33.2/19.8/**11.6** | 13.6 GB | **OOM 380 short of the end** |
+| #21 prefix caches | 30 035 | 514 s | 144.4/68.9/51.8/36.1 | 12.7 GB | completed |
+| #24 final (pre-phase-4) | 30 035 | 537 s | 127.2/67.6/50.4/34.4 | 12.8 GB | completed (1.1 GB of margin) |
+| **phase 4** | **30 035** | **445 s** | **163.2/83.4/60.5/40.6** | **1.39 GB, flat** | completed |
+
+Readings, beyond what FfiGrpc already showed:
+
+* **The GC coupling is now measured on the corpus that exhibited it.**
+  On FfiGrpc (heap ≤ 4.9 GB) #24 and phase 4 were indistinguishable; here
+  #24's 12.8 GB heap costs ~20 % of throughput in *every* quartile
+  against phase 4's flat 1.39 GB, and #20's collapse (77 → 11.6 v/s as
+  its heap walks to 13.6 GB) is the user's measured ÷3, reproduced.
+* **Feasibility is the real phase-4 deliverable**: #21/#24 finish *here*
+  with ~1 GB of margin on a 15 GB container, but they cross the 7.7 GB
+  machine's fatal line (6.8 GB) around verdict ~9 000 of 30 000 — on the
+  user's machine, only phase 4 finishes. End to end there: from
+  «17 hours, then OOM at 58 %» to **7.5 minutes, 1.39 GB**.
+* **The within-run slope (÷4, 163→41 v/s) is corpus-driven, not
+  heap-driven**: identical shape on #24 and phase 4, non-monotone (local
+  recoveries at ~18-20k and ~28-30k), so it mixes a positional trend with
+  heavy regions. Whether the positional trend is preparation cost (the
+  context prefix grows with position — every prior lemma statement is
+  carried, cited or not) or solver difficulty is settled by a solver-free
+  M1 profile — see PHASE4.md.
