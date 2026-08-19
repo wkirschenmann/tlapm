@@ -15,25 +15,70 @@ open M_t
 (* let debug = Printf.eprintf *)
 
 
-let rec generate cx m =
-  let obs : obligation list ref = ref [] in
-  let emit ob = obs := ob :: !obs in
-  let rsumm : summary ref = ref empty_summary in
-  let fincx = ref Deque.empty in
-  let rec visit cx mus = match mus with
-    | [] ->
-        fincx := cx ; []
-    | mu :: mus -> begin
-        match mu.core with
+(* [generate] is expressed as a resumable stepper so that a caller can
+   consume obligations module-unit by module-unit — numbering, preparing
+   and proving them before the whole module has been traversed (the
+   lazy-generation track).  [gen_step] returns the next unit's
+   obligations (a theorem's, or a module-level USE/HIDE's), in document
+   order; when the traversal is over it returns [None] and the rewritten
+   module is available in [gs_result].  The eager [generate] below
+   drains the stepper and presents the historical interface; its
+   behavior is unchanged. *)
+
+type gen_frame = {
+  gf_mule : mule ;                       (* module being rebuilt *)
+  gf_wrap : modunit option ;             (* enclosing [Submod] unit *)
+  mutable gf_cx : hyp Deque.dq ;         (* running context *)
+  mutable gf_todo : modunit list ;       (* units not yet visited *)
+  mutable gf_done : modunit list ;       (* rewritten units, reversed *)
+}
+
+type gen_stepper = {
+  mutable gs_stack : gen_frame list ;
+  mutable gs_summ : summary ;
+  mutable gs_result : mule option ;      (* set when the traversal ends *)
+}
+
+let gen_stepper cx m = {
+  gs_stack = [ { gf_mule = m ; gf_wrap = None ; gf_cx = cx ;
+                 gf_todo = m.core.body ; gf_done = [] } ] ;
+  gs_summ = empty_summary ;
+  gs_result = None ;
+}
+
+let rec gen_step st =
+  match st.gs_stack with
+  | [] -> None
+  | fr :: rest -> begin
+      match fr.gf_todo with
+      | [] ->
+          let m = { fr.gf_mule with
+                    core = { fr.gf_mule.core with
+                             body = List.rev fr.gf_done } } in
+          st.gs_stack <- rest ;
+          begin match rest, fr.gf_wrap with
+          | parent :: _, Some mu ->
+              parent.gf_done <- (Submod m @@ mu) :: parent.gf_done ;
+              gen_step st
+          | [], None ->
+              st.gs_result <- Some m ;
+              None
+          | _ ->
+              Errors.bug "Module.Gen.gen_step: inconsistent stack"
+          end
+      | mu :: mus ->
+          fr.gf_todo <- mus ;
+          begin match mu.core with
           | Theorem (nm, sq, naxs, prf, prf_orig, _) ->
-             let cx = match nm with
+              let cx = match nm with
                 | Some nm ->
-                    Deque.snoc cx (Defn (Operator (nm, exprify_sequent sq @@ nm)
-                    @@ mu, Proof Always , Visible, Export) @@ mu)
+                    Deque.snoc fr.gf_cx
+                      (Defn (Operator (nm, exprify_sequent sq @@ nm)
+                       @@ mu, Proof Always , Visible, Export) @@ mu)
                 | _ ->
-                    cx
+                    fr.gf_cx
               in
-              let prf, summ =
+              let prf, obs, summ =
                 let psq = if nm = None then sq else app_sequent (shift 1) sq in
                 (* the addition of the sequent context to the global context
                  * might invalidate the later generality. I.e. the added
@@ -45,53 +90,48 @@ let rec generate cx m =
                 Proof.Gen.reset_stats () ;
                 let prf = Proof.Gen.generate psq prf time_flag in
                 let (obs, prf) = Proof.Gen.collect prf in
-                (*let obs =
-                  let process_ob ob =
-                    let visitor1 = object (self: 'self)
-                      inherit Expr.Constness.const_visitor
-                    end in
-                    let visitor2 = object (self: 'self)
-                      inherit Expr.Leibniz.leibniz_visitor
-                    end in
-                    let ob1 =  visitor1#expr ((),cx) ((Sequent
-                    ob.obl.core) @@ ob.obl) in
-                    let ob2 =  visitor2#expr ((),cx) ob1 in
-                    match ob2.core with
-                      | Sequent sq -> { ob with obl = { ob.obl with core = sq } }
-                      | _ -> failwith "Proof_prep.normalize"
-                  in
-                  List.map process_ob obs in *)
                 let sts = Proof.Gen.get_stats () in
                 let summ = { sum_total = sts.Proof.Gen.total
                            ; sum_absent = (List.length sts.Proof.Gen.absent, sts.Proof.Gen.absent)
                            ; sum_omitted = (List.length sts.Proof.Gen.omitted, sts.Proof.Gen.omitted)
                            ; sum_suppressed = (List.length sts.Proof.Gen.suppressed, sts.Proof.Gen.suppressed)
                            } in
-                  List.iter emit obs ;
-                  prf, summ in
-                rsumm := cat_summary !rsumm summ ;
-                let mu = { mu with core = Theorem (nm, sq, naxs, prf, prf_orig, summ) } in
-                let he = if nm = None then exprify_sequent sq else Ix 1 in
-                let cx = Deque.snoc cx (Fact (he @@ mu, Hidden, Always) @@ mu) in
-                  mu :: visit cx mus
+                prf, obs, summ in
+              st.gs_summ <- cat_summary st.gs_summ summ ;
+              let mu = { mu with core = Theorem (nm, sq, naxs, prf, prf_orig, summ) } in
+              let he = if nm = None then exprify_sequent sq else Ix 1 in
+              fr.gf_cx <- Deque.snoc cx (Fact (he @@ mu, Hidden, Always) @@ mu) ;
+              fr.gf_done <- mu :: fr.gf_done ;
+              if obs = [] then gen_step st else Some obs
           | Submod m ->
-              let (m, obs, summ) = generate cx m in
-                List.iter emit obs ;
-                rsumm := cat_summary !rsumm summ ;
-                (Submod m @@ mu) :: visit cx mus
+              st.gs_stack <-
+                { gf_mule = m ; gf_wrap = Some mu ; gf_cx = fr.gf_cx ;
+                  gf_todo = m.core.body ; gf_done = [] } :: st.gs_stack ;
+              gen_step st
           | Mutate (uh, us) ->
-              let (cx, obs) = Proof.Gen.mutate cx uh (us @@ mu) Always in
-                List.iter emit obs ;
-                mu :: visit cx mus
+              let (cx, obs) = Proof.Gen.mutate fr.gf_cx uh (us @@ mu) Always in
+              fr.gf_cx <- cx ;
+              fr.gf_done <- mu :: fr.gf_done ;
+              if obs = [] then gen_step st else Some obs
           | Anoninst _ ->
               Errors.bug ~at:mu "Module.Gen.generate: unnamed INSTANCE"
           | _ ->
-              let cx = Deque.append_list cx (hyps_of_modunit mu) in
-                mu :: visit cx mus
-      end
+              fr.gf_cx <- Deque.append_list fr.gf_cx (hyps_of_modunit mu) ;
+              fr.gf_done <- mu :: fr.gf_done ;
+              gen_step st
+          end
+    end
+
+let generate cx m =
+  let st = gen_stepper cx m in
+  let rec drain acc = match gen_step st with
+    | Some obs -> drain (List.rev_append obs acc)
+    | None -> List.rev acc
   in
-  let body = visit cx m.core.body in
-    ({ m with core = { m.core with body = body } }, List.rev (!obs), !rsumm)
+  let obs = drain [] in
+  match st.gs_result with
+  | Some m -> (m, obs, st.gs_summ)
+  | None -> Errors.bug "Module.Gen.generate: traversal ended without a result"
 
 (****************************************************************************)
 
