@@ -172,6 +172,41 @@ today* — against the hard subset criterion. A viable B2 needs a
 pre-expansion, selection-compatible replacement for the triviality
 scan; that is a design item for the C3 discussion, not a quick move.
 
+## Phase C — first measurements (2026-08-19)
+
+Instrument: `test/perf/lsp_c0.py`, a scripted LSP client driving the
+real `tlapm_lsp` server (initialize → didOpen → timed didChange +
+diagnostic-pull rounds, completion signalled by the pushed
+`proofStepMarkers`/`publishDiagnostics` notifications, matched on the
+document version).
+
+* **F2 (parser grammar) — done.** The keystroke loop on a
+  30 294-line module was ≈ pure parse; memoizing the two instances of
+  each grammar rule (21 rules, bodies unchanged) cuts the parsing clock
+  3.02 → 1.18 s (×2.6) and the measured keystroke loop 2.9 → 1.2 s.
+  (Caveat recorded: those two loop numbers were taken with dependency
+  resolution failing, which the harness now handles by making the
+  stdlib visible; the CLI parsing-clock numbers are unaffected.)
+* **The true keystroke cost, dependencies resolved** (FfiGrpc + its
+  AbstractGrpc/stdlib chain): **~6.1 s per keystroke**, GDB-sampled at
+  ~85-90 % inside per-obligation **fingerprinting** — the LSP
+  re-fingerprints every obligation of the document at every version
+  (ANALYSIS observation L1). That is the next interactive lever, ahead
+  of everything else: skip re-fingerprinting (or re-generating)
+  obligations whose statement region did not change, or gate
+  generation to the edited range (C2/L3).
+* **C1 (elaborated-dependency cache): negative result, withdrawn.**
+  The cache worked mechanically (15 dependencies seeded per keystroke,
+  digest-validated) but made the loop *slower*: 10 s vs 6.1 s per
+  keystroke, the extra time GDB-sampled in the INSTANCE substitution
+  (`m_subst.app_modunits`) during the main module's elaboration. The
+  mechanism of that slowdown is not understood (suspects: property or
+  cache state carried by nodes shared across versions; heap locality),
+  so the change was not kept. Data point for the C3 design: reusing
+  elaborated dependency *values* across versions interacts badly with
+  today's per-node mutable state — a fresh argument for the
+  tree-with-addressing model over value-sharing caches.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →
