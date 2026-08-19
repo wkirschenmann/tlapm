@@ -382,14 +382,17 @@ prover lifecycle; only worth it if Shape A's stepper rewrite of
 Open decision points for the team/maintainer discussion:
 1. `module.mli`: `final_obs` becomes empty (or optional) on the CLI
    proving path — type/API choice.
-2. The toolbox protocol announces the obligation count up front
-   (`tlapm_lib` prints it from `Array.length final_obs`); with lazy
-   generation the total is only known at the end. Either a cheap
-   counting pre-pass (re-runs generation without retaining, ~6 s on
-   the monolith), a late count message (protocol/UI change), or
-   accepting the count after the stepper drains (it finishes well
-   before proving does — the progress denominator arrives a few
-   seconds late).
+2. ~~The toolbox protocol announces the obligation count up front~~
+   **RESOLVED (measured 2026-08-19):** a purely syntactic counting
+   pre-pass — a proof-tree walk mirroring `generate`'s gating and
+   `collect`'s suppression rules, building no sequent
+   (`M_gen.count_obligations` / `P_gen.count_proof`) — reproduces the
+   generated count *exactly* on all four corpora and costs **33 ms on
+   the monolith** against 2.0 s for real generation (the earlier
+   "~6 s" figure was the whole elaboration, not generation). The
+   up-front total is therefore essentially free; the
+   `TLAPM_COUNT_CHECK` probe in `Module.Elab.normalize` keeps the
+   counter in lockstep with the generator.
 3. Per-theorem granularity is proposed as final — going per-obligation
    inside a theorem would require re-splitting `generate`/`collect`
    (the supp filter and the Steps/QED dependency make creation-time
