@@ -134,3 +134,53 @@ an INSTANCE node holds a reference to the instantiated module plus the
 substitution, and only parameter-dependent definitions ever
 materialize; the hoisting above is the flattened-world approximation
 of that, implementable now and upstream-reviewable on its own.
+
+## Retained design (PO decision 2026-08-19): usage-filtered hoisting
+## with aliases
+
+Refinement over blanket hoisting: only keep what is actually *used*
+through the module's interface, and bring it to the top via aliases.
+The instantiated context then contains: the instance's own
+(parameter-carrying) units, plus **one alias per inherited name
+actually referenced** — `I!op == <Ix to the hoisted/root definition>`
+— plus the transitive dependencies of those hoisted definitions,
+deduplicated against the root's own extension (`seen` logic). Nothing
+unused ever enters the context, and the aliases *are* the name
+resolution (no side table needed; `BY DEF I!op` expands through the
+alias to the real body).
+
+What "used" means, both statically computable:
+1. references from the instantiated module's *own* units into its
+   extension prefix (De Bruijn indices below the extension boundary —
+   detectable on the module's elaborated body);
+2. `I!name` references in the enclosing module's source — these occur
+   *after* the INSTANCE point, so they require a pre-scan of the
+   enclosing module's parse tree before emitting the instance
+   (two-pass over the module, or an emission point that already knows
+   the use set).
+Plus the transitive closure of the hoisted definitions' own
+references. The per-module parameter-free criterion above still
+delimits what may be hoisted at all; parameter-carrying material is
+instantiated as today.
+
+Measured on FfiGrpc: the enclosing spec references **73 distinct
+`L0!…` names**, of which **one** is inherited library material
+(`L0!IsFiniteSet` — FiniteSets is not even in the root's own
+extension chain, so the interface use is genuine); the other 72 are
+AbstractGrpc's own definitions and theorem statements, which must be
+instantiated anyway. Expected effect of the design on this corpus:
+the ~110–130 unused inherited copies per obligation context (all the
+SequenceTheorems / NaturalsInduction / FiniteSetTheorems statement
+bodies among them) disappear outright, replaced by one alias and a
+handful of hoisted dependencies — roughly −60 % of instantiated
+occurrences, −12 % of all context-definition occurrences, concentrated
+on the largest bodies.
+
+Open implementation items: where to place the use-set pre-scan in
+`m_elab`'s single elaboration pass; alias visibility semantics (a
+`BY DEF I!op` must expand through the alias — chained `Operator`
+expansion already does this, to be confirmed on a test); fingerprint
+invariance (unused hypotheses do not enter the digest, used ones keep
+structurally identical bodies through the alias — to be confirmed
+with the differential oracle); and the `TLAPM_TRIVIAL_SPIKE`-style
+validation run on the INSTANCE-heavy corpora.
