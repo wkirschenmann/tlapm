@@ -50,26 +50,39 @@ or indefinitely remote.
 
 ### B2 — select the context before the expensive stages
 
-Compute, at the top of `ship`, the kept set: goal + `BY`/`BY DEF`
-transitive closure + the declarations well-formedness needs — and let
-the expensive stages walk only that. Hard constraint: the fingerprint
-is still computed on the *unselected* obligation (digest invariance —
-existing .tlacache files must stay valid).
+Move the selection that `prune_context` already performs (the
+citations are *applied at generation time* — cited facts are `Visible`,
+the rest `Hidden` — so the criterion exists) **upstream of the
+expensive stages**, so `elab_normalize`/`add_constness`/`expand_defs`
+walk only the kept set. Hard constraint: the fingerprint is still
+computed on the *unselected* obligation (digest invariance — existing
+.tlacache files must stay valid).
 
-What the lazy tree changes here — and what it does not: the tree gives
-the *candidate* context for free (parents + earlier siblings + module
-prefix at the root + INSTANCE-imported units, O(Δ) per node). It does
-**not** give the *cited subset*: the closure computation, its soundness
-edge cases (ENABLED expansion needs, level computations, implicit
-declarations) and the whole validation battery (subset dumps, verdict
-parity) are representation-independent. That is where the risk and the
-work live, and all of it survives C3. Only the small flat-deque
-traversal is representation-specific and will be rewritten as the O(Δ)
-tree walk.
+Scope correction (review discussion, 2026-08-19): an earlier draft
+claimed the `BY`-closure computation was representation-independent
+and would survive the lazy tree. **That was wrong.** In the tree,
+citation resolution is *addressing*, not closure-over-a-candidate-set:
+module-level names are predecessor siblings at level 1 (an
+incrementally-maintained name→node table cached in the current level-1
+node); step references `x.<y>` are direct tree coordinates; the `USE`s
+in force at each level are that level's predecessor siblings, in the
+same per-level cache. The «build the superset, then filter» shape —
+the bulk of a flat-world selection implementation — has no equivalent
+in the tree and is throwaway.
 
-So B2 is scoped to its portable core: establish and harden the
-*criterion* on today's architecture, take the ÷8-slope gain now, accept
-a small traversal rewrite later.
+What genuinely exists in both representations is the **assembly
+contract**, three pieces: (1) De Bruijn renumbering of a sparse
+sequent (today's `__pruned__` slots solve this); (2) the transitive
+pull of *declarations* by occurrence — a fetched or expanded body
+exposes free symbols whose declarations must ship, to a fixed point;
+(3) the auto-methods (AutoUSE, sound-ENABLED) that discover
+definitions beyond the citations. Plus the validation battery (subset
+dumps, verdict parity), which carries over as C3's acceptance suite.
+
+Consequence: B2's flat-world form is deliberately **minimal** — move
+the existing prune earlier, harvest the ÷8-slope gain, and stop there.
+Any effort beyond that goes into C3's assembly design directly, where
+the per-level cache + direct addressing model is the specification.
 
 ### C3 — remove the flattening (the lazy tree, step 3 of the design note)
 
