@@ -517,7 +517,8 @@ let as_lsp_tlaps_proof_step_details uri ps =
 
 (** Construct the view of the AST in terms of user-visible proof steps. *)
 module Builder : sig
-  val of_module : TL.Module.T.mule -> t option -> t option
+  val of_module :
+    TL.Module.T.mule -> t option -> (string * string) option -> t option
 end = struct
   let in_file file wrapped =
     match Tlapm_lib.Util.query_locus wrapped with
@@ -577,6 +578,74 @@ end = struct
   let fp_probe = ref false
   let fp_time = ref 0.
   let fp_count = ref 0
+  let fp_carried = ref 0
+
+  (* Scoped fingerprinting (TLAPM_LSP_SCOPED=1).  When the edit between
+     the previous and the current version is confined to the proof BODY
+     of a single top-level step, only that step's obligations can
+     change: statements — the only thing later material sees — are
+     untouched, so every obligation outside the edited step keeps a
+     sequent identical up to line positions, and fingerprints do not
+     depend on positions (the whole cross-version state carry-over
+     relies on that).  Those obligations therefore inherit the previous
+     version's fingerprint, found positionally: same range before the
+     edit, line-shifted after it.  The fingerprint is the key of the
+     existing proof-state carry-over, so inheriting it carries the
+     state too.  Any situation outside this criterion — edit touching a
+     statement, module-level material, several steps, no positional
+     match — falls back to a real fingerprint computation, so a carry
+     only ever skips recomputing an identical value. *)
+  let compute_carry (prev : t) (old_text : string) (new_text : string) =
+    let ol = Array.of_list (String.split_on_char '\n' old_text) in
+    let nl = Array.of_list (String.split_on_char '\n' new_text) in
+    let no = Array.length ol and nn = Array.length nl in
+    let p = ref 0 in
+    while !p < no && !p < nn && ol.(!p) = nl.(!p) do incr p done;
+    let s = ref 0 in
+    while
+      !s < no - !p && !s < nn - !p && ol.(no - 1 - !s) = nl.(nn - 1 - !s)
+    do
+      incr s
+    done;
+    let delta = nn - no in
+    (* the edited window, in old 1-based line coordinates *)
+    let wl = !p + 1 in
+    let wh_true = no - !s in
+    let wh = max wh_true wl in
+    let host =
+      List.find_opt
+        (fun st ->
+          Range.line_from st.full_range <= wl
+          && wh <= Range.line_till st.full_range
+          && wl > Range.line_till st.head_range)
+        prev.sub
+    in
+    match host with
+    | None -> None
+    | Some host ->
+        let hz_lo = Range.line_from host.full_range in
+        let hz_hi = Range.line_till host.full_range in
+        let tbl = Hashtbl.create 4096 in
+        let add r (o : Obl.t) =
+          match Obl.fingerprint o with
+          | None -> ()
+          | Some fp ->
+              let rf = Range.line_from r and rt = Range.line_till r in
+              if rt >= hz_lo && rf <= hz_hi then ()
+                (* the edited step: recompute *)
+              else
+                let lf, cf = Range.Position.as_pair (Range.from r) in
+                let lt, ct = Range.Position.as_pair (Range.till r) in
+                if rt < wl then Hashtbl.replace tbl (lf, cf, lt, ct) fp
+                else if rf > wh_true then
+                  Hashtbl.replace tbl (lf + delta, cf, lt + delta, ct) fp
+        in
+        let rec traverse ps =
+          RangeMap.iter add ps.obs;
+          List.iter traverse ps.sub
+        in
+        traverse prev;
+        Some tbl
 
   class step_visitor (file : string) =
     object (self : 'self)
@@ -586,6 +655,14 @@ end = struct
       val mutable acc_range : Range.t option = None
       val mutable mu_curr : TL.Module.T.modunit option = None
       val mutable obs : obl_pool = pool_of_list []
+
+      (* Scoped fingerprinting: previous-version fingerprints by
+         expected new-version range; see [compute_carry]. *)
+      val mutable carry :
+          (int * int * int * int, string) Hashtbl.t option =
+        None
+
+      method set_carry c = carry <- c
 
       method private take_mu () =
         let mu = Option.get mu_curr in
@@ -632,9 +709,20 @@ end = struct
              We will use the fingerprints to retain the
              proof status between the modifications.*)
             if_in_file_opt file o.obl @@ fun o_range ->
+            let carried_fp =
+              match carry with
+              | None -> None
+              | Some tbl ->
+                  let lf, cf = Range.Position.as_pair (Range.from o_range) in
+                  let lt, ct = Range.Position.as_pair (Range.till o_range) in
+                  Hashtbl.find_opt tbl (lf, cf, lt, ct)
+            in
             let o =
-              (match o.fingerprint with
-                | None ->
+              (match (o.fingerprint, carried_fp) with
+                | None, Some fp ->
+                    incr fp_carried ;
+                    { o with fingerprint = Some fp }
+                | None, None ->
                     let t0 =
                       if !fp_probe then Unix.gettimeofday () else 0. in
                     let o =
@@ -644,7 +732,7 @@ end = struct
                       incr fp_count
                     end;
                     o
-                | Some _ -> o)
+                | Some _, _ -> o)
               |> Obl.of_parsed_obligation
               |> Obl.with_proof_state_from (Hashtbl.find_opt prev_obs)
             in
@@ -787,7 +875,8 @@ end = struct
     end
 
   (** Make a view of a module in terms of the user-visible proof steps. *)
-  let of_module (mule : TL.Module.T.mule) (prev : t option) : t option =
+  let of_module (mule : TL.Module.T.mule) (prev : t option)
+      (texts : (string * string) option) : t option =
     let prev_obs = obl_by_fp prev in
     let file =
       match TL.Util.query_locus mule with
@@ -797,15 +886,23 @@ end = struct
     fp_probe := Sys.getenv_opt "TLAPM_LSP_PHASES" <> None ;
     fp_time := 0. ;
     fp_count := 0 ;
+    fp_carried := 0 ;
+    let carry =
+      match (Sys.getenv_opt "TLAPM_LSP_SCOPED", prev, texts) with
+      | Some _, Some prev_ps, Some (old_text, new_text) ->
+          compute_carry prev_ps old_text new_text
+      | _ -> None
+    in
     let v = new step_visitor file in
+    v#set_carry carry ;
     let r = v#process mule prev_obs in
     if !fp_probe then
-      Printf.eprintf "[LSP_PHASES] fingerprints=%.2fs (n=%d)\n%!"
-        !fp_time !fp_count ;
+      Printf.eprintf "[LSP_PHASES] fingerprints=%.2fs (n=%d carried=%d)\n%!"
+        !fp_time !fp_count !fp_carried ;
     r
 end
 
-let of_module ?prev mule = Builder.of_module mule prev
+let of_module ?prev ?texts mule = Builder.of_module mule prev texts
 
 (* ========================================================================== *)
 

@@ -24,7 +24,8 @@ end
 
 type t [@@deriving show]
 
-val of_module : ?prev:t -> Tlapm_lib.Module.T.mule -> t option
+val of_module :
+  ?prev:t -> ?texts:string * string -> Tlapm_lib.Module.T.mule -> t option
 val el : t -> El.t * TL.Expr.T.ctx
 val goal : t -> TL.Proof.T.obligation option
 val proof : t -> TL.Proof.T.proof option
