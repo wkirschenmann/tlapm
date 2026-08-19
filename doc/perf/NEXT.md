@@ -476,6 +476,28 @@ scoped, and by the touched subtree (~1–2 s) once generation is scoped:
 **÷6 to ÷30**. Parsing then becomes the next wall (2.2 s on the
 monolith even after the ×2.6 grammar fix).
 
+### Track 1, first result (same evening): the monolith keystroke was
+### not fingerprint-bound — it was a quadratic step/obligation
+### association, now fixed: 59.7 s → 11.5 s (×5.2)
+
+The TLAPM_LSP_PHASES probe corrected the attribution on the large
+file: of a 59.3 s keystroke, parse+elab+generation was 4.2 s,
+fingerprinting 9.9 s — and **~45 s was the proof-step tree build**:
+`Proof_step.with_obs` ran `RangeMap.partition` over the whole
+remaining obligation map for every step, O(steps × obligations) =
+13 563 × 30 872 on the monolith. (On the smaller corpus this term is
+negligible, which is why the earlier "85–90 % fingerprinting"
+attribution — true there — did not transfer.) Replaced by a sorted
+obligation pool with identical claiming semantics (first claimer wins,
+claim = range intersection; binary search + bounded backward scan by
+the longest obligation span; duplicate ranges collapse exactly as
+RangeMap.of_list did). Gates: LSP unit tests green; full notification
+streams (including the proofStepMarkers payloads) byte-identical
+between the old and new server on the corpora. Keystroke now 11.5 s =
+elab ~4 s + fingerprints ~7 s + tree ~0.2 s; the scoped-fingerprint
+step of the track now targets the ~7 s, and incremental elaboration
+(C3) the rest.
+
 ### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
 
 Stack-sampling the whole monolith preparation (60 samples, innermost
