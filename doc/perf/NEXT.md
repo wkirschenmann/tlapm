@@ -398,6 +398,42 @@ Open decision points for the team/maintainer discussion:
    (the supp filter and the Steps/QED dependency make creation-time
    emission subtle) for no measured benefit.
 
+## Étape 3 implemented and measured (2026-08-19, TLAPM_STREAM_GEN)
+
+The scheduler now pulls obligations straight from the generation
+stepper (`TLAPM_STREAM_GEN=1`): ids assigned at emission in document
+order, eager filters applied per emission, "to be proved" printed at
+emission, the announced total from the counting pre-pass, sequents of
+proved obligations dropped at verdict time, the module summary patched
+at drain, and the `--strict` checks running after the drain with
+identical messages and exit codes (verified, exit 11 both paths).
+Eager fallback for `--summary`, `--check`, `--stats`, `--suppress`
+and explicit targets. Default path byte-identical (golden dumps on
+four corpora, fast suite).
+
+Measured, eager vs stream on the same binary, real solvers:
+
+| corpus | verdicts | wall e/s | max RSS e/s |
+|---|---|---|---|
+| monolith | 30 035 = 30 035 (loc parity) | 4:15.8 / 4:13.5 | 1.53 GB / 1.62 GB |
+| FfiGrpc | 10 031 = 10 031 (loc parity) | 2:50.5 / 2:51.7 | 0.69 GB / 0.81 GB |
+
+**Honest verdict: streaming delivers correctness parity and no
+performance change — and the expected memory gain did not
+materialize.** The premise that the materialized `final_obs` sequents
+were the bulk of the remaining footprint is wrong on these corpora:
+generated contexts share their prefixes structurally (one deque spine,
+Δ≈3.4 hyps per node — the TREE probe numbers), so retaining 30 k
+sequents is nearly free, and the streamed run's small RSS excess
+(+5–15 %) is in GC-dynamics territory (interleaving generation with
+prover forks). What étape 3 actually is, post-measurement: the
+**architectural platform** for C3 — proving starts before generation
+ends, nothing depends on a materialized obligation array anymore, and
+the tree walk is now owned by a resumable stepper that an incremental
+LSP can drive — not a CLI performance lever. This mirrors the B2-lite
+lesson: on a structurally-shared pipeline, removing a *materialization*
+saves only its marginal footprint, which sharing already made small.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →
