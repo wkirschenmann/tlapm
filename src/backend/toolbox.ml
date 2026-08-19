@@ -98,20 +98,27 @@ let print_new_res ob st warns time_used =
 
 (**** duplicates prep.ml *****)
 let expand_defs ?(what = fun _ -> true) ob =
-  let rec visit sq =
-    match Deque.front sq.context with
-    | None -> sq
-    | Some (h, hs) -> begin
-        match h.core with
+  (* Single front-to-back pass accumulating one substitution, instead of
+     re-substituting the whole remaining sequent once per expanded
+     definition (quadratic on INSTANCE-heavy contexts) -- the same
+     rewrite as `Backend.Prep.expand_defs`, restricted to this printer's
+     historical filter (visible `Operator` definitions only), so the
+     printed obligation is identical. *)
+  let sq = ob.obl.core in
+  let rec fold s kept cx = match Deque.front cx with
+    | None -> (s, kept)
+    | Some (h, hs) ->
+        let h = app_hyp s h in
+        begin match h.core with
           | Defn ({core = Operator (_, e)}, wd, Visible, _) when what wd ->
-              visit (app_sequent (scons e (shift 0)) { sq with context = hs })
+              fold (scons e s) kept hs
           | _ ->
-              let sq = visit { sq with context = hs } in
-                { sq with context = Deque.cons h sq.context }
-      end
+              fold (bump s) (Deque.snoc kept h) hs
+        end
   in
-  let obl = visit ob.obl.core in
-     { ob with obl = { ob.obl with core = obl } }
+  let (s, context) = fold (shift 0) Deque.empty sq.context in
+  let active = app_expr s sq.active in
+  { ob with obl = { ob.obl with core = { context ; active } } }
 
 
 
