@@ -1072,7 +1072,7 @@ let assert_module_exists name mcx mu =
 
 
 (* is_anon = false => not yet anonymised *)
-let rec normalize ?stream mcx cx m =
+let rec normalize ?stream ?gen_only mcx cx m =
   let origbody = m.core.body in
   let prefix = ref Deque.empty in
   let emit mu = prefix := Deque.snoc !prefix mu in
@@ -1332,7 +1332,7 @@ let rec normalize ?stream mcx cx m =
             Some n
       in
       Timing.start Timing.gen ;
-      let r = Std.finally Timing.stop (M_gen.generate gencx) m in
+      let r = Std.finally Timing.stop (M_gen.generate ?only:gen_only gencx) m in
       (match expected with
        | None -> ()
        | Some n ->

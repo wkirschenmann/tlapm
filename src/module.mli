@@ -79,11 +79,14 @@ end
 module Gen : sig
   open Proof.T
   open T
-  val generate : Expr.T.hyp Deque.dq -> mule -> mule * obligation list * summary
+  val generate :
+    ?only:(Loc.locus -> bool) ->
+    Expr.T.hyp Deque.dq -> mule -> mule * obligation list * summary
   val count_obligations : mule -> int
   val count_obligations_split : mule -> int * int
   type gen_stepper = M_gen.gen_stepper
-  val gen_stepper : Expr.T.hyp Deque.dq -> mule -> gen_stepper
+  val gen_stepper :
+    ?only:(Loc.locus -> bool) -> Expr.T.hyp Deque.dq -> mule -> gen_stepper
   val gen_step : gen_stepper -> obligation list option
   val gen_summary : gen_stepper -> summary
   val collect_usables : mule -> usable option
@@ -103,6 +106,7 @@ module Elab : sig
 
   val normalize :
     ?stream:(M_gen.gen_stepper -> unit) ->
+    ?gen_only:(Loc.locus -> bool) ->
     modctx -> Expr.T.hyp Deque.dq -> mule -> modctx * mule * summary
 end
 

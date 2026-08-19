@@ -37,13 +37,20 @@ type gen_stepper = {
   mutable gs_stack : gen_frame list ;
   mutable gs_summ : summary ;
   mutable gs_result : mule option ;      (* set when the traversal ends *)
+  gs_only : (Loc.locus -> bool) option ;
+      (* Scoped generation: a theorem whose locus fails this predicate
+         is traversed for its context contribution only — its proof is
+         neither generated nor collected, so it yields no obligations.
+         The caller owns supplying those obligations by other means
+         (the LSP carries them from the previous document version). *)
 }
 
-let gen_stepper cx m = {
+let gen_stepper ?only cx m = {
   gs_stack = [ { gf_mule = m ; gf_wrap = None ; gf_cx = cx ;
                  gf_todo = m.core.body ; gf_done = [] } ] ;
   gs_summ = empty_summary ;
   gs_result = None ;
+  gs_only = only ;
 }
 
 let rec gen_step st =
@@ -78,6 +85,22 @@ let rec gen_step st =
                 | _ ->
                     fr.gf_cx
               in
+              let in_scope =
+                match st.gs_only with
+                | None -> true
+                | Some f ->
+                    (match Util.query_locus mu with
+                     | Some loc -> f loc
+                     | None -> true)
+              in
+              if not in_scope then begin
+                (* context contribution only: same [cx] flow as below,
+                   the proof left as parsed, no obligations *)
+                let he = if nm = None then exprify_sequent sq else Ix 1 in
+                fr.gf_cx <- Deque.snoc cx (Fact (he @@ mu, Hidden, Always) @@ mu) ;
+                fr.gf_done <- mu :: fr.gf_done ;
+                gen_step st
+              end else
               let prf, obs, summ =
                 let psq = if nm = None then sq else app_sequent (shift 1) sq in
                 (* the addition of the sequent context to the global context
@@ -144,8 +167,8 @@ let count_obligations m = fst (count_obligations_split m)
 
 let gen_summary st = st.gs_summ
 
-let generate cx m =
-  let st = gen_stepper cx m in
+let generate ?only cx m =
+  let st = gen_stepper ?only cx m in
   let rec drain acc = match gen_step st with
     | Some obs -> drain (List.rev_append obs acc)
     | None -> List.rev acc
