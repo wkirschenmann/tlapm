@@ -16,13 +16,26 @@ module Parsed = struct
 
   let make ~uri ~(doc_vsn : Doc_vsn.t) ~(ps_prev : Proof_step.t option) ~parser
       =
+    (* Probe (TLAPM_LSP_PHASES=1): per-version cost attribution of the
+       in-process pipeline — parse+elaboration+generation vs the
+       proof-step tree build (which fingerprints every obligation).
+       Inert without the environment variable. *)
+    let phases = Sys.getenv_opt "TLAPM_LSP_PHASES" <> None in
+    let t0 = if phases then Unix.gettimeofday () else 0. in
     match
       Eio.Mutex.use_rw ~protect:true prover_mutex @@ fun () ->
       parser ~content:(Doc_vsn.text doc_vsn)
         ~filename:(LspT.DocumentUri.to_path uri)
     with
     | Ok mule ->
+        let t1 = if phases then Unix.gettimeofday () else 0. in
         let ps = Proof_step.of_module mule ?prev:ps_prev in
+        if phases then begin
+          let t2 = Unix.gettimeofday () in
+          Printf.eprintf
+            "[LSP_PHASES] parse+elab+gen=%.2fs steps+fp=%.2fs total=%.2fs\n%!"
+            (t1 -. t0) (t2 -. t1) (t2 -. t0)
+        end;
         { mule = Ok mule; nts = []; ps }
     | Error (loc_opt, msg) ->
         let nts = [ Toolbox.notif_of_loc_msg loc_opt msg ] in

@@ -28,6 +28,9 @@ def send(method, params, notify=False):
     proc.stdin.flush()
     return _id[0]
 
+DUMP = os.environ.get("LSP_C0_DUMP")
+dumpf = open(DUMP, "w") if DUMP else None
+
 def recv(timeout=600):
     end = time.time() + timeout
     hdr = b""
@@ -39,7 +42,14 @@ def recv(timeout=600):
         if time.time() > end:
             raise TimeoutError
     n = int([l for l in hdr.split(b"\r\n") if b"Content-Length" in l][0].split(b":")[1])
-    return json.loads(proc.stdout.read(n))
+    m = json.loads(proc.stdout.read(n))
+    # With LSP_C0_DUMP set, record every server notification (method +
+    # params, canonical form) so two server builds can be diffed.
+    if dumpf is not None and "method" in m:
+        dumpf.write(json.dumps({"method": m["method"], "params": m.get("params")},
+                               sort_keys=True) + "\n")
+        dumpf.flush()
+    return m
 
 def pull_diags(want_ver):
     t0 = time.time()
