@@ -119,8 +119,9 @@ let obligate sq kind =
       | Ob_error _ -> "error"
       | Ob_omitted _ -> "omitted"
     in
-    Printf.eprintf "[TREE] ob depth=%d ctx=%d kind=%s\n"
+    Printf.eprintf "[TREE] ob depth=%d ctx=%d kind=%s loc=%s\n"
       !tree_depth (Deque.size sq.core.context) k
+      (Util.location ~cap:false sq)
   end;
   {
    id = None;
@@ -440,8 +441,15 @@ let collect prf =
               | _ -> () in
             prf
         | Steps (sts, qed) ->
-            let qed_prf = self#proof scx (get_qed_proof qed) in
+            (* Visit the steps before the QED so that obligations are
+               collected — and therefore numbered — in document order,
+               which is also the order `generate` creates them in: the
+               QED's sequent is built from the context the steps
+               accumulate, so no traversal can produce it first.  This
+               only renumbers the per-run obligation ids (fingerprints
+               are content-keyed and unaffected). *)
             let (_, sts) = self#steps scx sts in
+            let qed_prf = self#proof scx (get_qed_proof qed) in
             let prf = Steps (sts, {qed with core = Qed qed_prf}) @@ prf in
             prf
       in
