@@ -36,25 +36,62 @@ let vprintf fmt =
     Printf.ifprintf stderr fmt
 
 (* Debug accumulators (TLAPM_PREP_TIMES=1): wall time per backend-preparation
-   stage, printed at exit. *)
+   stage, printed at exit. With TLAPM_PREP_BUCKETS=<width> also accumulate
+   per tranche of <width> obligation ids, so a stage's cost can be read as a
+   function of document position (printed as one [PREP_BUCKETS] line per
+   stage). Both are inert without their env var. *)
 let prep_times_on = lazy (Sys.getenv_opt "TLAPM_PREP_TIMES" <> None)
-let prep_timers : (string * float ref) list ref = ref []
+let prep_bucket_width = lazy begin
+  match Sys.getenv_opt "TLAPM_PREP_BUCKETS" with
+  | Some s -> (try max 1 (int_of_string s) with Failure _ -> 0)
+  | None -> 0
+end
+let prep_current_id = ref 0
+(* Set at the top of [ship] from the obligation id; only read when
+   TLAPM_PREP_BUCKETS is set. *)
+type prep_timer = {
+  mutable total : float;
+  buckets : (int, float ref) Hashtbl.t;
+}
+let prep_timers : (string * prep_timer) list ref = ref []
 let prep_timer name =
-  let r = ref 0.0 in
+  let r = { total = 0.0; buckets = Hashtbl.create 16 } in
   prep_timers := (name, r) :: !prep_timers;
   r
 let prep_time r f x =
   if Lazy.force prep_times_on then begin
     let t0 = Unix.gettimeofday () in
     let y = f x in
-    r := !r +. (Unix.gettimeofday () -. t0);
+    let dt = Unix.gettimeofday () -. t0 in
+    r.total <- r.total +. dt;
+    let w = Lazy.force prep_bucket_width in
+    if w > 0 then begin
+      let b = !prep_current_id / w in
+      let cell =
+        match Hashtbl.find_opt r.buckets b with
+        | Some c -> c
+        | None -> let c = ref 0.0 in Hashtbl.add r.buckets b c; c
+      in
+      cell := !cell +. dt
+    end;
     y
   end else f x
 let () = at_exit begin fun () ->
-  if Lazy.force prep_times_on then
+  if Lazy.force prep_times_on then begin
     List.iter
-      (fun (n, r) -> Printf.eprintf "[PREP_TIMES] %-18s %8.3f s\n%!" n !r)
-      (List.rev !prep_timers)
+      (fun (n, r) -> Printf.eprintf "[PREP_TIMES] %-18s %8.3f s\n%!" n r.total)
+      (List.rev !prep_timers);
+    let w = Lazy.force prep_bucket_width in
+    if w > 0 then
+      List.iter
+        (fun (n, r) ->
+          let bs = Hashtbl.fold (fun b c acc -> (b, !c) :: acc) r.buckets [] in
+          let bs = List.sort ~cmp:compare bs in
+          Printf.eprintf "[PREP_BUCKETS] %s w=%d" n w;
+          List.iter (fun (b, t) -> Printf.eprintf " %d:%.2f" b t) bs;
+          Printf.eprintf "\n%!")
+        (List.rev !prep_timers)
+  end
 end
 let t_findmeth = prep_timer "find_meth"
 let t_constness = prep_timer "add_constness"
@@ -1765,6 +1802,7 @@ let ship ob fpout thyout record =
      that obligation's contexts on shared syntax nodes; empty them so the
      memoization stays bounded to the obligations in flight. *)
   Expr.Levels.reset_caches ();
+  (match ob.id with Some i -> prep_current_id := i | None -> ());
   prep_share_probe ob;
   vprintf "(* trying obligation %d generated from %s *)\n" (Option.get ob.id)
           (Util.location ~cap:false ob.obl);
