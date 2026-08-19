@@ -145,6 +145,19 @@ tranches (`TLAPM_PREP_BUCKETS`):
 * Standing gates passed at each commit: strict golden dumps (synthetic
   + AbstractGrpc, old binary vs new), fast-suite fail-set unchanged,
   real-solver verdicts loc+status-identical on FfiGrpc (9927/9927).
+* **Functional equivalence of the normalize cache, validated three
+  ways**: beyond the dumps (printed form) and the solver verdicts, a
+  differential oracle (`TLAPM_CHECK_ELABCACHE=1`) runs every obligation
+  through BOTH the cached fold and the original whole-sequent
+  `Elab.normalize` and compares the resulting sequents with `Expr.Eq`
+  (structural alpha-equivalence): **zero divergences over 31 597
+  obligations** (the 30k monolith + AbstractGrpc). Known scope limit:
+  `Expr.Eq` ignores node *properties*; the argument there is structural
+  (both paths execute the same visitor code on the same nodes — only
+  the inter-pass interleaving changes, and neither visitor's output
+  properties depend on visit order; the one global (`current_at`) is
+  saved/restored per `Except` node). A property-sensitive divergence
+  would still be caught downstream by the byte-level dumps.
 
 **B2-minimal is blocked as scoped, by the triviality check.** The plan
 said «move the existing prune upstream of the expensive stages». The
