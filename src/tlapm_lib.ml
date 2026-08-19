@@ -221,15 +221,31 @@ let process_obs
     let fpout = Fpfile.fp_init fpf !modules_list in
     let thyout = Isabelle.thy_init modname thyf in
     let _ = Errors.get_warnings () in
-    (* prepare proof tasks *)
-    let tasks =
-        try
-            let f = Prep.make_task fpout thyout record in
-            Array.to_list (Array.map f obs)
-        with Exit -> []
+    (* Prepare and prove: tasks are built on demand, in document order
+       (the cross-obligation preparation caches assume the sequence),
+       so a task's closures — and the prepared obligation forms they
+       hold once forced — only live while the task is in flight.
+       Materializing the whole task array up front paid every task's
+       eager preparation before the first prover started and kept every
+       consumed closure reachable for the entire run.
+       A task-construction error (Exit) stops the stream: obligations
+       already dispatched keep their results, the rest are reported
+       untreated (the eager code aborted the whole batch instead). *)
+    let make_task = Prep.make_task fpout thyout record in
+    let next_i = ref 0 in
+    let aborted = ref false in
+    let next_task () =
+        if !aborted || !next_i >= Array.length obs then None
+        else begin
+            try
+                let t = make_task obs.(!next_i) in
+                incr next_i;
+                Some t
+            with Exit -> aborted := true; None
+        end
     in
     (* proving *)
-    Schedule.run !Params.max_threads tasks;
+    Schedule.run_stream !Params.max_threads next_task;
     Isabelle.thy_close thyf thyout;
     (* close fingerprints file *)
     Fpfile.fp_close_and_consolidate fpf fpout;
