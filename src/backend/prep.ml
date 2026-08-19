@@ -56,6 +56,7 @@ let () = at_exit begin fun () ->
       (fun (n, r) -> Printf.eprintf "[PREP_TIMES] %-18s %8.3f s\n%!" n !r)
       (List.rev !prep_timers)
 end
+let t_findmeth = prep_timer "find_meth"
 let t_constness = prep_timer "add_constness"
 let t_fingerprint = prep_timer "fingerprint"
 let t_expand = prep_timer "expand_defs"
@@ -1769,7 +1770,7 @@ let ship ob fpout thyout record =
           (Util.location ~cap:false ob.obl);
   begin try
     print_obl_and_msg ob "Proof obligation before `find_meth`:\n";
-    let ob = find_meth ob in
+    let ob = prep_time t_findmeth find_meth ob in
     print_obl_and_msg ob "Proof obligation after `find_meth`:\n";
     Toolbox.print_ob_provers ob;
     let meths = get ob.obl Proof.T.Props.meth in
