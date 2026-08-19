@@ -165,6 +165,16 @@ let process_obs
     let treated = ref IntSet.empty in
     (* initialize table of proved obligations *)
     let proved_ids = ref IntSet.empty in
+    (* Measurement probe: with TLAPM_LIVE_STATS=N set, print the live and
+       total heap sizes every N recorded verdicts. This is the instrument
+       that attributes the per-obligation live-memory floor observed on
+       large single-pass runs (Gc.stat walks the heap, so use a large N).
+       Inert when the variable is unset. *)
+    let live_every =
+        match Sys.getenv_opt "TLAPM_LIVE_STATS" with
+        | Some s -> (try int_of_string s with Failure _ -> 0)
+        | None -> 0 in
+    let recorded = ref 0 in
     let record
             (success: bool)
             (ob: Proof.T.obligation):
@@ -178,6 +188,14 @@ let process_obs
                         the internal table `proved_ids`
                         *)
             proved_ids := IntSet.add obl_id !proved_ids;
+        incr recorded;
+        if live_every > 0 && !recorded mod live_every = 0 then begin
+            let st = Gc.stat () in
+            Printf.eprintf "[LIVE] verdicts=%d live_mb=%.1f heap_mb=%.1f\n%!"
+                !recorded
+                (float_of_int st.Gc.live_words *. 8. /. 1048576.)
+                (float_of_int st.Gc.heap_words *. 8. /. 1048576.)
+        end
         in
     let collect_untreated_obligations
             (untreated: Proof.T.obligation list ref):
