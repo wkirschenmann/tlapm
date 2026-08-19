@@ -317,7 +317,41 @@ let distinct =
     fun vs -> check S.empty vs
 
 
-let rec expr b = lazy begin
+(* The [b] parameter of the grammar rules below takes exactly two values,
+   and the rules build position-independent parser values, so each rule
+   has exactly two useful instances.  Building them at every call site
+   re-allocated the whole combinator family (choice lists, Lazy.t's) at
+   every token position; memoize the two instances per rule instead.
+   The [mk_*] bodies are the original rules, unchanged. *)
+let memo_gram (ct, cf) mk b =
+  let c = if b then ct else cf in
+  match !c with
+  | Some v -> v
+  | None -> let v = mk b in c := Some v; v
+let m_expr = (ref None, ref None)
+let m_opargs = (ref None, ref None)
+let m_subref = (ref None, ref None)
+let m_sel = (ref None, ref None)
+let m_complex_expr = (ref None, ref None)
+let m_atomic_expr = (ref None, ref None)
+let m_reduced_expr = (ref None, ref None)
+let m_sub_expr = (ref None, ref None)
+let m_bulleted_list = (ref None, ref None)
+let m_operator = (ref None, ref None)
+let m_bounds = (ref None, ref None)
+let m_boundeds = (ref None, ref None)
+let m_func_boundeds = (ref None, ref None)
+let m_defn = (ref None, ref None)
+let m_ophead = (ref None, ref None)
+let m_oparg = (ref None, ref None)
+let m_instance = (ref None, ref None)
+let m_subst = (ref None, ref None)
+let m_hyp = (ref None, ref None)
+let m_sequent = (ref None, ref None)
+let m_expr_or_sequent = (ref None, ref None)
+
+let rec expr b = memo_gram m_expr mk_expr b
+and mk_expr b = lazy begin
   resolve (expr_or_op b);
 end
 
@@ -452,17 +486,20 @@ and label = lazy begin
   end
 end
 
-and opargs b = lazy begin
+and opargs b = memo_gram m_opargs mk_opargs b
+and mk_opargs b = lazy begin
   optional begin
     punct "(" >*> comma1 (use (oparg b)) <<< punct ")"
   end <$> Option.default []
 end
 
-and subref b = lazy begin
+and subref b = memo_gram m_subref mk_subref b
+and mk_subref b = lazy begin
   punct "!" >*> sep1 (punct "!") (use (sel b))
 end
 
-and sel b = lazy begin
+and sel b = memo_gram m_sel mk_sel b
+and mk_sel b = lazy begin
   choice [
     choice [ anyident ; anyop ] <**> optional (punct "("
         >>> comma1 (use (oparg b)) <<< punct ")")
@@ -485,7 +522,8 @@ and sel b = lazy begin
   ]
 end
 
-and complex_expr b = lazy begin
+and complex_expr b = memo_gram m_complex_expr mk_complex_expr b
+and mk_complex_expr b = lazy begin
   choice [
     (* IF ... THEN ... ELSE *)
 
@@ -626,7 +664,8 @@ and complex_expr b = lazy begin
 end
 
 
-and atomic_expr b = lazy begin
+and atomic_expr b = memo_gram m_atomic_expr mk_atomic_expr b
+and mk_atomic_expr b = lazy begin
   choice [
     locate begin
       (* set constructor *)
@@ -856,7 +895,8 @@ and atomic_expr b = lazy begin
   ]
 end
 
-and reduced_expr b = lazy begin
+and reduced_expr b = memo_gram m_reduced_expr mk_reduced_expr b
+and mk_reduced_expr b = lazy begin
   choice [
     (* parentheses *)
     punct "(" >>> use (expr b) <<< punct ")"
@@ -889,7 +929,8 @@ and reduced_expr b = lazy begin
   ]
 end
 
-and sub_expr b = lazy begin
+and sub_expr b = memo_gram m_sub_expr mk_sub_expr b
+and mk_sub_expr b = lazy begin
   choice [
     locate begin
       hint <*> optional (use (subref b))
@@ -915,7 +956,8 @@ and bull_at bull where =
         else None
   end
 
-and bulleted_list b = lazy begin
+and bulleted_list b = memo_gram m_bulleted_list mk_bulleted_list b
+and mk_bulleted_list b = lazy begin
   lookahead (scan begin
                function
                  | OP "/\\" -> Some "/\\"
@@ -933,7 +975,8 @@ and bulleted_list b = lazy begin
                | _     -> List (And, es))
 end
 
-and operator b = lazy begin
+and operator b = memo_gram m_operator mk_operator b
+and mk_operator b = lazy begin
   choice [
     locate begin
       kwd "LAMBDA" >*> names
@@ -982,7 +1025,8 @@ function definition is not allowed in TLA+,
 read Section 16.1.7 on pages 301--304 of the book "Specifying Systems",
 in particular pages 303--304.
 *)
-and bounds b = lazy begin
+and bounds b = memo_gram m_bounds mk_bounds b
+and mk_bounds b = lazy begin
   comma1 (names <*> optional (in_expr b))
   <$> begin
     fun bss ->
@@ -999,7 +1043,8 @@ and bounds b = lazy begin
 end
 
 
-and boundeds b = lazy begin
+and boundeds b = memo_gram m_boundeds mk_boundeds b
+and mk_boundeds b = lazy begin
   (* The function `boundeds` parses a list of only bounded declarations. *)
   comma1 (names <*> (in_expr b))
   <$> begin
@@ -1026,7 +1071,8 @@ and quantifier_boundeds b =
         ]
 
 
-and func_boundeds b = lazy begin
+and func_boundeds b = memo_gram m_func_boundeds mk_func_boundeds b
+and mk_func_boundeds b = lazy begin
     (* Parse comma-separated bounded declarations.
 
     The declarations are separated by commas.
@@ -1156,7 +1202,8 @@ end
 
 (* definitions *)
 
-and defn b = lazy begin
+and defn b = memo_gram m_defn mk_defn b
+and mk_defn b = lazy begin
   locate (use (ophead b) <<< punct "==") >>= fun ({core = head} as oph) ->
     commit begin
       choice [
@@ -1229,7 +1276,8 @@ and defn b = lazy begin
     end
 end
 
-and ophead b = lazy begin
+and ophead b = memo_gram m_ophead mk_ophead b
+and mk_ophead b = lazy begin
   let make_param name = (name, Shape_expr) in
   choice [
     (* prefix operator definition *)
@@ -1308,7 +1356,8 @@ and opdecl = lazy begin
   ]
 end
 
-and oparg b = lazy begin
+and oparg b = memo_gram m_oparg mk_oparg b
+and mk_oparg b = lazy begin
   alt [
     use (expr b);
 
@@ -1323,7 +1372,8 @@ and oparg b = lazy begin
   ]
 end
 
-and instance b = lazy begin
+and instance b = memo_gram m_instance mk_instance b
+and mk_instance b = lazy begin
   kwd "INSTANCE" >*> anyident
   <*> optional (kwd "WITH" >*> use (subst b))
   <$> (fun (m, sub) ->
@@ -1332,14 +1382,16 @@ and instance b = lazy begin
            inst_sub = Option.default [] sub })
 end
 
-and subst b = lazy begin
+and subst b = memo_gram m_subst mk_subst b
+and mk_subst b = lazy begin
   let exprify op = return (Opaque op) in
   comma1
     (choice [ hint ; locate anyop ]
      <**> (punct "<-" >>> choice [ use (expr b) ; locate (anyop >>+ exprify) ]))
 end
 
-and hyp b = lazy begin locate begin
+and hyp b = memo_gram m_hyp mk_hyp b
+and mk_hyp b = lazy begin locate begin
   choice [
     optional (kwd "NEW") >>= begin fun nk ->
       choice [
@@ -1368,13 +1420,15 @@ and hyp b = lazy begin locate begin
   ]
 end end
 
-and sequent b = lazy begin
+and sequent b = memo_gram m_sequent mk_sequent b
+and mk_sequent b = lazy begin
   kwd "ASSUME" >*> comma1 (use (hyp b))
   <**> (kwd "PROVE" >>> use (expr b))
   <$> (fun (hs, e) -> { context = Deque.of_list hs ; active = e }) ;
 end
 
-and expr_or_sequent b = lazy begin
+and expr_or_sequent b = memo_gram m_expr_or_sequent mk_expr_or_sequent b
+and mk_expr_or_sequent b = lazy begin
   alt [
     use (expr b) ;
     locate (use (sequent b)) <$> (fun sq -> { sq with core = Sequent sq.core }) ;
