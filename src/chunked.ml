@@ -105,7 +105,7 @@ let run (file: string): int =
   let n_lines = line_count file in
   let plan = ranges n_lines !Params.chunks in
   let n = List.length plan in
-  let par = max 1 (if !Params.spawn > 0 then !Params.spawn else 1) in
+  let par = max 1 (if !Params.spawn > 0 then !Params.spawn else Params.nprocs) in
   let tmp = Filename.concat (Filename.get_temp_dir_name ())
       (Printf.sprintf "tlapm-chunks-%d" (Unix.getpid ())) in
   Unix.mkdir tmp 0o700 ;
