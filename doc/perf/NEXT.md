@@ -586,6 +586,57 @@ locations — stale coordinates for failure diagnostics, the details
 panel and the prover-result match; they are now line-shifted at carry
 time (regression-tested).
 
+### Track 1, fifth result: scoped re-elaboration — keystroke 2.0 s
+### (×30 overall), the parse is now 95 % of it
+
+`TLAPM_LSP_SCOPED=3` removes the last elaboration cost: when the edit
+is confined to one theorem, the previous version's **elaborated body**
+is reused as-is and only that theorem is re-elaborated — by running
+the ordinary `normalize` on a one-unit module against the two prefix
+contexts the full pass would have built (elaboration context from
+`hyps_of_modunit`, generation context replayed with the generation
+semantics by the new `M_gen.context_after`; `normalize ?gencx` keeps
+them apart).  The proof tree is patched the same way: previous
+top-level steps reused with line-shifted ranges and obligations —
+prover results included, so no fingerprint is recomputed for them —
+and only the edited theorem's subtree rebuilt.
+
+Monolith numbers (quiet machine): keystroke→diagnostics **1.8–2.2 s**
+(was 3.3 s in mode 2, 11.5 s unscoped, 59.7 s at the start of the
+track): parse_main 1.85 s + deps 0.04 s + elab_main **0.00 s** + tree
+and host fingerprints 0.06 s.  Only the edited theorem's obligations
+(~66 here) are generated and fingerprinted.  Combined with the forked
+prover, edit → step verdict is **~3.2 s** end to end.
+
+Coverage widening shipped with it: the carry baseline (tree + text +
+elaborated module) survives versions that never parsed (rapid typing)
+or failed to parse — the next good parse carries against the last good
+version (measured 20.1 s → 2.0 s on an edit following a syntax-error
+version); and, under mode 3 only, the host theorem owns the gap after
+its proof, so appending a proof step or editing a trailing comment
+stays scoped (33.7 s → 2.1 s) — sound because the reuse machinery's
+shape checks reject any edit that actually introduces top-level
+material there (verified: a new lemma in the gap falls back with a
+byte-identical stream).
+
+Gates, all on the 30k monolith: full notification streams
+byte-identical to the mode-0 recomputation for same-length edits, line
+insertion, line removal, chained patches, gap edits and the fallback
+case (`GEN3_STREAM_IDENTICAL`, `GEN3_INSERT_STREAM_IDENTICAL`,
+`GEN3_GAP_STREAM_IDENTICAL`); the carry regression test gains a mode-3
+case (line-inserting edit, (loc, fp) parity against full recompute);
+23 LSP tests and the src cram suite pass.  Known limitation (inherited
+from carrying whole obligations, documented for the maintainer
+discussion): expressions *inside* reused elaborated units keep the
+line coordinates of the version they were elaborated in — everything
+positional the client sees comes from tree ranges and obligation
+wrappers, which are shifted, but the step-decomposition code actions
+would need the same treatment before mode 3 becomes a default.
+
+What remains of the keystroke is the whole-file **parse** (1.85 s of
+the 2.0): the next multiple needs an incremental parser, a much bigger
+lift.  The interactive loop is no longer preparation-bound.
+
 ### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
 
 Stack-sampling the whole monolith preparation (60 samples, innermost
