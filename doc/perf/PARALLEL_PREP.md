@@ -282,6 +282,69 @@ portable across both supported compilers, no shared-state refactoring,
 and a precedent already gated in the tree.  Domains remain the nicer
 destination if 4.14 is ever dropped.
 
+## Shipped: `--chunks N --spawn P` (spawn route)
+
+`--chunks N` splits the input into N contiguous line ranges and runs
+the same executable on each, at most `--spawn P` at a time, handing the
+next range to whichever worker frees up.
+
+**The split is by module unit, and that is a correctness matter, not a
+convenience.**  A proof's locus is its *keyword*, while the obligations
+it generates sit at the positions of the facts it cites.  Selecting
+obligations by their own line therefore loses some: measured on a
+three-line `BY`, the whole file yields 4 obligations while
+`--toolbox 1 6` yields 2 and `--toolbox 7 9` yields **0** — two
+obligations belong to no range at all.  This is how a document is
+chunked by hand today, so hand-chunking can silently skip obligations.
+`--chunk-lines` instead selects the module *units* starting in the
+range, reusing the generation filter already gated for the LSP;
+out-of-range units still contribute their statements to the context.
+Verified on the 30k monolith: the union of 4 ranges is the same 29 965
+obligations at the same loci as the whole run
+(`CHUNK_PARTITION_EXACT`).
+
+**Measured, 30k monolith, 4 cores, real solvers, `--nofp`:**
+
+| run | wall | peak RSS | failures |
+|---|---|---|---|
+| sequential | 289.5 s | 1.49 GB | 958 / 29 965 |
+| `--chunks 16 --spawn 4` | **130.8 s** | 605 MB (parent) | 958 / 29 965 |
+
+**×2.21**, and the 958 failing obligations are at exactly the same 958
+loci in both runs (`CHUNK_VERDICT_PARITY_EXACT`) — they are genuine,
+not an artefact.  Ideal would be 43 + 233/4 ≈ 101 s; the gap is the
+parse-and-elaborate paid 16 times.
+
+**Prover slots are not divided among workers.**  P workers each keeping
+one slot per core hold P×ncores provers on ncores, which looked like
+oversubscription worth avoiding.  Measuring settled it: same 958
+failures at the same loci either way, and dividing the slots costs 7 %
+(140.5 s against 130.8 s) — prover processes are short and often
+blocked, so the surplus keeps the cores fed.  An explicit `--threads`
+is still honoured.
+
+**Why not 50-line ranges.**  Each spawned worker re-parses and
+re-elaborates the whole file — 43 s of fixed cost.  Range size has a
+floor: preparation of the range must dominate its parse.  At 50 lines
+the monolith would need 606 workers × 43 s of redundant parse, hours of
+pure waste.  Fine ranges only make sense in the fork route below, where
+the parse is paid once.
+
+**Why not "just start the provers earlier".**  Tempting, but the
+scheduler measurement rules it out: `wait = 0.0 s` over 68 915
+`select` calls means no prover capacity is ever idle, and the dead time
+before the first obligation is 7 s of 291 (2.4 %).  Lazy generation
+(`TLAPM_STREAM_GEN`), which does exactly that, measured CLI-neutral for
+this reason.  The ×2.2 comes from preparation running on four cores,
+not from provers starting sooner.
+
+**Next, and this is where fine ranges belong.**  Forking after
+elaboration pays the parse once and hands each worker the elaborated
+module copy-on-write; ranges can then be as small as one obligation,
+with near-perfect load balancing.  Projected ×2.8 on this corpus, Unix
+only (`Unix.fork` does not exist on Windows and never will), with the
+spawn route as the portable fallback.
+
 ## Risks, stated plainly
 
 * A stray access from the wrong domain is a data race, not an error.

@@ -58,17 +58,19 @@ let worker_argv range_lo range_hi cache_dir n_workers =
      | a -> out := a :: !out) ;
     incr i
   done ;
-  (* Divide the prover slots among the workers.  Each worker otherwise
-     defaults to one slot per core, so P workers would keep P*ncores
-     provers on ncores — the oversubscription starves them into
-     timeouts, which are indistinguishable from real failures. *)
+  (* Prover slots are deliberately *not* divided among the workers.
+     Each keeps its own default of one slot per core, so P workers hold
+     P*ncores provers on ncores.  That looked like oversubscription
+     worth avoiding, but measuring it settled the question: on the 30k
+     monolith the failing obligations are the same 958, at the same
+     loci, either way, and dividing the slots costs 7 % (140.5 s
+     against 130.8 s) — prover processes are short and often blocked,
+     so the surplus keeps the cores fed.  A machine with tighter
+     timeouts can still bound it with an explicit --threads, which is
+     honoured here. *)
+  ignore n_workers ;
+  ignore !has_threads ;
   let extra =
-    if !has_threads then []
-    else
-      [ "--threads" ;
-        string_of_int (max 1 (Params.nprocs / max 1 n_workers)) ] in
-  let extra =
-    extra @
     [ "--chunk-lines" ; string_of_int range_lo ; string_of_int range_hi ;
       "--cache-dir" ; cache_dir ] in
   Array.of_list (argv.(0) :: List.rev_append !out extra)
