@@ -44,19 +44,31 @@ let ranges n_lines n_chunks =
 
 (* The parent's own command line, minus the flags that would make a
    worker split again, plus the worker's range and cache directory. *)
-let worker_argv range_lo range_hi cache_dir =
+let worker_argv range_lo range_hi cache_dir n_workers =
   let argv = Sys.argv in
   let out = ref [] in
+  let has_threads = ref false in
   let i = ref 1 in
   let n = Array.length argv in
   while !i < n do
     (match argv.(!i) with
      | "--chunks" | "--spawn" -> incr i  (* drop the flag and its value *)
      | "--chunk-lines" -> i := !i + 2
+     | "--threads" -> has_threads := true ; out := argv.(!i) :: !out
      | a -> out := a :: !out) ;
     incr i
   done ;
+  (* Divide the prover slots among the workers.  Each worker otherwise
+     defaults to one slot per core, so P workers would keep P*ncores
+     provers on ncores — the oversubscription starves them into
+     timeouts, which are indistinguishable from real failures. *)
   let extra =
+    if !has_threads then []
+    else
+      [ "--threads" ;
+        string_of_int (max 1 (Params.nprocs / max 1 n_workers)) ] in
+  let extra =
+    extra @
     [ "--chunk-lines" ; string_of_int range_lo ; string_of_int range_hi ;
       "--cache-dir" ; cache_dir ] in
   Array.of_list (argv.(0) :: List.rev_append !out extra)
@@ -116,7 +128,7 @@ let run (file: string): int =
     let (lo, hi) = plan.(k) in
     let cache = Filename.concat cache_root (Printf.sprintf "chunk-%d" k) in
     mkdir_p cache ;
-    let argv = worker_argv lo hi cache in
+    let argv = worker_argv lo hi cache par in
     let fd_out =
       Unix.openfile outs.(k) [ Unix.O_WRONLY; Unix.O_CREAT; Unix.O_TRUNC ] 0o600
     and fd_err =
