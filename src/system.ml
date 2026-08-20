@@ -45,7 +45,43 @@ let (_, ps_cmd, _, ps_format, kill_fn) =
   List.find test ps_list
 
 
-let kill_tree pid =
+(* Probe (TLAPM_PROC_TIMES): what the process primitives themselves
+   cost.  Every prover attempt forks this process -- whose heap is
+   gigabytes on a large module -- and execs "/bin/sh -c", so the shell
+   is a third process per attempt; every kill runs "ps x" through yet
+   another shell and Scanf-parses the whole process table.  None of
+   that is prover work, and none of it shows up as such.  Inert
+   without the variable. *)
+let proc_probe = Sys.getenv_opt "TLAPM_PROC_TIMES" <> None
+let n_launch = ref 0
+let t_launch = ref 0.
+let n_kill = ref 0
+let t_kill = ref 0.
+let n_harvest = ref 0
+let t_harvest = ref 0.
+
+let timed n t f x =
+  if not proc_probe then f x
+  else begin
+    incr n ;
+    let t0 = Unix.gettimeofday () in
+    let r = f x in
+    t := !t +. (Unix.gettimeofday () -. t0) ;
+    r
+  end
+
+let proc_report () =
+  if proc_probe then
+    Printf.eprintf
+      "[PROC] launch=%d in %.1fs (%.2fms each)  kill_tree=%d in %.1fs \
+(%.1fms each)  harvest=%d in %.1fs\n%!"
+      !n_launch !t_launch
+      (if !n_launch = 0 then 0. else 1000. *. !t_launch /. float !n_launch)
+      !n_kill !t_kill
+      (if !n_kill = 0 then 0. else 1000. *. !t_kill /. float !n_kill)
+      !n_harvest !t_harvest
+
+let kill_tree_raw pid =
   try
     let scanline l = Scanf.sscanf l ps_format (fun x y z -> (x, y, z)) in
     let psout = Unix.open_process_in ps_cmd in
@@ -71,17 +107,21 @@ let kill_tree pid =
     kill pid;
   with _ -> ()
 
+let kill_tree pid = timed n_kill t_kill kill_tree_raw pid
+
 
 (* Use the wait system call to harvest the dead children processes. *)
-let harvest_zombies () =
+let harvest_zombies_raw () =
   let rec spin () =
     let (pid, _) = Unix.waitpid [Unix.WNOHANG] (-1) in
     if pid <> 0 then spin ();
   in
   try spin () with Unix.Unix_error _ -> ()
 
+let harvest_zombies () = timed n_harvest t_harvest harvest_zombies_raw ()
 
-let launch_process cmd =
+
+let launch_process_raw cmd =
   let (out_read, out_write) = Unix.pipe () in
   let (in_read, in_write) = Unix.pipe () in
   let pid = Unix.create_process "/bin/sh" [| "/bin/sh"; "-c"; cmd |]
@@ -91,6 +131,8 @@ let launch_process cmd =
   Unix.close in_read;
   Unix.close in_write;
   (pid, out_read)
+
+let launch_process cmd = timed n_launch t_launch launch_process_raw cmd
 
 
 (*****************************************)

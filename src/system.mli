@@ -2,6 +2,11 @@
  * Copyright (C) 2012  INRIA and Microsoft Corporation
  *)
 
+val proc_report: unit -> unit
+(** Print the [TLAPM_PROC_TIMES] probe: how many times the process
+    primitives below were called and how long they took.  Inert unless
+    the variable is set. *)
+
 val kill_tree: int -> unit
 (** [kill_tree pid]
     Kill the process tree rooted at [pid] (with signal 1).

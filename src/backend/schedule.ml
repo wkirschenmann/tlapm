@@ -148,7 +148,8 @@ let sched_report total =
       "[SCHED] overlap potential: serial=%.1fs, max(prep+launch, wait)=%.1fs\n%!"
       (!t_next +. !t_launch +. !t_wait)
       (Float.max (!t_next +. !t_launch) !t_wait)
-  end
+  end ;
+  System.proc_report ()
 
 let run_stream max_threads next =
   assert (max_threads >= 1);
