@@ -14,6 +14,14 @@ val with_proof_state_from : (string -> t option) -> t -> t
 val with_prover_names : int -> int -> string list -> t -> t
 val parsed : t -> Tlapm_lib.Proof.T.obligation option
 val parsed_main : t -> Tlapm_lib.Proof.T.obligation option
+
+val with_lines_shifted : int -> t -> t
+(** [with_lines_shifted delta obl] shifts the line coordinates of the
+    parsed obligation's location by [delta].  Used when an obligation is
+    carried whole across document versions (scoped generation): its
+    inner location is the previous version's, and every consumer of
+    [loc] — failure diagnostics, the proof-step details panel, the
+    exact-location match of prover results — needs current coordinates. *)
 val role : t -> Role.t
 val is_omitted : t -> bool
 val loc : t -> Range.t

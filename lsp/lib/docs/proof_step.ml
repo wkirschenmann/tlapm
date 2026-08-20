@@ -655,7 +655,9 @@ end = struct
 
   (* Previous-version material outside the edited step, keyed by its
      expected range in the NEW version: identical before the edit,
-     line-shifted after it.  [carry_fold] drives both carry modes. *)
+     line-shifted after it.  [carry_fold] drives both carry modes; [f]
+     also receives the line shift applied to the range (0 before the
+     edited window). *)
   let carry_fold (prev : t) sc f acc =
     let acc = ref acc in
     let each r (o : Obl.t) =
@@ -664,10 +666,11 @@ end = struct
       else
         let lf, cf = Range.Position.as_pair (Range.from r) in
         let lt, ct = Range.Position.as_pair (Range.till r) in
-        if rt < sc.es_wl then acc := f !acc (lf, cf, lt, ct) o
+        if rt < sc.es_wl then acc := f !acc 0 (lf, cf, lt, ct) o
         else if rf > sc.es_wh_old then
           acc :=
-            f !acc (lf + sc.es_delta, cf, lt + sc.es_delta, ct) o
+            f !acc sc.es_delta
+              (lf + sc.es_delta, cf, lt + sc.es_delta, ct) o
     in
     let rec traverse ps =
       RangeMap.iter each ps.obs;
@@ -680,7 +683,7 @@ end = struct
   let carry_table (prev : t) sc =
     let tbl = Hashtbl.create 4096 in
     carry_fold prev sc
-      (fun () k o ->
+      (fun () _d k o ->
         match Obl.fingerprint o with
         | None -> ()
         | Some fp -> Hashtbl.replace tbl k fp)
@@ -689,13 +692,14 @@ end = struct
 
   (* Mode 2 (scoped generation): the whole previous obligations, at
      their expected new ranges, ready to enter the pool.  Their inner
-     locations are the previous version's (stale by [es_delta] lines
-     after the edit) — the tree ranges come from the fresh parse, so
-     markers and statuses are unaffected. *)
+     locations are shifted to the new version's line coordinates, so
+     the consumers of [Obl.loc] — failure diagnostics, the proof-step
+     details panel, the exact-location match of prover results — see
+     the same coordinates the tree (built from the fresh parse) uses. *)
   let carried_obligations (prev : t) sc =
     carry_fold prev sc
-      (fun acc (lf, cf, lt, ct) o ->
-        (Range.of_ints ~lf ~cf ~lt ~ct, o) :: acc)
+      (fun acc d (lf, cf, lt, ct) o ->
+        (Range.of_ints ~lf ~cf ~lt ~ct, Obl.with_lines_shifted d o) :: acc)
       []
 
   let gen_scope_lines prev old_text new_text =
@@ -1147,7 +1151,28 @@ let%test_unit "scoped fingerprint carry-over: exact, and scoped correctly" =
   Unix.putenv "TLAPM_LSP_SCOPED" "";
   let ps_c_full = of_module ?prev:ps_scoped (parse t_c) in
   assert (carried_stmt = 0);
-  assert (fps ps_c_scoped = fps ps_c_full)
+  assert (fps ps_c_scoped = fps ps_c_full);
+  (* Mode 2 (scoped generation + whole-obligation carry), with an edit
+     that CHANGES the line count inside the FIRST theorem's body: the
+     second theorem's obligations are carried line-shifted, and the
+     (loc, fingerprint) pairs must still match the full recomputation —
+     which checks that the carried obligations' inner locations are
+     shifted along with their pool ranges. *)
+  let t_d =
+    Str.replace_first (Str.regexp_string "<1>1. TRUE OBVIOUS")
+      "<1>1. TRUE\n           OBVIOUS" t_a
+  in
+  Unix.putenv "TLAPM_LSP_SCOPED" "2";
+  TL.lsp_gen_scope := gen_scope_lines ~prev:(Option.get ps_a) ~old_text:t_a
+      ~new_text:t_d;
+  let mule_d = parse t_d in
+  TL.lsp_gen_scope := None;
+  let ps_d_scoped = of_module ?prev:ps_a ~texts:(t_a, t_d) mule_d in
+  let carried_gen2 = Builder.last_carried () in
+  Unix.putenv "TLAPM_LSP_SCOPED" "";
+  let ps_d_full = of_module ?prev:ps_a (parse t_d) in
+  assert (carried_gen2 > 0);
+  assert (fps ps_d_scoped = fps ps_d_full)
 
 let%test_unit "check if parsing works with nested local instances." =
   let mod_file = "test_loc_ins.tla" in

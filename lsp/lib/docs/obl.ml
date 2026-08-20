@@ -90,6 +90,39 @@ let reset obl p_ref =
     status = Proof_status.Pending;
   }
 
+(* Carried whole across document versions (see [Proof_step]): the
+   obligation's inner location is the previous version's — shift its
+   lines so every consumer of [loc] (failure diagnostics, the
+   proof-step details panel, the exact-location match of prover
+   results) sees current coordinates.  Byte offsets ([bol]) are left
+   as-is: nothing downstream reads them for these obligations, and the
+   carry criterion guarantees the underlying line content is identical
+   up to the shift.  The cached obligation texts do not depend on the
+   location, so they are kept. *)
+let with_lines_shifted delta obl =
+  if delta = 0 then obl
+  else
+    match obl.parsed with
+    | None -> obl
+    | Some parsed -> (
+        let open Tlapm_lib in
+        match Util.query_locus parsed.obl with
+        | None -> obl
+        | Some loc ->
+            let shift = function
+              | Loc.Actual p -> Loc.Actual { p with Loc.line = p.line + delta }
+              | Loc.Dummy -> Loc.Dummy
+            in
+            let loc =
+              {
+                loc with
+                Loc.start = shift loc.Loc.start;
+                Loc.stop = shift loc.Loc.stop;
+              }
+            in
+            let parsed = { parsed with obl = Util.set_locus parsed.obl loc } in
+            { obl with parsed = Some parsed })
+
 let parsed obl = obl.parsed
 
 let parsed_main obl =
