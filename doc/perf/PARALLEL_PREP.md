@@ -330,13 +330,42 @@ the monolith would need 606 workers × 43 s of redundant parse, hours of
 pure waste.  Fine ranges only make sense in the fork route below, where
 the parse is paid once.
 
-**Why not "just start the provers earlier".**  Tempting, but the
-scheduler measurement rules it out: `wait = 0.0 s` over 68 915
-`select` calls means no prover capacity is ever idle, and the dead time
-before the first obligation is 7 s of 291 (2.4 %).  Lazy generation
-(`TLAPM_STREAM_GEN`), which does exactly that, measured CLI-neutral for
-this reason.  The ×2.2 comes from preparation running on four cores,
-not from provers starting sooner.
+**Why not "just start the provers earlier".**  Tempting, and it is the
+natural reading of the ×2.2 — four workers reach their first obligation
+after a quarter of the document instead of after all of it — but the
+measurement separates the two causes.
+
+First, the model is already pipelined.  `Schedule.run_stream` prepares
+one obligation, launches its prover as a *subprocess*, and goes on
+preparing the next while that prover runs; `TLAPM_SCHED_TIMES` reports
+`wait = 0.0 s` over 68 915 `select` calls.  Preparation never waits for
+a verdict, so there is no serialisation between the stages to remove.
+The dead time before the *first* obligation is 7 s of 291 (2.4 %), and
+lazy generation (`TLAPM_STREAM_GEN`), which exists precisely to shorten
+it, measured CLI-neutral for this reason.
+
+Second, the control isolates the effect.  Same four ranges — hence the
+same redundant parse, and the same broken pipeline at the three chunk
+boundaries, since a `--spawn 1` worker does not prepare chunk *k+1*
+while chunk *k*'s provers run — only the concurrency differs:
+
+| run | wall | failures |
+|---|---|---|
+| sequential | 289.5 s | 958 / 29 965 |
+| `--chunks 4 --spawn 1` | 297.1 s | 958 / 29 965 |
+| `--chunks 4 --spawn 4` | 147.6 s | 958 / 29 965 |
+| `--chunks 16 --spawn 4` | 130.8 s | 958 / 29 965 |
+
+Breaking the pipeline at three boundaries and re-parsing four times
+costs **7.6 s of 289.5** (+2.6 %).  Raising the concurrency from 1 to 4,
+everything else identical, accounts for **149.5 s of the 149.5 s**
+difference.  So the ×2 is preparation running on four cores; earlier
+prover starts are worth single-digit seconds.
+
+That the ×2 exists at all is itself the proof that cores were idle:
+preparation is one single-threaded process, and `wait = 0.0 s` says
+prover demand never saturated the rest of the machine.  "All cores are
+busy" describes the *provers'* view during bursts, not the run.
 
 **Next, and this is where fine ranges belong.**  Forking after
 elaboration pays the parse once and hands each worker the elaborated
@@ -344,6 +373,37 @@ module copy-on-write; ranges can then be as small as one obligation,
 with near-perfect load balancing.  Projected ×2.8 on this corpus, Unix
 only (`Unix.fork` does not exist on Windows and never will), with the
 spawn route as the portable fallback.
+
+## The pipelining that *is* left: preparation's own stages
+
+The pipeline between preparation and provers is saturated, but
+preparation is itself a chain of stages run strictly one after another
+per obligation.  `TLAPM_PREP_TIMES` on the cold monolith:
+
+| stage | cold run |
+|---|---|
+| `find_meth` | 10 s |
+| `add_constness` | 54 s |
+| fingerprint digest | 29 s |
+| `normalize_expand` | 45 s |
+| `normalize` (tail) | 41 s |
+
+Sum ≈ 180 s, largest stage ≈ 54 s.  Treating them as a five-stage
+producer chain — obligation *i* being expanded while *i+1* is
+const-annotated — bounds the wall at the slowest stage, ≈ **×3.3 on
+preparation with no redundant parse at all**, better than the chunk
+route's ×2.2 and better than its ×2.8 fork projection, and it keeps
+document order (so the prefix caches keep their 90 % hit rate within a
+stage).
+
+It is also the one form of parallelism that needs *shared* memory: the
+stages hand each other partially-prepared obligations that reference the
+same context, so passing them between processes would mean serialising
+the very structure whose sharing makes the caches work.  That means
+`Domain`, i.e. OCaml ≥ 5, i.e. the compiler-matrix decision documented
+above — plus making the ~25 category-A scratch refs stage-local, which
+here is unavoidable rather than merely awkward, since two stages genuinely
+run at the same instant.  Recorded as the destination, not scheduled.
 
 ## Risks, stated plainly
 
