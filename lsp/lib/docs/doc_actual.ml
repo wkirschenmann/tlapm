@@ -15,45 +15,81 @@ module Parsed = struct
   }
 
   let make ~uri ~(doc_vsn : Doc_vsn.t) ~(ps_prev : Proof_step.t option)
-      ?prev_text ~parser () =
+      ?prev_text ?mule_prev ~parser () =
     (* Probe (TLAPM_LSP_PHASES=1): per-version cost attribution of the
        in-process pipeline — parse+elaboration+generation vs the
        proof-step tree build (which fingerprints every obligation).
        Inert without the environment variable. *)
     let phases = Sys.getenv_opt "TLAPM_LSP_PHASES" <> None in
+    let scoped_lvl =
+      Option.map String.trim (Sys.getenv_opt "TLAPM_LSP_SCOPED") in
+    let new_text = Doc_vsn.text doc_vsn in
     (* Scoped generation (TLAPM_LSP_SCOPED=2): when the edit satisfies
        the body-only criterion, tell the pipeline to generate proofs
        only for the edited step's line window; the missing obligations
-       are carried from the previous version in Proof_step. *)
-    let gen_scope =
-      match Sys.getenv_opt "TLAPM_LSP_SCOPED" with
-      | Some lvl when String.trim lvl = "2" -> (
-          match (ps_prev, prev_text) with
-          | Some ps, Some ot ->
-              Proof_step.gen_scope_lines ~prev:ps ~old_text:ot
-                ~new_text:(Doc_vsn.text doc_vsn)
-          | _ -> None)
-      | _ -> None
+       are carried from the previous version in Proof_step.
+       Scoped re-elaboration (TLAPM_LSP_SCOPED=3): under the same
+       criterion, hand the pipeline the previous version's elaborated
+       module — only the edited theorem is re-elaborated and
+       re-generated, and the proof tree is patched instead of
+       rebuilt. *)
+    let gen_scope, elab_reuse =
+      match (scoped_lvl, ps_prev, prev_text) with
+      | Some "2", Some ps, Some ot ->
+          ( Proof_step.gen_scope_lines ~prev:ps ~old_text:ot ~new_text,
+            None )
+      | Some "3", Some ps, Some ot -> (
+          match
+            (Proof_step.patch_zones ~prev:ps ~old_text:ot ~new_text,
+             mule_prev)
+          with
+          | Some (oz, nz), Some pm -> (None, Some (pm, oz, nz))
+          | _ -> (None, None))
+      | _ -> (None, None)
     in
     let t0 = if phases then Unix.gettimeofday () else 0. in
     match
       Eio.Mutex.use_rw ~protect:true prover_mutex @@ fun () ->
       Tlapm_lib.lsp_gen_scope := gen_scope;
+      Tlapm_lib.lsp_elab_reuse := elab_reuse;
       Fun.protect
-        ~finally:(fun () -> Tlapm_lib.lsp_gen_scope := None)
+        ~finally:(fun () ->
+          Tlapm_lib.lsp_gen_scope := None;
+          Tlapm_lib.lsp_elab_reuse := None)
         (fun () ->
-          parser ~content:(Doc_vsn.text doc_vsn)
-            ~filename:(LspT.DocumentUri.to_path uri))
+          let r =
+            parser ~content:new_text
+              ~filename:(LspT.DocumentUri.to_path uri)
+          in
+          (r, !Tlapm_lib.lsp_elab_reused))
     with
-    | Ok mule ->
+    | Ok mule, reused ->
         let t1 = if phases then Unix.gettimeofday () else 0. in
         let texts =
           (* Only usable when [ps_prev] was built from exactly this
              text (see [make] below): the positional fingerprint
              carry-over needs the matching baseline. *)
-          Option.map (fun ot -> (ot, Doc_vsn.text doc_vsn)) prev_text
+          Option.map (fun ot -> (ot, new_text)) prev_text
         in
-        let ps = Proof_step.of_module mule ?prev:ps_prev ?texts in
+        let ps =
+          match (reused, ps_prev, prev_text) with
+          | true, Some ps, Some ot -> (
+              match
+                Proof_step.patch_of_module ~prev:ps ~old_text:ot ~new_text
+                  mule
+              with
+              | Some t -> Some t
+              | None ->
+                  (* Should not happen when the pipeline took the reuse
+                     path (same criterion on both sides); rebuilt tree
+                     ranges would be stale for the reused units, so
+                     surface it loudly rather than degrade silently. *)
+                  Eio.traceln
+                    "[LSP] scoped re-elaboration: tree patch failed, \
+                     rebuilding from the patched module";
+                  Proof_step.of_module mule ?prev:ps_prev ?texts)
+          | _ -> Proof_step.of_module mule ?prev:ps_prev ?texts
+        in
         if phases then begin
           let t2 = Unix.gettimeofday () in
           Printf.eprintf
@@ -61,7 +97,7 @@ module Parsed = struct
             (t1 -. t0) (t2 -. t1) (t2 -. t0)
         end;
         { mule = Ok mule; nts = []; ps }
-    | Error (loc_opt, msg) ->
+    | Error (loc_opt, msg), _ ->
         let nts = [ Toolbox.notif_of_loc_msg loc_opt msg ] in
         { mule = Error msg; nts; ps = None }
 
@@ -94,16 +130,24 @@ let make uri doc_vsn prev_act parser =
   | Some prev_act ->
       (* We have the previous actual document, thus either use its
          parsed data, or the data it got from its previous. *)
-      let ps_prev, prev_text =
+      let ps_prev, prev_text, mule_prev =
         match Parsed.ps_if_ready prev_act.parsed with
         | None ->
             (* An older tree, from an unknown text: no positional
                carry-over baseline. *)
-            (prev_act.ps_prev, None)
-        | some -> (some, Some (Doc_vsn.text prev_act.doc_vsn))
+            (prev_act.ps_prev, None, None)
+        | some ->
+            let mule_prev =
+              match (Lazy.force prev_act.parsed).mule with
+              | Ok m -> Some m
+              | Error _ -> None
+            in
+            (some, Some (Doc_vsn.text prev_act.doc_vsn), mule_prev)
       in
       let parsed =
-        lazy (Parsed.make ~uri ~doc_vsn ~ps_prev ?prev_text ~parser ()) in
+        lazy
+          (Parsed.make ~uri ~doc_vsn ~ps_prev ?prev_text ?mule_prev ~parser
+             ()) in
       { uri; doc_vsn; p_ref = prev_act.p_ref; ps_prev; parser; parsed }
 
 let with_parser act parser = make act.uri act.doc_vsn (Some act) parser

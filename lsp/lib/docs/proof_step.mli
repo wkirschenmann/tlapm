@@ -33,6 +33,26 @@ val gen_scope_lines :
 val all_obligations : t option -> Tlapm_lib.Proof.T.obligation list
 (** All parsed obligations of the tree, in document order — the payload
     of a forked in-process prove request. *)
+
+val patch_zones :
+  prev:t ->
+  old_text:string ->
+  new_text:string ->
+  ((int * int) * (int * int)) option
+(** When the edit is confined to one top-level theorem's proof body,
+    that theorem's line zones in the old and new version — the input of
+    the scoped re-elaboration (see [Tlapm_lib.lsp_elab_reuse]). *)
+
+val patch_of_module :
+  prev:t ->
+  old_text:string ->
+  new_text:string ->
+  Tlapm_lib.Module.T.mule ->
+  t option
+(** The proof tree for a module elaborated by the reuse path: previous
+    tree reused with line-shifted ranges and obligations (fingerprints
+    and prover results kept), only the edited theorem's subtree
+    rebuilt. *)
 val el : t -> El.t * TL.Expr.T.ctx
 val goal : t -> TL.Proof.T.obligation option
 val proof : t -> TL.Proof.T.proof option

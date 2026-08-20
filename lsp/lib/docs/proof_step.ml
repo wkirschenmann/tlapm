@@ -530,6 +530,18 @@ module Builder : sig
   (** How many fingerprints the last [of_module] carried over from the
       previous version instead of recomputing (scoped fingerprinting;
       for tests and probes). *)
+
+  val patch_zones :
+    t -> string -> string -> ((int * int) * (int * int)) option
+  (** [patch_zones prev old_text new_text]: the edited theorem's line
+      zones in the old and new version, when the body-only criterion
+      holds — the input of the scoped re-elaboration. *)
+
+  val patch_of_module :
+    TL.Module.T.mule -> t -> string -> string -> t option
+  (** The proof tree for a module elaborated by the reuse path:
+      previous tree reused with line-shifted ranges and obligations,
+      only the edited theorem's subtree rebuilt. *)
 end = struct
   let in_file file wrapped =
     match Tlapm_lib.Util.query_locus wrapped with
@@ -705,6 +717,13 @@ end = struct
   let gen_scope_lines prev old_text new_text =
     Option.map
       (fun sc -> (sc.es_hz_lo, sc.es_hz_hi + sc.es_delta))
+      (compute_scope prev old_text new_text)
+
+  let patch_zones prev old_text new_text =
+    Option.map
+      (fun sc ->
+        ( (sc.es_hz_lo, sc.es_hz_hi),
+          (sc.es_hz_lo, sc.es_hz_hi + sc.es_delta) ))
       (compute_scope prev old_text new_text)
 
   class step_visitor (file : string) =
@@ -972,12 +991,139 @@ end = struct
       Printf.eprintf "[LSP_PHASES] fingerprints=%.2fs (n=%d carried=%d)\n%!"
         !fp_time !fp_count !fp_carried ;
     r
+
+  (* ------------------------------------------------------------------ *)
+  (* Scoped re-elaboration (TLAPM_LSP_SCOPED=3): the module was patched
+     by [Tlapm_lib] — previous elaborated body reused, only the edited
+     (host) theorem re-elaborated and re-generated — so the proof tree
+     is patched the same way: the previous tree's top-level steps are
+     reused with their ranges (and their obligations' locations)
+     line-shifted, and only the host's subtree is rebuilt, from a
+     one-unit module whose Final stage carries exactly the host's fresh
+     obligations.  Reused steps keep their [Obl.t] records wholesale —
+     fingerprints AND prover results — so no fingerprint is recomputed
+     for them and the proof state carries over directly. *)
+
+  let shift_range d r =
+    let lf, cf = Range.Position.as_pair (Range.from r) in
+    let lt, ct = Range.Position.as_pair (Range.till r) in
+    Range.of_ints ~lf:(lf + d) ~cf ~lt:(lt + d) ~ct
+
+  let rec shift_step d (st : t) =
+    if d = 0 then st
+    else
+      {
+        st with
+        full_range = shift_range d st.full_range;
+        head_range = shift_range d st.head_range;
+        obs =
+          RangeMap.fold
+            (fun r o acc ->
+              RangeMap.add (shift_range d r) (Obl.with_lines_shifted d o) acc)
+            st.obs RangeMap.empty;
+        sub = List.map (shift_step d) st.sub;
+      }
+
+  let patch_of_module (mule : TL.Module.T.mule) (prev : t)
+      (old_text : string) (new_text : string) : t option =
+    match compute_scope prev old_text new_text with
+    | None -> None
+    | Some sc -> (
+        let file =
+          match TL.Util.query_locus mule with
+          | None -> failwith "patch_of_module, has no file location"
+          | Some m_locus -> m_locus.file
+        in
+        fp_probe := Sys.getenv_opt "TLAPM_LSP_PHASES" <> None ;
+        fp_time := 0. ;
+        fp_count := 0 ;
+        fp_carried := 0 ;
+        let nzl = sc.es_hz_lo and nzh = sc.es_hz_hi + sc.es_delta in
+        let touches mu =
+          match TL.Util.query_locus mu with
+          | Some
+              {
+                TL.Loc.start = TL.Loc.Actual s;
+                TL.Loc.stop = TL.Loc.Actual e;
+                _;
+              } ->
+              e.TL.Loc.line >= nzl && s.TL.Loc.line <= nzh
+          | _ -> false
+        in
+        match List.filter touches mule.core.body with
+        | [ host_mu ] -> (
+            let m_host =
+              TL.Property.( @@ )
+                { mule.core with TL.Module.T.body = [ host_mu ] }
+                mule
+            in
+            let prev_obs = obl_by_fp (Some prev) in
+            let v = new step_visitor file in
+            match v#process m_host prev_obs with
+            | Some root' -> (
+                match root'.sub with
+                | [ host_step ] ->
+                    let before, after =
+                      List.partition
+                        (fun st ->
+                          Range.line_till st.full_range < sc.es_hz_lo)
+                        (List.filter
+                           (fun st ->
+                             Range.line_till st.full_range < sc.es_hz_lo
+                             || Range.line_from st.full_range > sc.es_hz_hi)
+                           prev.sub)
+                    in
+                    let sub =
+                      before @ (host_step :: List.map (shift_step sc.es_delta) after)
+                    in
+                    (* Module-level obligations (USE facts between
+                       theorems): reused positionally, like the steps. *)
+                    let obs =
+                      RangeMap.fold
+                        (fun r o acc ->
+                          if Range.line_till r < sc.es_wl then
+                            RangeMap.add r o acc
+                          else if Range.line_from r > sc.es_wh_old then
+                            RangeMap.add (shift_range sc.es_delta r)
+                              (Obl.with_lines_shifted sc.es_delta o)
+                              acc
+                          else acc)
+                        prev.obs RangeMap.empty
+                    in
+                    let root =
+                      {
+                        prev with
+                        full_range = root'.full_range;
+                        sub;
+                        obs;
+                      }
+                    in
+                    let root =
+                      { root with
+                        status_derived =
+                          derived_status root.status_parsed root.obs root.sub
+                      }
+                    in
+                    if !fp_probe then
+                      Printf.eprintf
+                        "[LSP_PHASES] fingerprints=%.2fs (n=%d patched-tree)\n%!"
+                        !fp_time !fp_count ;
+                    Some root
+                | _ -> None)
+            | None -> None)
+        | _ -> None)
 end
 
 let of_module ?prev ?texts mule = Builder.of_module mule prev texts
 
 let gen_scope_lines ~prev ~old_text ~new_text =
   Builder.gen_scope_lines prev old_text new_text
+
+let patch_zones ~prev ~old_text ~new_text =
+  Builder.patch_zones prev old_text new_text
+
+let patch_of_module ~prev ~old_text ~new_text mule =
+  Builder.patch_of_module mule prev old_text new_text
 
 (* All parsed obligations of the tree, in document order — the payload
    of a forked in-process prove request.  Each obligation lives in
@@ -1194,7 +1340,32 @@ let%test_unit "scoped fingerprint carry-over: exact, and scoped correctly" =
   Unix.putenv "TLAPM_LSP_SCOPED" "";
   let ps_d_full = of_module ?prev:ps_a (parse t_d) in
   assert (carried_gen2 > 0);
-  assert (fps ps_d_scoped = fps ps_d_full)
+  assert (fps ps_d_scoped = fps ps_d_full);
+  (* Mode 3 (scoped re-elaboration + tree patch), same line-inserting
+     edit: the pipeline reuses the previous version's elaborated body
+     (only ThmA is re-elaborated), and the tree is patched — ThmB's
+     steps and obligations are carried line-shifted.  The (loc,
+     fingerprint) pairs must again match the full recomputation. *)
+  Unix.putenv "TLAPM_LSP_SCOPED" "3";
+  let mule_a = parse t_a in
+  let ps_a3 = of_module mule_a in
+  let zones =
+    patch_zones ~prev:(Option.get ps_a3) ~old_text:t_a ~new_text:t_d in
+  let oz, nz = Option.get zones in
+  TL.lsp_elab_reuse := Some (mule_a, oz, nz);
+  let mule_d3 =
+    Fun.protect
+      ~finally:(fun () -> TL.lsp_elab_reuse := None)
+      (fun () -> parse t_d)
+  in
+  assert !TL.lsp_elab_reused;
+  let ps_d_patched =
+    patch_of_module ~prev:(Option.get ps_a3) ~old_text:t_a ~new_text:t_d
+      mule_d3
+  in
+  Unix.putenv "TLAPM_LSP_SCOPED" "";
+  assert (ps_d_patched <> None);
+  assert (fps ps_d_patched = fps ps_d_full)
 
 let%test_unit "check if parsing works with nested local instances." =
   let mod_file = "test_loc_ins.tla" in
