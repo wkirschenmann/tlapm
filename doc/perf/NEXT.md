@@ -637,6 +637,20 @@ What remains of the keystroke is the whole-file **parse** (1.85 s of
 the 2.0): the next multiple needs an incremental parser, a much bigger
 lift.  The interactive loop is no longer preparation-bound.
 
+### Track 4, follow-up: Property lookups made cheap; representation
+### left upstream
+
+The one cross-cutting target the profile exposed got its
+non-intrusive half: monomorphic pid equality and loop-based
+has/get/query in `util/property.ml` (output-identical; strict golden
+dumps, both suites green).  Whole-module preparation on the monolith,
+two interleaved before/after pairs: 199.1/201.7 s → 188.8/188.9 s
+(**−5..−6 %**), same peak RSS.  The representation change itself
+(dedicated slots for hot properties) remains upstream-discussion
+material — the argument and options are written up in
+`UPSTREAM_NOTES.md` together with the INSTANCE×EXTENDS deduplication
+and the pre-expansion-triviality record.
+
 ### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
 
 Stack-sampling the whole monolith preparation (60 samples, innermost
