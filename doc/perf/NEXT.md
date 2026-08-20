@@ -548,6 +548,44 @@ launch-to-first-result, because the child re-parses and re-elaborates
 the file from scratch — an in-process prove path (or a warm child)
 is the next cheap multiple.
 
+### Track 1, fourth result: forked in-process prover — step verdict
+### 5.1–7.9 s → 0.4–0.6 s
+
+Measured first: the spawned prove child costs **5.8–6.4 s wall on the
+monolith before its first toolbox message** (parsing 2.4 s + analysis
+3.8 s by `--timing`; the earlier 3.5 s figure was another corpus), and
+scoped generation would win nothing there — `P_gen.generate` already
+skips proofs outside the `--toolbox` range, so the child's cost *is*
+the parse and context elaboration.  So the child model has a ~6 s
+floor, and the fix is to not re-elaborate at all: with
+`TLAPM_LSP_FORK=1` the server forks itself and the child proves the
+already-elaborated obligations (`Tlapm_lib.lsp_prove`, copy-on-write
+reuse), writing the exact toolbox protocol to the same pipe a spawned
+child would.  Everything downstream — parser, events, SIGINT
+cancellation, progress UI — is shared; the spawned path stays the
+default and the fallback, and the socket transport (remote proof
+server) is unaffected: the remote server forks on its own machine.
+Measured at a scripted LSP client on the monolith: step verdict
+**5.1–7.9 s → 0.4–0.6 s**; combined with mode 2, edit → verdict of a
+carried, line-shifted step = 4.7 s + 0.44 s.
+
+The hard part was keeping the forked child out of the inherited Eio
+runtime: Eio's SIGCHLD handler runs Eio code when a solver exits, the
+Eio-created pipe is O_NONBLOCK (tlapm's printers die on EAGAIN with
+`Sys_blocked_io`), and an unwind into the runtime can do I/O through
+inherited state — under the io_uring backend even into the parent's
+own stdout, the rings being shared mappings (observed as foreign bytes
+interleaved mid-frame in the LSP stream).  The child resets signal
+dispositions, clears O_NONBLOCK after the dup2, and exits only through
+`Unix._exit`; the parent reaps via WNOHANG in the read fiber and uses
+no systhreads.  Gates: final markers and diagnostics byte-identical to
+the spawned child, chained prove/cancel stable, 23 LSP tests + src
+cram suite green.  A prerequisite fix landed separately: obligations
+carried whole under mode 2 kept their previous version's inner
+locations — stale coordinates for failure diagnostics, the details
+panel and the prover-result match; they are now line-shifted at carry
+time (regression-tested).
+
 ### Track 4 — CLI grinding: no local hotspot, one cross-cutting one
 
 Stack-sampling the whole monolith preparation (60 samples, innermost
