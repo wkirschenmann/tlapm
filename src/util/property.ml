@@ -55,6 +55,18 @@ let fresh () = incr ids ; !ids
 
 let pid (id, _) = id
 
+(* Property lookups run on every property read of every node visit —
+   they are among the hottest paths of the whole prover.  Pid equality
+   is therefore monomorphic (the generic structural equality is a C
+   call per list element), and the lookups below are direct loops: no
+   closure per call, no [Not_found] round-trip on a miss ([query]
+   misses are the common case). *)
+let pid_eq a b =
+  match a, b with
+  | Pid i, Pid j -> i = j
+  | Puuid (a1, a2), Puuid (b1, b2) -> Int64.equal a1 b1 && Int64.equal a2 b2
+  | Pid _, Puuid _ | Puuid _, Pid _ -> false
+
 let make ?uuid rep =
   let pid = match uuid with
     | Some uus -> Puuid (uuid_of_string uus)
@@ -62,7 +74,7 @@ let make ?uuid rep =
   in
   let set x = (pid, Obj.repr x) in
   let get (qid, ob) =
-    if pid = qid then Obj.obj ob
+    if pid_eq pid qid then Obj.obj ob
     else invalid_arg "Property.get"
   in
     { get = get ; set = set
@@ -73,23 +85,36 @@ type 'a wrapped = {
   props : props ;
 }
 
+let rec mem_prop pid = function
+  | [] -> false
+  | (qid, _) :: rest -> pid_eq pid qid || mem_prop pid rest
+
+let rec find_prop pid = function
+  | [] -> raise Not_found
+  | ((qid, _) as p) :: rest -> if pid_eq pid qid then p else find_prop pid rest
+
 let has w pf =
-  List.exists (fun p -> pf.pid = fst p) w.props
+  mem_prop pf.pid w.props
 
 let get w pf =
-  pf.get (List.find (fun p -> pf.pid = fst p) w.props)
+  pf.get (find_prop pf.pid w.props)
 
 let query w pf =
-  try Some (pf.get (List.find (fun p -> pf.pid = fst p) w.props)) with
-    | Not_found -> None
+  let rec go = function
+    | [] -> None
+    | ((qid, _) as p) :: rest ->
+        if pid_eq pf.pid qid then Some (pf.get p) else go rest
+  in
+  go w.props
 
 let assign w pf v =
-  { w with props = pf.set v :: List.filter (fun p -> pf.pid <> fst p) w.props }
+  { w with
+    props = pf.set v :: List.filter (fun p -> not (pid_eq pf.pid (fst p))) w.props }
 
 let with_prop pf v w = assign w pf v
 
 let remove w pf =
-  { w with props = List.filter (fun p -> pf.pid <> fst p) w.props }
+  { w with props = List.filter (fun p -> not (pid_eq pf.pid (fst p))) w.props }
 
 let unwrap x = x.core
 
@@ -125,20 +150,26 @@ let props_of a =
   else invalid_arg "props_of"
 
 let unsafe_has a pf =
-  List.exists (fun p -> pf.pid = fst p) (props_of a)
+  mem_prop pf.pid (props_of a)
 
 let unsafe_get a pf = (* should this be really unsafe ? *)
-  try pf.get (List.find (fun p -> pf.pid = fst p) (props_of a))
+  try pf.get (find_prop pf.pid (props_of a))
   with Not_found -> assert false
 
 let unsafe_query a pf =
-  try Some (pf.get (List.find (fun p -> pf.pid = fst p) (props_of a))) with
-    | Not_found -> None
+  let rec go = function
+    | [] -> None
+    | ((qid, _) as p) :: rest ->
+        if pid_eq pf.pid qid then Some (pf.get p) else go rest
+  in
+  go (props_of a)
 
 let unsafe_assign (a : 'a) pf v : 'a =
   let br = Obj.dup (Obj.repr a) in
     Obj.set_field br 0 begin
-      Obj.repr (pf.set v :: List.filter (fun p -> pf.pid <> fst p) (props_of a))
+      Obj.repr
+        (pf.set v
+         :: List.filter (fun p -> not (pid_eq pf.pid (fst p))) (props_of a))
     end ;
     Obj.obj br
 
