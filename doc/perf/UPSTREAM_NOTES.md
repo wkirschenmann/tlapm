@@ -118,26 +118,55 @@ distinct declarations keep distinct positional indices
 (`$CONSTANT(1)`, `$CONSTANT(2)`, assigned at first reference), so
 dropping the name cannot conflate two declarations.
 
-**Soundness, checked on real merges rather than argued.** With a
-digest-buffer probe (`TLAPM_FP_DUMP`), two obligations that merge only
-under the variant were compared byte by byte on the 30k monolith.  The
-buffers are 522 bytes and differ in **4 characters**: the tail reads
-`… $Def(12,0)$Def(5,3)$Def(15,0) CONSTANT<a> CONSTANT<b> CONSTANT<c>`
-where the only difference is one enumeration constant's name (`…CLAIMED`
-vs `…EXPIRED`).  Everything else — the goal, and every *visible* fact,
-whose expression is hashed in full by `$Fact(…)` — is identical, which
-is precisely a certificate that the two sequents are the same up to
-renaming that declaration: one proof serves both.  This generalises:
-for each merged class the buffer diff exhibits the substitution being
-quotiented, so the audit is mechanical per class rather than a global
-argument.
+**Soundness: what is established, and what is not.** An earlier
+version of this note claimed the digest-buffer diff of two merging
+obligations (522 bytes, differing in the 4 characters of one
+enumeration constant's name) was a certificate of α-equivalence.  **That
+was circular and is retracted**: the buffer *is* the digest input, so
+two obligations that merge necessarily have near-identical buffers, and
+the buffer contains `$Def(i, const?)` for hidden definitions — their
+bodies are **not** hashed.  A buffer diff therefore says nothing about
+the obligations themselves.
 
-**Census on the 30k monolith.** 369 merged classes covering 466
-obligations: 283 classes merge 2 current fingerprints, 79 merge 3, 5
-merge 4, 2 merge 6.  Class *membership* is larger than that (up to 13
-obligations) because the current digest already collapses exact
-repeats — one inspected class has 12 members but only 2 distinct
-fingerprints today, and 1 after the fix.
+What *is* established, by adversarial construction rather than by
+argument: the positional numbering protects against the obvious false
+merge, because any asymmetry between two declared constants shows up as
+a different index pattern.  Two cases, both of a provable obligation
+alongside an unprovable twin, keep distinct fingerprints under the
+name-free variant:
+
+  * `CONSTANTS A, B, P(_)`, `ASSUME HA == P(A)`, goals `P(A)` (provable)
+    vs `P(B)` (not) — the goal's reference index differs because `A` was
+    already numbered by the hashed fact and `B` gets a fresh one;
+  * `Ok(s) == s = A` cited by `BY DEF`, goals `Ok(A)` vs `Ok(B)` — a
+    cited definition is made visible by `find_meth`, so its body is
+    hashed with positional references.
+
+A merge therefore requires the two obligations to be *symmetric* in
+everything hashed — same visible facts, same goal structure, same
+reference pattern — which is the case where one proof does serve both.
+The specs are in `_perf/fp_invariance/` (`Sem.tla`, `Sem2.tla`).
+
+**The open question, pre-existing and widened by the change.** Hidden
+definition bodies are not hashed (`$Def(i, const?)` keeps only the
+position and a constancy bit).  This is sound only if a hidden
+definition can never reach the provers — plausible, since citing one
+makes it visible via `find_meth`, but **we have not verified** that
+`autouse`/`expand_enabled` cannot pull an uncited hidden body into the
+shipped set.  The name-free digest does not create this hole, but it
+increases the number of obligations sharing a fingerprint and therefore
+the exposure.  Verifying it is a prerequisite to proposing the digest
+change, and the check is mechanical: for each merged class, diff the
+*shipped* ("normalized") forms rather than the digest buffers.
+
+**Census on the 30k monolith — indicative.** 369 merged classes
+covering 466 obligations (283 classes merge 2 current fingerprints, 79
+merge 3, 5 merge 4, 2 merge 6); class membership runs up to 13
+obligations because the current digest already collapses exact repeats
+(one inspected class: 12 members, 2 distinct fingerprints today, 1
+after).  The id→fingerprint mapping was checked single-valued (0 of
+29 965 ids carry two fingerprints), so the delta is real; but the
+per-class *soundness* is not audited, per the paragraph above.
 
 ## 3b. Spin-off: the merged classes are a spec-level diagnostic
 
