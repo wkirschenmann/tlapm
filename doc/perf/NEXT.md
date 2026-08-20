@@ -637,6 +637,47 @@ What remains of the keystroke is the whole-file **parse** (1.85 s of
 the 2.0): the next multiple needs an incremental parser, a much bigger
 lift.  The interactive loop is no longer preparation-bound.
 
+### Re-baseline of the whole throughput campaign on a second machine
+
+The measurement host changed under us (container restart): **4 cores
+(Xeon 2.80 GHz), 16 GB**, where the earlier campaign had 16 cores.
+Since `max_threads` defaults to `nproc`, that alone moved every
+absolute number by 25-45 % — a fresh HEAD run read 301 s on the
+monolith against the 235 s on record, which would have looked like a
+regression.  Rule adopted: **absolutes only ever compare inside one
+campaign, on one machine, on one boot**; the machine fingerprint is
+now recorded with the campaign (`_perf/rb_machine.txt`).
+
+The whole set of terminating runs was therefore re-measured in one
+interleaved campaign on the new host (the runs that died of the
+OOM-killer on the old host are not replayed — their outcome is taken
+as reproducible and reported as such):
+
+| binary | monolith (30 035 verdicts) | FfiGrpc (10 031) |
+|---|---|---|
+| base → #16 | (OOM on the old host) | 854 s, 1 175 verdicts, capped |
+| #20 prune facts | (OOM) | 910 s, 5.2 GB |
+| #21 prefix caches | 798 s, 12.6 GB | 293 s, 4.8 GB |
+| #24 final | 724 s, 12.7 GB | 300 s, 4.9 GB |
+| phase 4 | 544 s, **1.46 GB flat** | 271 s, 547 MB |
+| phase B (prep caches) | 333 s | 236 s |
+| étape 3 (pre-Property) | 317 s | 226 s |
+| **HEAD** | **291 s, 1.36 GB** | 227 s |
+
+Three things this campaign settles.  (1) The **Property commit** is
+worth **−8.2 % on the monolith** (317 → 291 s) and **neutral on
+FfiGrpc** (226 → 227 s) — consistent with the −5..−6 % A/B on
+preparation alone, amplified on the monolith because that run is
+preparation-bound.  (2) That bound is now measured directly: monolith
+HEAD only loses **×1.24** going from 16 to 4 cores, so the single-pass
+run is dominated by single-threaded preparation, not by solver
+parallelism — which is also why the remaining CLI work has to be
+preparation work.  (3) `#21`/`#24` **complete** on a 16 GB host
+(12.6-12.7 GB peak) but at 2.5-2.7× HEAD's wall time with the
+characteristic decay (61-66 → 24-27 v/s across quartiles), while
+phase 4 walks the same corpus at 1.46 GB flat: the heap→throughput
+coupling is a throughput fact, not only a survival fact.
+
 ### Track 4, follow-up: Property lookups made cheap; representation
 ### left upstream
 
