@@ -7,11 +7,17 @@ open M_t
 
 
 val generate:
-    ?only:(Loc.locus -> bool) ->
+    ?only:(modunit -> bool) ->
     Expr.T.hyp Deque.dq -> mule ->
         mule * obligation list * summary
 val count_obligations: mule -> int
 val count_obligations_split: mule -> int * int
+
+val context_after:
+    Expr.T.hyp Deque.dq -> modunit list -> Expr.T.hyp Deque.dq
+(** The generation context after traversing the given (elaborated)
+    units: exactly the context the generation traversal threads, with
+    no obligation generated. *)
 
 (* Resumable obligation generation: [gen_stepper cx m] starts a
    traversal; [gen_step] returns the next unit's obligations in
@@ -20,7 +26,7 @@ val count_obligations_split: mule -> int * int
    returned [None]). *)
 type gen_stepper
 val gen_stepper:
-    ?only:(Loc.locus -> bool) -> Expr.T.hyp Deque.dq -> mule -> gen_stepper
+    ?only:(modunit -> bool) -> Expr.T.hyp Deque.dq -> mule -> gen_stepper
 val gen_step: gen_stepper -> obligation list option
 val gen_summary: gen_stepper -> summary
 val collect_usables: mule -> usable option

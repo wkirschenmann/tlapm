@@ -920,6 +920,18 @@ let init () =
    the previous document version) and resetting the reference. *)
 let lsp_gen_scope : (int * int) option ref = ref None
 
+(* Scoped re-elaboration for the in-process LSP pipeline: when set,
+   the main module is elaborated by [Module.Elab.normalize_reuse] —
+   the previous version's elaborated body is reused as-is and only the
+   theorem spanning the given zones (old- and new-version line spans)
+   is re-elaborated and re-generated.  [lsp_elab_reused] reports
+   whether the reuse path was actually taken (it falls back to the
+   full elaboration when the expected shape does not hold), so the
+   caller can pick the matching proof-tree strategy. *)
+let lsp_elab_reuse
+    : (Module.T.mule * (int * int) * (int * int)) option ref = ref None
+let lsp_elab_reused : bool ref = ref false
+
 let modctx_of_string ~(content : string) ~(filename : string) ~loader_paths ~prefer_stdlib : (modctx * Module.T.mule, string option * string) result =
     let parse_it () =
         Errors.reset ();
@@ -954,14 +966,33 @@ let modctx_of_string ~(content : string) ~(filename : string) ~loader_paths ~pre
             match !lsp_gen_scope with
             | None -> None
             | Some (a, b) ->
-                Some (fun (loc : Loc.locus) ->
-                    Loc.line loc.Loc.stop >= a && Loc.line loc.Loc.start <= b)
+                Some (fun (mu : Module.T.modunit) ->
+                    match Util.query_locus mu with
+                    | Some loc ->
+                        Loc.line loc.Loc.stop >= a
+                        && Loc.line loc.Loc.start <= b
+                    | None -> true)
         in
+        let reuse = !lsp_elab_reuse in
+        lsp_elab_reused := false ;
         let t_deps = ref 0. and t_main = ref 0. in
         Clocks.start Clocks.elab ;
         let mcx, mule = Std.finally Clocks.stop (List.fold_left (fun (mcx, found) m ->
             let t0 = if phases then Unix.gettimeofday () else 0. in
-            let (mcx, m, _summ) = Module.Elab.normalize ?gen_only mcx Deque.empty m in
+            let is_main_name = m.core.name.core = mule.core.name.core in
+            let (mcx, m, _summ) =
+                match reuse with
+                | Some (prev, old_zone, new_zone) when is_main_name -> (
+                    match
+                        Module.Elab.normalize_reuse mcx m
+                            ~prev_body:prev.core.Module.T.body
+                            ~old_zone ~new_zone
+                    with
+                    | Some r -> lsp_elab_reused := true ; r
+                    | None ->
+                        Module.Elab.normalize ?gen_only mcx Deque.empty m)
+                | _ -> Module.Elab.normalize ?gen_only mcx Deque.empty m
+            in
             let is_main = m.core.name.core = mule.core.name.core in
             if phases then begin
                 let dt = Unix.gettimeofday () -. t0 in

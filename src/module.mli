@@ -80,13 +80,13 @@ module Gen : sig
   open Proof.T
   open T
   val generate :
-    ?only:(Loc.locus -> bool) ->
+    ?only:(T.modunit -> bool) ->
     Expr.T.hyp Deque.dq -> mule -> mule * obligation list * summary
   val count_obligations : mule -> int
   val count_obligations_split : mule -> int * int
   type gen_stepper = M_gen.gen_stepper
   val gen_stepper :
-    ?only:(Loc.locus -> bool) -> Expr.T.hyp Deque.dq -> mule -> gen_stepper
+    ?only:(T.modunit -> bool) -> Expr.T.hyp Deque.dq -> mule -> gen_stepper
   val gen_step : gen_stepper -> obligation list option
   val gen_summary : gen_stepper -> summary
   val collect_usables : mule -> usable option
@@ -106,8 +106,16 @@ module Elab : sig
 
   val normalize :
     ?stream:(M_gen.gen_stepper -> unit) ->
-    ?gen_only:(Loc.locus -> bool) ->
+    ?gen_only:(T.modunit -> bool) ->
+    ?gencx:Expr.T.hyp Deque.dq ->
     modctx -> Expr.T.hyp Deque.dq -> mule -> modctx * mule * summary
+
+  val normalize_reuse :
+    modctx -> mule ->
+    prev_body:T.modunit list ->
+    old_zone:(int * int) ->
+    new_zone:(int * int) ->
+    (modctx * mule * summary) option
 end
 
 module Dep : sig

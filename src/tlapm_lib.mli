@@ -17,6 +17,15 @@ val init : unit -> unit
 
 val lsp_gen_scope : (int * int) option ref
 
+val lsp_elab_reuse :
+  (Module.T.mule * (int * int) * (int * int)) option ref
+(** Scoped re-elaboration for the in-process LSP pipeline: previous
+    version's elaborated module, and the edited theorem's line zones in
+    the old and new version.  See [Module.Elab.normalize_reuse]. *)
+
+val lsp_elab_reused : bool ref
+(** Whether the last [modctx_of_string] took the reuse path. *)
+
 val modctx_of_string :
   content:string ->
   filename:string ->

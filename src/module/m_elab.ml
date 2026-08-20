@@ -1072,11 +1072,16 @@ let assert_module_exists name mcx mu =
 
 
 (* is_anon = false => not yet anonymised *)
-let rec normalize ?stream ?gen_only mcx cx m =
+let rec normalize ?stream ?gen_only ?gencx mcx cx m =
   let origbody = m.core.body in
   let prefix = ref Deque.empty in
   let emit mu = prefix := Deque.snoc !prefix mu in
-  let gencx = cx in
+  (* The context obligation generation starts from.  It equals the
+     elaboration context [cx] except under scoped re-elaboration, where
+     the caller replays the generation semantics over the reused prefix
+     (USE/HIDE mutation, theorem statement facts) — see
+     [normalize_reuse]. *)
+  let gencx = match gencx with Some g -> g | None -> cx in
   (* let submod_obs: Proof.T.obligation list ref = ref [] in *)
   let rec spin mcx cx = function
     | [] -> cx
@@ -1368,3 +1373,84 @@ let rec normalize ?stream ?gen_only mcx cx m =
   let m = { m.core with defdepth = Deque.size gencx } @@ m in
   let mcx = StringMap.add m.core.name.core m mcx in
   (mcx, m, summ)
+
+(* Scoped re-elaboration for the LSP.  When an edit is confined to the
+   proof body of a single top-level theorem (the host), everything the
+   rest of the module sees — statements, definitions — is unchanged, so
+   the previous version's elaborated body can be reused as-is and only
+   the host needs elaborating and generating, against the contexts the
+   full pass would have given it: the elaboration context is the fold
+   of [hyps_of_modunit] over the reused prefix (what [spin]'s
+   [continue] builds), and the generation context replays the
+   generation semantics over the same prefix ([M_gen.context_after]).
+   The host is elaborated by running the ordinary [normalize] on a
+   one-unit module with those contexts, so no elaboration logic is
+   duplicated.
+
+   [prev_body] is the previous version's elaborated body, with
+   canonical (current-version) unit-wrapper locations — this function
+   maintains that invariant by shifting the wrapper locations of the
+   reused suffix, so chained patches stay well-founded.  Locations
+   inside reused units are the version they were elaborated in;
+   fingerprints do not depend on them, and the LSP carries positions
+   separately.  Returns [None] whenever the expected shape does not
+   hold (the host is not a single theorem unit on either side); the
+   caller then falls back to the full elaboration. *)
+let normalize_reuse mcx (m : mule) ~(prev_body : modunit list)
+    ~old_zone:((ozl : int), (ozh : int)) ~new_zone:(nzl, nzh) =
+  let touches zl zh mu =
+    match Util.query_locus mu with
+    | Some { Loc.start = Loc.Actual s ; Loc.stop = Loc.Actual e ; _ } ->
+        e.Loc.line >= zl && s.Loc.line <= zh
+    | _ -> false
+  in
+  let is_theorem mu = match mu.core with Theorem _ -> true | _ -> false in
+  (* Split the previous body around the host zone. *)
+  let rec split pre = function
+    | mu :: rest when touches ozl ozh mu ->
+        if is_theorem mu && not (List.exists (touches ozl ozh) rest)
+        then Some (List.rev pre, rest)
+        else None
+    | mu :: rest -> split (mu :: pre) rest
+    | [] -> None
+  in
+  match split [] prev_body with
+  | None -> None
+  | Some (pre, post) ->
+      (* The newly parsed host unit. *)
+      let host_parsed =
+        List.filter (touches nzl nzh) m.core.body in
+      match host_parsed with
+      | [ host ] when is_theorem host ->
+          let cx =
+            List.fold_left
+              (fun cx mu -> Deque.append_list cx (hyps_of_modunit mu))
+              Deque.empty pre in
+          let gencx = M_gen.context_after Deque.empty pre in
+          let m_host = { m.core with body = [ host ] } @@ m in
+          let (_, m_host, summ) = normalize ~gencx mcx cx m_host in
+          (match m_host.core.stage with
+           | Final fin ->
+               let delta = nzh - ozh in
+               let shift_mu mu =
+                 if delta = 0 then mu
+                 else match Util.query_locus mu with
+                   | None -> mu
+                   | Some loc ->
+                       let sh = function
+                         | Loc.Actual p ->
+                             Loc.Actual { p with Loc.line = p.line + delta }
+                         | Loc.Dummy -> Loc.Dummy in
+                       Util.set_locus mu
+                         { loc with Loc.start = sh loc.Loc.start ;
+                                    Loc.stop = sh loc.Loc.stop }
+               in
+               let body = pre @ m_host.core.body @ List.map shift_mu post in
+               let stage =
+                 Final { fin with final_named = m.core.body } in
+               let m =
+                 { m.core with body ; stage ; defdepth = 0 } @@ m in
+               let mcx = StringMap.add m.core.name.core m mcx in
+               Some (mcx, m, summ)
+           | _ -> None)
+      | _ -> None

@@ -37,9 +37,9 @@ type gen_stepper = {
   mutable gs_stack : gen_frame list ;
   mutable gs_summ : summary ;
   mutable gs_result : mule option ;      (* set when the traversal ends *)
-  gs_only : (Loc.locus -> bool) option ;
-      (* Scoped generation: a theorem whose locus fails this predicate
-         is traversed for its context contribution only — its proof is
+  gs_only : (M_t.modunit -> bool) option ;
+      (* Scoped generation: a theorem unit failing this predicate is
+         traversed for its context contribution only — its proof is
          neither generated nor collected, so it yields no obligations.
          The caller owns supplying those obligations by other means
          (the LSP carries them from the previous document version). *)
@@ -88,10 +88,7 @@ let rec gen_step st =
               let in_scope =
                 match st.gs_only with
                 | None -> true
-                | Some f ->
-                    (match Util.query_locus mu with
-                     | Some loc -> f loc
-                     | None -> true)
+                | Some f -> f mu
               in
               if not in_scope then begin
                 (* context contribution only: same [cx] flow as below,
@@ -144,6 +141,30 @@ let rec gen_step st =
               gen_step st
           end
     end
+
+(* The generation context after traversing [mus] from [cx]: exactly
+   the context [gen_step] threads (same hypothesis shapes, real
+   USE/HIDE mutation), with no obligation generated and no proof
+   rewritten.  Lets a caller regenerate a single unit against the same
+   context the full traversal would have given it; kept in lockstep
+   with [gen_step] above. *)
+let context_after cx mus =
+  List.fold_left begin fun cx mu ->
+    match mu.core with
+    | Theorem (nm, sq, _, _, _, _) ->
+        let cx = match nm with
+          | Some nm ->
+              Deque.snoc cx
+                (Defn (Operator (nm, exprify_sequent sq @@ nm) @@ mu,
+                       Proof Always, Visible, Export) @@ mu)
+          | None -> cx in
+        let he = if nm = None then exprify_sequent sq else Ix 1 in
+        Deque.snoc cx (Fact (he @@ mu, Hidden, Always) @@ mu)
+    | Submod _ -> cx
+    | Mutate (uh, us) -> fst (Proof.Gen.mutate cx uh (us @@ mu) Always)
+    | Anoninst _ -> cx  (* expanded away in an elaborated body *)
+    | _ -> Deque.append_list cx (hyps_of_modunit mu)
+  end cx mus
 
 (* Count the obligations [generate] would return, without running it:
    a pure walk of the module units and proof trees — no contexts, no
