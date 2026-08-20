@@ -89,20 +89,58 @@ here"**: the producer must return a prepared value and perform no
 effect.  This is the real refactoring cost of step (a), and it is
 mostly plumbing in `prep.ml`'s `prep_meth`/`really_ship`.
 
-## Step (a): relocate, do not parallelise
+## Step (a) is dead — measured, not argued
 
-One producer domain; every effect stays on the main domain.  Because
-there is exactly *one* preparation domain, category A is never shared —
-that is what makes (a) tractable — and only C needs a lock.
+`TLAPM_SCHED_TIMES` attributes the scheduler's own wall time on the
+cold monolith run:
 
-* bounded queue (depth 1–2) of prepared tasks, preserving document
-  order;
-* producer: fingerprint query (under the C lock), `add_constness`,
-  digest, `normalize_expand`, encoding → a prepared record;
-* consumer: emits the toolbox messages, launches solvers, records
-  verdicts, writes fingerprints and theory files;
-* an environment variable or `--debug` flag to disable, so the
-  sequential path stays the reference.
+```
+total=247.8s  next(prep)=11.1s  launch=233.6s  wait=0.0s (68915 selects)
+overlap potential: serial=244.8s   max(prep+launch, wait)=244.7s
+```
+
+**Waiting for provers costs zero.**  Over 68 915 `select` calls the
+loop never blocks, because the provers are *subprocesses*: their
+execution already overlaps the main loop's preparation.  The premise of
+step (a) — preparation and solver waiting strictly alternating — was
+simply wrong, and the −30 % it promised does not exist (0.1 s of 245).
+
+What the same measurement establishes: **233.6 s of the 247.8 s are
+spent inside `start_process`**, i.e. forcing preparation.  The run is
+preparation-bound from inside the scheduler, matching the ×1.24 core
+scaling and the 229 s solver-free warm run.  So step (b) is not "the
+bigger win", it is the only one, and its target is the whole 233.6 s.
+
+## Step (b): parallelise preparation by contiguous chunks
+
+K domains, each preparing a contiguous range of the document, one
+prepared-task queue per chunk, and the main domain consuming them in
+document order and performing every effect.
+
+* contiguous chunks, because the category-B prefix caches hit on
+  consecutive obligations: one cache set per domain keeps the locality
+  inside a chunk, and only the cross-chunk hits are lost;
+* category A (~25 scratch refs over 6 modules) must become
+  domain-local: this is the real price of (b), and it is a
+  functorisation or a `Domain.DLS` pass, not a patch;
+* the consumer keeps all reporting (toolbox messages ordered by
+  obligation id, theory and fingerprint writes, the `record`
+  callback), so the observable stream is unchanged;
+* behind a flag, with the sequential path as the reference.
+
+**Category C without a lock.**  The fingerprint table is a memo of a
+deterministic function, so the write is idempotent: read, and on a miss
+compute and store — two domains racing store the *same* value, and the
+only cost is duplicate work on cores that would otherwise idle.  That
+removes the synchronisation point as such.  One implementation caveat,
+though: OCaml's `Hashtbl` is not safe under concurrent mutation — a
+resize during a lookup can crash or lose entries, and "the value is the
+same" does not help because the corruption is structural.  The faithful
+way to keep the lock-free design is a word-sized atomic slot: an
+immutable map (or an array of per-bucket immutable maps) behind
+`Atomic.t`, where storing is a plain set of the same value.  Reads stay
+lock-free and always see a consistent structure.  The fingerprint
+*file* writes stay on the consumer, where they are already ordered.
 
 **Gate.** Strict golden dumps (generated *and* shipped obligations
 byte-identical) plus a **byte-identical toolbox stream**: the message
@@ -119,15 +157,20 @@ break.
   (a); under (b) they must all become domain-local, which is the honest
   price of step (b) and probably a functorisation, not a patch.
 * Under (b), the prefix caches lose cross-chunk hits.  The measured
-  hit rate per chunk decides whether (b) beats (a) at all.
+  per-chunk hit rate decides how much of the ×K is actually available —
+  and since (a) is dead, there is no cheaper fallback to retreat to.
 
 ## Sequence
 
 0. This inventory — done.
-1. **Measure the overlap potential directly** inside the scheduler
-   (time spent building tasks vs waiting on solvers).  The 189/100
-   split above comes from two different runs; one probe replaces the
-   inference.  Cheap, and it decides whether (a) is worth its
-   refactoring.
-2. Step (a), behind a flag, with the gates above.
-3. Re-measure, then decide on (b).
+1. Measure the overlap potential inside the scheduler — done, and it
+   removed step (a) from the plan.
+2. Measure the per-chunk prefix-cache hit rate (a pure simulation over
+   the existing `TLAPM_PREP_SHARE` data: replay the obligation sequence
+   split into K contiguous chunks and count the hits each chunk would
+   still get).  This sizes (b) before any refactoring, the same way
+   step 1 unsized (a).
+3. Make category A domain-local, behind a flag, with a domain-identity
+   assertion to catch stray accesses during testing.
+4. Step (b) proper: K chunk domains + ordered consumer, gated on
+   byte-identical toolbox stream and golden dumps.
