@@ -147,6 +147,49 @@ byte-identical) plus a **byte-identical toolbox stream**: the message
 order is part of the contract, and it is the property most likely to
 break.
 
+## Step (b) sized before writing it
+
+Two questions decide the ceiling: do the prefix caches survive
+chunking, and does the work balance?  Both answered from a
+`TLAPM_PREP_SHARE` run on the 30k monolith (29 965 obligations).
+
+**The caches survive, by a wide margin.**  Contexts have a median of
+743 hypotheses, of which a median of **699 are physically shared with
+the preceding obligation** — the median divergent suffix, i.e. the real
+per-obligation work, is **1 hypothesis** (mean 81).  The caches
+therefore avoid **90.1 %** of the context work, and since they are
+single-slot and keyed on the *previous* obligation, contiguous chunking
+only breaks the chain at chunk starts: **0.096 % extra work at K=4**,
+0.23 % at K=8.  The locality worry was quantitatively unfounded.
+
+**Balance is the real limiter, and coarse dynamic chunks fix it.**  With
+K chunks of equal *obligation count*, the load ratio reaches 1.61 at
+K=4, capping the speedup at 2.48×.  But no single obligation dominates
+(the heaviest is 0.05 % of the total, the top 1 % carry 11.7 %), so
+splitting into more chunks than domains and letting domains pull them
+recovers almost everything.  Modelling per-obligation cost as 87 %
+proportional to the divergent suffix plus 13 % uniform (the digest
+hashes the whole context, 29.4 s of the 233.6 s, so it is
+size-independent):
+
+| K | chunks | obl./chunk | speedup on preparation | boundary overhead |
+|---|---|---|---|---|
+| 4 | 4 | 7 491 | 2.61× | 0.08 % |
+| 4 | 8 | 3 745 | 3.89× | 0.20 % |
+| **4** | **16** | **1 872** | **3.98×** | **0.44 %** |
+| 4 | 64 | 468 | 4.00× | 1.72 % |
+| 2 | 16 | 1 872 | 2.00× | 0.44 % |
+
+Sixteen chunks on four domains is the knee: 3.98× of the theoretical 4,
+each chunk still holding ~1 900 consecutive obligations for the caches.
+
+**Projection.** Preparation 233.6 s → 59 s, plus 14.2 s of serial
+scheduler work → **≈ 73 s inside `run_stream`** (3.4×).  The cold run's
+remaining 43 s (parse, elaboration, generation, fingerprint load,
+report) is untouched, so the whole run goes **291 s → ≈ 116 s (×2.5)**;
+the warm re-run, which is preparation end to end, goes **229 s → ≈ 70 s
+(×3.3)**.
+
 ## Risks, stated plainly
 
 * A stray access from the wrong domain is a data race, not an error.
