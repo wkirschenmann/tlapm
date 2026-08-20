@@ -117,13 +117,48 @@ let kill_and_start_next now reason d =
    Note that this uses lists and is inefficient if there are
    many processes.  Optimize it if you have max_threads > 100.
 *)
+(* Probe (TLAPM_SCHED_TIMES): where the scheduler's wall time goes —
+   building the next task (which forces its preparation), launching
+   processes, and blocking in [select] waiting for provers.  The point
+   of the measurement is the overlap potential: preparation and solver
+   waiting are strictly alternating today, so a producer that prepared
+   ahead could hide the smaller of the two.  Inert without the
+   variable. *)
+let sched_probe = Sys.getenv_opt "TLAPM_SCHED_TIMES" <> None
+let t_next = ref 0.
+let t_launch = ref 0.
+let t_wait = ref 0.
+let n_wait = ref 0
+let sched_time acc f x =
+  if not sched_probe then f x
+  else begin
+    let t0 = Unix.gettimeofday () in
+    let r = f x in
+    acc := !acc +. (Unix.gettimeofday () -. t0) ;
+    r
+  end
+
+let sched_report total =
+  if sched_probe then begin
+    Printf.eprintf
+      "[SCHED] total=%.1fs next(prep)=%.1fs launch=%.1fs wait=%.1fs        (selects=%d) other=%.1fs\n%!"
+      total !t_next !t_launch !t_wait !n_wait
+      (total -. !t_next -. !t_launch -. !t_wait) ;
+    Printf.eprintf
+      "[SCHED] overlap potential: serial=%.1fs, max(prep+launch, wait)=%.1fs\n%!"
+      (!t_next +. !t_launch +. !t_wait)
+      (Float.max (!t_next +. !t_launch) !t_wait)
+  end
+
 let run_stream max_threads next =
   assert (max_threads >= 1);
   assert (max_threads < 100);
+  let t_start_run = Unix.gettimeofday () in
   let rec spin running tl =
     (* Refill: keep at most one pulled-ahead task in [tl]. *)
     let tl =
-      if tl = [] then (match next () with Some t -> [t] | None -> [])
+      if tl = [] then
+        (match sched_time t_next next () with Some t -> [t] | None -> [])
       else tl
     in
     let now = Unix.gettimeofday () in
@@ -179,13 +214,22 @@ let run_stream max_threads next =
          do it only until the deadline is up. *)
       match tl with
       | [] -> assert false
-      | (refid, comps) :: t -> spin (start_process refid comps @ running) t
+      | (refid, comps) :: t ->
+          spin (sched_time t_launch (start_process refid) comps @ running) t
     end else if running <> [] then begin
       (* Finally, call select and treat the outputs and deadlines. *)
       let outs = List.map (fun x -> x.ofd) running in
       let delay = max 0.0 (min (dl -. Unix.gettimeofday ()) 60.0) in
       let outs = if !Params.toolbox then Unix.stdin :: outs else outs in
-      let (ready, _, _) = Unix.select outs [] [] delay in
+      let (ready, _, _) =
+        if sched_probe then begin
+          incr n_wait ;
+          let t0 = Unix.gettimeofday () in
+          let r = Unix.select outs [] [] delay in
+          t_wait := !t_wait +. (Unix.gettimeofday () -. t0) ;
+          r
+        end else Unix.select outs [] [] delay
+      in
       (* Refresh the clock: select may have slept up to [delay]; dating
          reaps and deadline checks with the stale pre-select timestamp
          under-reports run times and postpones kills. *)
@@ -224,9 +268,11 @@ let run_stream max_threads next =
   in
   try
     spin [] [];
-    System.harvest_zombies ()
+    System.harvest_zombies () ;
+    sched_report (Unix.gettimeofday () -. t_start_run)
   with Exit ->
-    System.harvest_zombies ()
+    System.harvest_zombies () ;
+    sched_report (Unix.gettimeofday () -. t_start_run)
 
 
 let run max_threads tasks =
