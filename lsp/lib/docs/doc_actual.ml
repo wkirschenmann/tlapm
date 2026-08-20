@@ -110,7 +110,17 @@ type t = {
   doc_vsn : Doc_vsn.t;
   p_ref : int;
   ps_prev : Proof_step.t option;
-      (** Proof steps from the previous version, if there was any.*)
+      (** Proof steps from the last successfully parsed version, if
+          there was any. *)
+  base_text : string option;
+      (** The text [ps_prev] was built from — the positional carry-over
+          baseline.  Kept alongside [ps_prev] across versions that were
+          never parsed (rapid typing) or failed to parse, so the next
+          successful parse still carries against the last good
+          version. *)
+  base_mule : Tlapm_lib.Module.T.mule option;
+      (** The elaborated module of that same baseline version (scoped
+          re-elaboration input). *)
   parser : Util.parser_fun;  (** Parser to use to parse the modules. *)
   parsed : Parsed.t Lazy.t;
       (** Parsed document and information derived from it. *)
@@ -126,29 +136,47 @@ let make uri doc_vsn prev_act parser =
          to move the proof state from there. *)
       let parsed =
         lazy (Parsed.make ~uri ~doc_vsn ~ps_prev:None ~parser ()) in
-      { uri; doc_vsn; p_ref = 0; ps_prev = None; parser; parsed }
+      {
+        uri;
+        doc_vsn;
+        p_ref = 0;
+        ps_prev = None;
+        base_text = None;
+        base_mule = None;
+        parser;
+        parsed;
+      }
   | Some prev_act ->
       (* We have the previous actual document, thus either use its
-         parsed data, or the data it got from its previous. *)
-      let ps_prev, prev_text, mule_prev =
+         parsed data, or the baseline it inherited: the tree, its text
+         and its elaborated module always travel together, so the
+         carry-over stays sound across skipped or unparsable
+         versions. *)
+      let ps_prev, base_text, base_mule =
         match Parsed.ps_if_ready prev_act.parsed with
-        | None ->
-            (* An older tree, from an unknown text: no positional
-               carry-over baseline. *)
-            (prev_act.ps_prev, None, None)
+        | None -> (prev_act.ps_prev, prev_act.base_text, prev_act.base_mule)
         | some ->
-            let mule_prev =
+            let base_mule =
               match (Lazy.force prev_act.parsed).mule with
               | Ok m -> Some m
               | Error _ -> None
             in
-            (some, Some (Doc_vsn.text prev_act.doc_vsn), mule_prev)
+            (some, Some (Doc_vsn.text prev_act.doc_vsn), base_mule)
       in
       let parsed =
         lazy
-          (Parsed.make ~uri ~doc_vsn ~ps_prev ?prev_text ?mule_prev ~parser
-             ()) in
-      { uri; doc_vsn; p_ref = prev_act.p_ref; ps_prev; parser; parsed }
+          (Parsed.make ~uri ~doc_vsn ~ps_prev ?prev_text:base_text
+             ?mule_prev:base_mule ~parser ()) in
+      {
+        uri;
+        doc_vsn;
+        p_ref = prev_act.p_ref;
+        ps_prev;
+        base_text;
+        base_mule;
+        parser;
+        parsed;
+      }
 
 let with_parser act parser = make act.uri act.doc_vsn (Some act) parser
 let parser act = act.parser

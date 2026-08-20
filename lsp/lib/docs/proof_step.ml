@@ -634,7 +634,8 @@ end = struct
      outside that step keeps a sequent identical up to line positions.
      Returns [None] whenever the criterion does not hold (statement
      touched, module-level edit, several steps, no previous tree). *)
-  let compute_scope (prev : t) (old_text : string) (new_text : string) =
+  let compute_scope ?(widen = false) (prev : t) (old_text : string)
+      (new_text : string) =
     let ol = Array.of_list (String.split_on_char '\n' old_text) in
     let nl = Array.of_list (String.split_on_char '\n' new_text) in
     let no = Array.length ol and nn = Array.length nl in
@@ -650,13 +651,41 @@ end = struct
     let wl = !p + 1 in
     let wh_true = no - !s in
     let wh = max wh_true wl in
+    (* Widened ([widen], scoped re-elaboration only): the host owns
+       everything from below its statement to just above the next
+       top-level step — an edit in the gap after its proof (appending a
+       step, editing a trailing comment) is still confined to it.  This
+       is only sound together with the reuse machinery's shape checks
+       (exactly one theorem unit on each side of the carry, checked
+       over a zone covering the whole edit window), which reject the
+       patch when the edit actually introduces new top-level material;
+       the fingerprint/obligation carry modes have no such check and
+       keep the strict body-containment criterion. *)
     let host =
-      List.find_opt
-        (fun st ->
-          Range.line_from st.full_range <= wl
-          && wh <= Range.line_till st.full_range
-          && wl > Range.line_till st.head_range)
-        prev.sub
+      if widen then
+        let rec find = function
+          | [] -> None
+          | st :: rest ->
+              let next_start =
+                match rest with
+                | nxt :: _ -> Range.line_from nxt.full_range
+                | [] -> max_int
+              in
+              if
+                Range.line_from st.full_range <= wl
+                && wl > Range.line_till st.head_range
+                && wl < next_start && wh < next_start
+              then Some st
+              else find rest
+        in
+        find prev.sub
+      else
+        List.find_opt
+          (fun st ->
+            Range.line_from st.full_range <= wl
+            && wh <= Range.line_till st.full_range
+            && wl > Range.line_till st.head_range)
+          prev.sub
     in
     Option.map
       (fun host ->
@@ -719,12 +748,17 @@ end = struct
       (fun sc -> (sc.es_hz_lo, sc.es_hz_hi + sc.es_delta))
       (compute_scope prev old_text new_text)
 
+  (* The zone the reuse machinery checks for shape: it must cover the
+     host's new extent AND the whole edit window, so any new top-level
+     unit the edit introduced is seen (and rejected as a second unit in
+     the zone). *)
+  let patch_new_zone sc =
+    (sc.es_hz_lo, max sc.es_hz_hi sc.es_wh_old + sc.es_delta)
+
   let patch_zones prev old_text new_text =
     Option.map
-      (fun sc ->
-        ( (sc.es_hz_lo, sc.es_hz_hi),
-          (sc.es_hz_lo, sc.es_hz_hi + sc.es_delta) ))
-      (compute_scope prev old_text new_text)
+      (fun sc -> ((sc.es_hz_lo, sc.es_hz_hi), patch_new_zone sc))
+      (compute_scope ~widen:true prev old_text new_text)
 
   class step_visitor (file : string) =
     object (self : 'self)
@@ -1026,7 +1060,7 @@ end = struct
 
   let patch_of_module (mule : TL.Module.T.mule) (prev : t)
       (old_text : string) (new_text : string) : t option =
-    match compute_scope prev old_text new_text with
+    match compute_scope ~widen:true prev old_text new_text with
     | None -> None
     | Some sc -> (
         let file =
@@ -1038,7 +1072,7 @@ end = struct
         fp_time := 0. ;
         fp_count := 0 ;
         fp_carried := 0 ;
-        let nzl = sc.es_hz_lo and nzh = sc.es_hz_hi + sc.es_delta in
+        let nzl, nzh = patch_new_zone sc in
         let touches mu =
           match TL.Util.query_locus mu with
           | Some
