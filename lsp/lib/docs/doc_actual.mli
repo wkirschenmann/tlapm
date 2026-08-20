@@ -20,5 +20,11 @@ val prover_add_notif : t -> int -> Toolbox.tlapm_notif -> t option
 val prover_terminated : t -> int -> t option
 val is_obl_final : t -> int -> int -> bool option
 
+val prove_payload :
+  t -> (Tlapm_lib.Module.T.mule * Tlapm_lib.Proof.T.obligation list) option
+(** The elaborated module and all its obligations in document order —
+    the payload of a forked in-process prove request; [None] when the
+    module failed to parse. *)
+
 val on_parsed_mule :
   t -> (Tlapm_lib.Module.T.mule -> Proof_step.t -> 'a option) -> 'a option

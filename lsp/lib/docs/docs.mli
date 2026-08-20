@@ -85,8 +85,15 @@ val prover_prepare :
   int ->
   Range.t ->
   p_ref:int ->
-  t * (string * Range.t * Doc_proof_res.t) option
-(** Increment the prover ref for the specified doc/vsn. *)
+  t
+  * (string
+    * Range.t
+    * Doc_proof_res.t
+    * (Tlapm_lib.Module.T.mule * Tlapm_lib.Proof.T.obligation list) option)
+    option
+(** Increment the prover ref for the specified doc/vsn.  The last
+    component is the forked in-process prove payload (elaborated module
+    and its obligations), when available. *)
 
 val prover_add_obl_provers :
   t -> tk -> int -> int -> int -> string list -> t * bool option

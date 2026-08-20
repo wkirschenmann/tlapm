@@ -168,6 +168,21 @@ let is_obl_final (act : t) p_ref obl_id =
     Proof_step.is_obl_final parsed.ps p_ref obl_id
   else None
 
+(* The payload of a forked in-process prove request: the elaborated
+   module and all its obligations in document order (the proof-step
+   pool carries them all, including the ones carried across versions
+   under scoped generation).  [None] when the module failed to parse —
+   the caller then falls back to spawning a tlapm child. *)
+let prove_payload (act : t) =
+  (* Same gate as the prover: only pay the collection walk when the
+     forked path can consume it. *)
+  if Sys.getenv_opt "TLAPM_LSP_FORK" <> Some "1" then None
+  else
+    let parsed = Lazy.force act.parsed in
+    match parsed.mule with
+    | Error _ -> None
+    | Ok mule -> Some (mule, Proof_step.all_obligations parsed.ps)
+
 let on_parsed_mule (act : t) f =
   let parsed = Lazy.force act.parsed in
   match parsed.mule with

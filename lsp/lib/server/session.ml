@@ -210,7 +210,7 @@ module SessionHandlers = Handlers.Make (struct
     in
     let st = { st with docs } in
     match proof_opt with
-    | Some (doc_text, p_range, proof_res) -> (
+    | Some (doc_text, p_range, proof_res, forked_payload) -> (
         let st = ProverProgress.proof_started ~p_ref st in
         let st = send_proof_info st uri vsn (Some proof_res) in
         let prov_events e =
@@ -218,7 +218,7 @@ module SessionHandlers = Handlers.Make (struct
         in
         match
           Prover.start_async st.prov uri doc_text p_range st.paths prov_events
-            ()
+            ?forked_payload ()
         with
         | Ok prov' -> { st with prov = prov' }
         | Error msg ->

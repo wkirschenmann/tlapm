@@ -55,13 +55,23 @@ let suggest_proof_range docs uri range : t * (int * Range.t) option =
 
 (* Push specific version to the actual, increase the proof_rec and clear the notifications. *)
 let prover_prepare docs uri vsn range ~p_ref :
-    t * (string * Range.t * Doc_proof_res.t) option =
+    t
+    * (string
+      * Range.t
+      * Doc_proof_res.t
+      * (Tlapm_lib.Module.T.mule * Tlapm_lib.Proof.T.obligation list) option)
+      option =
   with_doc_vsn docs uri vsn @@ fun (doc : Doc.t) (act : Doc_actual.t) ->
   match Doc_actual.prover_prepare act p_ref with
   | None -> (doc, act, None)
   | Some act ->
       let p_range = Doc_actual.locate_proof_range act range in
-      let res = (Doc_actual.text act, p_range, Doc_actual.proof_res act) in
+      let res =
+        ( Doc_actual.text act,
+          p_range,
+          Doc_actual.proof_res act,
+          Doc_actual.prove_payload act )
+      in
       (doc, act, Some res)
 
 let prover_add_obl_provers docs uri vsn p_ref obl_id provers =

@@ -104,6 +104,11 @@ val start_async :
   string list ->
   (Toolbox.Msg.t -> unit) ->
   ?tlapm_locator:(unit -> (string, string) result) ->
+  ?forked_payload:Tlapm_lib.Module.T.mule * Tlapm_lib.Proof.T.obligation list ->
   unit ->
   (t, string) result
-(** Start new proof process after canceling the existing processes. *)
+(** Start new proof process after canceling the existing processes.
+    When [forked_payload] carries the already-elaborated module and its
+    obligations and TLAPM_LSP_FORK=1 is set, the prover is a process
+    forked from this server proving them directly, instead of a spawned
+    tlapm re-parsing and re-elaborating the file. *)

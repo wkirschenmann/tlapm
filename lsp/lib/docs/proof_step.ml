@@ -979,6 +979,28 @@ let of_module ?prev ?texts mule = Builder.of_module mule prev texts
 let gen_scope_lines ~prev ~old_text ~new_text =
   Builder.gen_scope_lines prev old_text new_text
 
+(* All parsed obligations of the tree, in document order — the payload
+   of a forked in-process prove request.  Each obligation lives in
+   exactly one step (first-claimer-wins distribution of the pool), so a
+   plain traversal collects each once; the sort restores document order
+   across the nesting. *)
+let all_obligations (ps : t option) =
+  let rec go acc ps =
+    let acc =
+      RangeMap.fold
+        (fun r o acc ->
+          match Obl.parsed o with None -> acc | Some p -> (r, p) :: acc)
+        ps.obs acc
+    in
+    List.fold_left go acc ps.sub
+  in
+  match ps with
+  | None -> []
+  | Some ps ->
+      go [] ps
+      |> List.sort (fun (a, _) (b, _) -> Range.compare a b)
+      |> List.map snd
+
 (* ========================================================================== *)
 
 let%test_unit "determine proof steps" =

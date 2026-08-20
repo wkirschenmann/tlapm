@@ -47,9 +47,16 @@ let tlapm_exe () =
         ("tlapm not found, expected it among these: "
         ^ String.concat ", " paths_to_check)
 
-(* Currently forked tlapm process. *)
+(* Currently running tlapm: either a spawned tlapm executable, or a
+   process forked from this server (in-process proving: the fork reuses
+   the server's already-elaborated module by copy-on-write instead of
+   re-parsing and re-elaborating the file). *)
+type proc_handle =
+  | Spawned of [ `Generic | `Unix ] Eio.Process.ty Eio__.Std.r
+  | Forked of int  (* pid *)
+
 type tf = {
-  proc : [ `Generic | `Unix ] Eio.Process.ty Eio__.Std.r;
+  proc : proc_handle;
   complete : unit Eio.Promise.or_exn;
   cancel : unit Eio.Promise.u;
 }
@@ -64,25 +71,53 @@ type t = {
 (** Create instance of a prover process manager. *)
 let create sw fs mgr = { sw; fs; mgr; forked = None }
 
+(* Collect a forked child once its output pipe reached EOF (so it has
+   exited or is in exit).  Deliberately avoids systhreads: forking is
+   only safe while this process runs no extra threads, so the prover
+   must not create any.  The WNOHANG loop yields to the event loop; the
+   final blocking call only runs when the child is already in exit. *)
+let reap_forked pid =
+  let rec go tries =
+    match Unix.waitpid [ Unix.WNOHANG ] pid with
+    | 0, _ ->
+        if tries > 0 then (
+          Eio.Fiber.yield ();
+          go (tries - 1))
+        else ignore (Unix.waitpid [] pid)
+    | _ -> ()
+    | exception Unix.Unix_error (Unix.EINTR, _, _) -> go tries
+    | exception Unix.Unix_error (Unix.ECHILD, _, _) -> ()
+  in
+  go 100
+
 (** Cancel (all) the preceding prover instances. *)
 let cancel_all st =
   match st.forked with
   | None -> st
   | Some { proc; complete; cancel; _ } ->
-      Eio.Process.signal proc Sys.sigint;
-      (match Eio.Process.await proc with
-      | `Exited x -> Eio.traceln "[TLAPM] Process exited %d" x
-      | `Signaled x ->
-          Eio.traceln "[TLAPM] Process signalled %d" x;
-          Eio.Promise.resolve cancel ());
+      (match proc with
+      | Spawned proc -> (
+          Eio.Process.signal proc Sys.sigint;
+          match Eio.Process.await proc with
+          | `Exited x -> Eio.traceln "[TLAPM] Process exited %d" x
+          | `Signaled x ->
+              Eio.traceln "[TLAPM] Process signalled %d" x;
+              Eio.Promise.resolve cancel ())
+      | Forked pid -> (
+          (* The read fiber reaps the child once its pipe reaches EOF;
+             awaiting [complete] below is the termination wait. *)
+          try Unix.kill pid Sys.sigint
+          with Unix.Unix_error (Unix.ESRCH, _, _) -> ()));
       (match Eio.Promise.await complete with
       | Ok () -> Eio.traceln "[TLAPM] Fiber exited"
       | Error e ->
           Eio.traceln "[TLAPM] Fiber failed with %s" (Printexc.to_string e));
       { st with forked = None }
 
-(* Start a fiber to read the tlapm stdout asynchronously. *)
-let fork_read sw stream r w cancel =
+(* Start a fiber to read the tlapm stdout asynchronously. [reap]
+   collects the process (waitpid, for forked children) once its output
+   is drained, before the termination event is delivered. *)
+let fork_read ?(reap = fun () -> ()) sw stream r w cancel =
   let fib_read () =
     Eio.Flow.close w;
     let rec read_fun' br acc =
@@ -104,6 +139,7 @@ let fork_read sw stream r w cancel =
   let fib_cancel () = Eio.Promise.await cancel in
   Eio.Fiber.fork_promise ~sw @@ fun () ->
   Eio.Fiber.first fib_read fib_cancel;
+  reap ();
   stream TlapmTerminated;
   Eio.traceln "[TLAPM] main fiber completed"
 
@@ -146,20 +182,108 @@ let start_async_with_exec st doc_uri doc_text range paths events_adder
   in
   let cancel_p, cancel_r = Eio.Promise.create () in
   let complete = fork_read st.sw events_adder r w cancel_p in
-  let forked = { proc; complete; cancel = cancel_r } in
+  let forked = { proc = Spawned proc; complete; cancel = cancel_r } in
   { st with forked = Some forked }
 
-(* Run the tlapm prover, cancel the preceding one, if any. *)
+(** In-process proving: fork this server and prove the already
+    elaborated obligations in the child, skipping the parse and
+    elaboration a spawned tlapm would redo from scratch.  The child's
+    stdout/stderr are the same toolbox pipe a spawned child gets, so
+    everything downstream (the toolbox parser, events, cancellation by
+    SIGINT) is shared with the spawned path. *)
+let start_forked st doc_uri range
+    ((mule, obs) :
+      Tlapm_lib.Module.T.mule * Tlapm_lib.Proof.T.obligation list)
+    events_adder =
+  let mod_path = LspT.DocumentUri.to_path doc_uri in
+  let mod_dir = Filename.dirname mod_path in
+  let r, w = Eio.Process.pipe st.mgr ~sw:st.sw in
+  (* Empty the Stdlib channel buffers: anything pending would be
+     flushed by the child into the toolbox pipe after the dup2. *)
+  Stdlib.flush_all ();
+  let wfd_t =
+    match Eio_unix.Resource.fd_opt w with
+    | Some fd -> fd
+    | None -> failwith "tlapm-fork: pipe without an OS file descriptor"
+  in
+  let pid =
+    Eio_unix.Fd.use_exn "tlapm-fork" wfd_t @@ fun wfd ->
+    match Unix.fork () with
+    | 0 -> (
+        (* Child: only Unix and tlapm_lib from here on.  The inherited
+           Eio runtime must never run again in this process: its signal
+           handlers would execute Eio code on solver exits (SIGCHLD),
+           and any unwind into it can do I/O through inherited state —
+           under an io_uring backend even into the parent's own stdout
+           (the rings are shared mappings).  So: restore default signal
+           dispositions first, make the redirected descriptors blocking
+           again (Eio creates its pipes non-blocking, and tlapm's
+           printers treat EAGAIN as a fatal [Sys_blocked_io]), and
+           leave only through [Unix._exit]. *)
+        try
+          Sys.set_signal Sys.sigchld Sys.Signal_default;
+          Sys.set_signal Sys.sigterm Sys.Signal_default;
+          (* Same graceful-interrupt behavior as the tlapm CLI: the
+             scheduler polls this flag, kills the running solvers and
+             reports before exiting. *)
+          Sys.set_signal Sys.sigint
+            (Sys.Signal_handle
+               (fun _ ->
+                 ignore (Tlapm_lib.Backend.Interrupted.mark_interrupted ())));
+          Unix.dup2 wfd Unix.stdout;
+          Unix.dup2 wfd Unix.stderr;
+          Unix.clear_nonblock Unix.stdout;
+          Unix.clear_nonblock Unix.stderr;
+          let devnull = Unix.openfile "/dev/null" [ Unix.O_RDONLY ] 0 in
+          Unix.dup2 devnull Unix.stdin;
+          Unix.close devnull;
+          Unix.chdir mod_dir;
+          Tlapm_lib.lsp_prove
+            ~tb_sl:(Range.line_from range)
+            ~tb_el:(Range.line_till range)
+            mule obs;
+          Stdlib.flush_all ();
+          Unix._exit 0
+        with e ->
+          (try
+             Printf.eprintf "in-process prover failed: %s\n%!"
+               (Printexc.to_string e)
+           with _ -> ());
+          Unix._exit 3)
+    | pid -> pid
+  in
+  Eio.traceln "[TLAPM] forked in-process prover: pid=%d, lines %d--%d" pid
+    (Range.line_from range) (Range.line_till range);
+  let cancel_p, cancel_r = Eio.Promise.create () in
+  let complete =
+    fork_read ~reap:(fun () -> reap_forked pid) st.sw events_adder r w cancel_p
+  in
+  let forked = { proc = Forked pid; complete; cancel = cancel_r } in
+  { st with forked = Some forked }
+
+(* Run the tlapm prover, cancel the preceding one, if any.
+   [forked_payload] (the elaborated module and its obligations) enables
+   the forked in-process path; it is only taken when TLAPM_LSP_FORK=1
+   and the platform has [Unix.fork]. *)
 let start_async st doc_uri doc_text range paths events_adder
-    ?(tlapm_locator = tlapm_exe) () =
+    ?(tlapm_locator = tlapm_exe) ?forked_payload () =
   Eio.traceln "[TLAPM][I]\n%s" doc_text;
-  match tlapm_locator () with
-  | Ok executable ->
+  match
+    if Sys.getenv_opt "TLAPM_LSP_FORK" = Some "1" && Sys.unix then
+      forked_payload
+    else None
+  with
+  | Some payload ->
       let st' = cancel_all st in
-      Ok
-        (start_async_with_exec st' doc_uri doc_text range paths events_adder
-           executable)
-  | Error reason -> Error reason
+      Ok (start_forked st' doc_uri range payload events_adder)
+  | None -> (
+      match tlapm_locator () with
+      | Ok executable ->
+          let st' = cancel_all st in
+          Ok
+            (start_async_with_exec st' doc_uri doc_text range paths
+               events_adder executable)
+      | Error reason -> Error reason)
 
 let%test_module "Mocked TLAPM" =
   (module struct
