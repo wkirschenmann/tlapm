@@ -16,8 +16,19 @@ let win_kill pid =
   ignore (Sys.command (Printf.sprintf "taskkill /PID %d /F" pid))
 
 
+(* SIGTERM, not SIGHUP.  A prover that outlives its deadline is killed
+   through this function, and signal 1 was the wrong choice: SIGHUP
+   means "the controlling terminal went away", so launchers routinely
+   set it to SIG_IGN -- [nohup] does exactly that -- and SIG_IGN is
+   inherited across both fork and exec.  Started that way, tlapm keeps
+   announcing timeouts, frees the scheduler slot and moves on, while
+   the prover it believes it killed keeps running: measured on the 30k
+   monolith under [nohup], 725 s instead of 290 s, a mean of 4.6
+   concurrent provers against a limit of 4 (peak 8), and one z3 grown
+   to 6.9 GB.  SIGTERM is the conventional "stop now" signal and no
+   launcher pre-ignores it. *)
 let unix_kill pid =
-  try Unix.kill pid 1 with _ -> ()
+  try Unix.kill pid Sys.sigterm with _ -> ()
 
 
 let ps_list = [
