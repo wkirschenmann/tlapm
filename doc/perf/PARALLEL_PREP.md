@@ -190,6 +190,58 @@ report) is untouched, so the whole run goes **291 s → ≈ 116 s (×2.5)**;
 the warm re-run, which is preparation end to end, goes **229 s → ≈ 70 s
 (×3.3)**.
 
+## Validated on the machine, and it changes the implementation route
+
+Before touching the code: four independent `tlapm` processes, each on a
+contiguous quarter of the monolith (separate cache dirs, `--nofp`).
+
+```
+part0 65 s   part1 98 s   part2 84 s   part3 141 s      wall 141 s   (vs 291 s serial: x2.06)
+```
+
+Two results.  **The machine scales**: four OCaml processes doing this
+work do not contend — no memory-bandwidth wall — even though each one
+*repays ~43 s of redundant parse and elaboration*.  And the imbalance is
+exactly the one modelled above (predicted 137 s for the heaviest
+quarter, measured 141 s: 3 % error), which validates the model that
+predicts 3.98× for 16 dynamic chunks.
+
+**Therefore: fork, not domains.**  The experiment is nearly the target
+architecture already.  Preparation per chunk is independent; only the
+*effects* need ordering.  A process forked after elaboration inherits
+the elaborated module by copy-on-write — exactly the mechanism already
+built and gated for the LSP prove path (`TLAPM_LSP_FORK`) — and pays the
+parse and elaboration **once**, in the parent.
+
+This removes the entire category-A problem: separate address spaces, so
+none of the ~25 scratch refs is shared, and no OCaml 5 domain hazard at
+all.  What remains is bounded and already has precedent in the tree:
+
+* the toolbox stream must be reassembled in chunk order — one pipe per
+  child, the parent forwarding them in order (children are contiguous
+  ranges, so the ordering is a concatenation, not an interleave);
+* each child writes its own fingerprint file and the parent
+  consolidates — `Fpfile.fp_close_and_consolidate` already exists for
+  this;
+* the parent keeps the verdict accounting and the final report;
+* the fork hygiene lessons from `TLAPM_LSP_FORK` apply verbatim (reset
+  signal dispositions, blocking descriptors, leave through
+  `Unix._exit`).
+
+Projection with the redundant parse paid once: 43 s (parse, elaboration,
+generation) + 233.6/3.98 ≈ 59 s of preparation + merge ≈ **~105 s, i.e.
+×2.8 on the cold run**, and the warm re-run ≈ ×3.3.
+
+The one new risk this route carries is **memory**: K children each
+copy-on-write over a 1.4 GB heap and then allocate their own working
+set.  Measurable before committing to it, and the 7.7 GB target machine
+is the constraint to check, not the 16 GB one.
+
+**Usable today, without any code change.** The same experiment is a
+technique, not just a measurement: splitting a large spec across
+processes by line range already gives ×2 on this corpus.  It also
+explains why chunked proving has been the practical workaround.
+
 ## Risks, stated plainly
 
 * A stray access from the wrong domain is a data race, not an error.
