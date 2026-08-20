@@ -868,6 +868,7 @@ let main fs =
       in
       ignore (List.fold_left f mcx mods)
   end ;
+  Backend.Fp_classes.report () ;  (* probe, inert without TLAPM_FP_CLASSES *)
   if !Params.stats then Clocks.report () ;
   (* Under `--strict`, exit with the most severe condition encountered. A clean
      run leaves [exit_status] at 0 and falls through to the normal exit. The

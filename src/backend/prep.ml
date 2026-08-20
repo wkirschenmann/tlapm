@@ -1787,6 +1787,13 @@ let find_meth ob =
 
 
 let really_ship ob org_ob meth fpout thyout record =
+  (* Probe (TLAPM_FP_CLASSES): the form the backends receive is the one
+     the class audit compares — it has been pruned, so nothing in it
+     escapes the digest.  Inert without the variable, and it must not
+     force [ob] on its own: under --noproving the shipped form is never
+     built. *)
+  if Fp_classes.enabled && not !Params.noproving then
+    Fp_classes.record_shipped (Lazy.force ob) ;
   if !Params.printallobs then begin
     let tt = match meth with
     | Method.LS4 _ -> true
@@ -1997,8 +2004,11 @@ let ship ob fpout thyout record =
       lazy begin
         let ob = prep_time t_constness add_constness ob in
         Timing.start Timing.fp_compute ;
-        Std.finally Timing.stop
-          (prep_time t_fingerprint Fingerprints.write_fingerprint) ob
+        let ob =
+          Std.finally Timing.stop
+            (prep_time t_fingerprint Fingerprints.write_fingerprint) ob in
+        Fp_classes.record ob ;   (* probe, inert without TLAPM_FP_CLASSES *)
+        ob
       end
     in
     let p = lazy (normalize_expand (Lazy.force const_fp_ob)

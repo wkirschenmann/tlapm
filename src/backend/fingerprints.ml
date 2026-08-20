@@ -10,6 +10,16 @@ open Ext
 open Proof.T
 
 
+(* Name-erasing mode (probe, see [Fp_classes]): with this set, the
+   declaration of an unbounded [Fresh] contributes its kind and shape
+   instead of its literal name, which makes the digest invariant under
+   renaming a declared constant.  A global ref rather than a parameter
+   threaded through every function: the digest walk is single-threaded
+   and re-entrant only through [fp_sequent], and this keeps the probe's
+   diff to the two places that matter.  Never set during a normal run —
+   [fingerprint] below is unchanged. *)
+let anon_names = ref false
+
 type ident =
   | No
   | Identvari of int
@@ -420,7 +430,7 @@ and fp_sequent stack buf sq =
         bprintf buf "$Goal(%a)" (fp_expr counthyp countvar stack) sq.active
     | Some (h, cx) ->
          match h.core with
-          | Fresh (hint, _, kind, Unbounded)
+          | Fresh (hint, shp, kind, Unbounded)
           ->
               let kind_str = match kind with
                 | Constant -> "CONSTANT"
@@ -432,7 +442,13 @@ and fp_sequent stack buf sq =
               spin stack cx;
               let (v, r) = Stack.pop stack in
               if !r then
-                bprintf buf "%s" (kind_str ^ hint.core)
+                if !anon_names then
+                  bprintf buf "%s/%s" kind_str
+                    (match shp with
+                     | Shape_expr -> "e"
+                     | Shape_op n -> string_of_int n)
+                else
+                  bprintf buf "%s" (kind_str ^ hint.core)
           | Fresh (hint, _, _, Bounded (_, Hidden))
           | Defn ({core = Recursive (hint, _)}, _, _, _)
           ->  Stack.push stack (Identhyp ("CON", hint.core), ref false);
@@ -583,6 +599,18 @@ let fp_sequent sq =
 
 let fingerprint ob =
  to_string (fp_sequent ob.Proof.T.obl.core)
+
+(* The same digest with declared names erased (probe only).  Two
+   obligations sharing it are the same sequent up to renaming declared
+   constants — provided everything the provers receive is hashed, which
+   holds of a *shipped* obligation (hidden definitions, whose bodies
+   this digest does not hash, are pruned before shipping). *)
+let fingerprint_anon ob =
+  anon_names := true ;
+  let r = try to_string (fp_sequent ob.Proof.T.obl.core)
+          with e -> anon_names := false ; raise e in
+  anon_names := false ;
+  r
 
 (* adds its fingerprint to an obligation *)
 let write_fingerprint ob =

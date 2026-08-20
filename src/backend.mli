@@ -23,6 +23,13 @@ module Types: sig
 end
 
 
+module Fp_classes: sig
+  val enabled: bool
+  val record: Proof.T.obligation -> unit
+  val record_shipped: Proof.T.obligation -> unit
+  val report: unit -> unit
+end
+
 module Fingerprints: sig
     val write_fingerprint:
         Proof.T.obligation -> Proof.T.obligation
