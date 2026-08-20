@@ -728,6 +728,63 @@ fingerprinting) as the C3-lite vertical, ahead of phase, feeding the
 optimistic-display discussion with a working demo instead of a design
 note.
 
+### A robustness bug found by accident: SIGHUP, `nohup`, and provers
+### that outlive their own timeout (2026-08-20)
+
+Found by contaminating a measurement: the first occupancy run of the
+30k monolith was launched under `nohup` and took **725 s instead of
+285**, with a mean of 4.60 concurrent provers against a limit of 4, a
+peak of 8, and a peak RSS of 6.86 GB held by a single `z3`.
+
+Mechanism.  `System.unix_kill` sent **signal 1**, and it is the only
+place in the CLI that kills a prover.  SIGHUP means "the controlling
+terminal went away", so launchers set it to `SIG_IGN` — that is exactly
+what `nohup` does — and unlike a handler, `SIG_IGN` is inherited across
+both fork *and* exec.  A tlapm started that way cannot kill anything it
+spawns: the deadline fires, the timeout is announced, the scheduler
+slot is freed, and the prover keeps running.  Confirmed directly: a
+child's `SigIgn` mask carries bit 0 under `nohup` and not otherwise,
+the leaked `z3` processes ignored SIGHUP for ten minutes, and a plain
+SIGTERM killed them instantly.
+
+Fixed by sending SIGTERM (one line).  The gate is the accident itself —
+the same run, under `nohup`, before and after:
+
+| sequential run, `--nofp`, one boot | wall | provers mean/peak | peak RSS | failures |
+|---|---|---|---|---|
+| started normally, before fix | 284.5 s | 0.38 / 3 | 1.46 GB | 958 / 29 965 |
+| under `nohup`, before fix | **725.2 s** | 4.60 / **8** | **6.86 GB** | — |
+| under `nohup`, after fix | **282.2 s** | 0.43 / 4 | 1.54 GB | 958 / 29 965 |
+| | | | | |
+
+The third row is within 0.8 % of the first and the prover count no
+longer exceeds `max_threads`: the penalty is gone, ×2.57 in that
+configuration, −5.3 GB of peak RSS, and no leftover process after the
+run.
+
+Two consequences worth carrying.  **For users**: any tlapm run with
+SIGHUP ignored — `nohup`, a detached or daemonised run, some CI and
+batch harnesses — silently lost its prover timeouts before this fix,
+which makes it a candidate explanation for part of the single-pass OOM
+history: what grows is not tlapm's heap but forgotten solvers at
+several GB each.  **For the code**: escalation is still missing (SIGKILL
+after a grace period, for a backend that traps SIGTERM), and it needs
+the scheduler to remember the pids it killed — a separate change,
+noted, not done.
+
+### Occupancy measured: the CLI run uses 1.54 cores of 4 (2026-08-20)
+
+Full table and interpretation in `PARALLEL_PREP.md`.  Summary: the
+sequential run consumes 374 of the 1 138 available core-seconds, has no
+prover alive in 70 % of samples, and never reaches its own
+`max_threads = 4` cap; `--chunks 16 --spawn 4` takes it to 3.88/4 and
+127.2 s (×2.24, same 958 failures).  Parallelising the producer
+multiplied prover concurrency by 3.8 — the provers were the
+consequence, not the constraint.  Two hypotheses of ours died here: the
+process primitives are negligible (10 437 forks + `/bin/sh` execs cost
+4.2 s of 258.9 s) and the per-worker redundant parse is ≈ 3 s, not the
+43 s previously assumed.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →

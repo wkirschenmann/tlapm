@@ -323,12 +323,18 @@ failures at the same loci either way, and dividing the slots costs 7 %
 blocked, so the surplus keeps the cores fed.  An explicit `--threads`
 is still honoured.
 
-**Why not 50-line ranges.**  Each spawned worker re-parses and
-re-elaborates the whole file — 43 s of fixed cost.  Range size has a
-floor: preparation of the range must dominate its parse.  At 50 lines
-the monolith would need 606 workers × 43 s of redundant parse, hours of
-pure waste.  Fine ranges only make sense in the fork route below, where
-the parse is paid once.
+**Why not 50-line ranges.**  Each spawned worker re-parses the whole
+file, so range size has a floor: preparation of the range must dominate
+that fixed cost.  Measured, the cost is **≈ 3 s per worker**, not the
+43 s an earlier version of this file assumed from the full-run
+parse+elaborate+generate figure — a `--chunk-lines` worker generates
+only its own range, so it repays the parse and a scoped elaboration and
+nothing else (16 workers add 50 s of CPU to a 374 s run, +13 %).  Even
+at 3 s the floor bites: redundancy stays under a quarter of the
+parallel budget up to ~32 chunks on this corpus, and 606 workers of 50
+lines would spend 1 800 s of pure redundancy against 374 s of useful
+work.  Fine ranges only make sense in the fork route below, where the
+parse is paid once.
 
 **Why not "just start the provers earlier".**  Tempting, and it is the
 natural reading of the ×2.2 — four workers reach their first obligation
@@ -373,6 +379,73 @@ module copy-on-write; ranges can then be as small as one obligation,
 with near-perfect load balancing.  Projected ×2.8 on this corpus, Unix
 only (`Unix.fork` does not exist on Windows and never will), with the
 spawn route as the portable fallback.
+
+## What the cores were actually doing
+
+The chunk result leaves one question open: were the cores idle, or was
+the machine already saturated and the gain came from somewhere else?
+Sampling system-wide CPU occupancy and the live prover count every
+0.5 s answers it.  Runs are serial rather than interleaved here —
+occupancy *is* the metric, so overlapping runs would destroy it — and
+all three rows are one machine, one boot.
+
+| run | wall | busy cores | live provers mean/peak | total CPU | peak RSS | failures |
+|---|---|---|---|---|---|---|
+| sequential | 284.5 s | **1.54 / 4 (38 %)** | 0.38 / 3 | 374 s | 1.46 GB | 958 / 29 965 |
+| `--chunks 16 --spawn 4` | **127.2 s** | 3.88 / 4 (97 %) | 1.44 / 6 | 424 s | 615 MB | 958 / 29 965 |
+| sequential under `nohup` | 725.2 s | 3.83 / 4 (96 %) | 4.60 / **8** | 1 080 s | **6.86 GB** | (see below) |
+
+**The sequential run leaves two thirds of the machine idle**: 374
+core-seconds used of the 1 138 available, `busy_cores` median 1.37 and
+p90 2.34, 85 % of samples below two busy cores, and **no prover running
+at all in 70 % of the samples** (histogram 0:394, 1:136, 2:29, 3:7 —
+the `max_threads = 4` cap is never reached).  The chunked run sits at a
+median of 3.98.  `TLAPM_SCHED_TIMES` agrees from inside the loop:
+`wait = 0.1 s` over **259** blocking selects in 273 s.
+
+Prover demand is that small because the provers are that short: 10 437
+launches over 284 s at a mean concurrency of 0.38 gives a mean prover
+lifetime of **≈ 10 ms** — immediate `unsat` answers, not searches.  And
+10 437 launches for 29 965 obligations means **two thirds of the
+obligations never reach a prover at all** (triviality and the
+already-decided cases).
+
+So the same table, read the other way, settles the causality:
+parallelising the *producer* multiplied prover concurrency by **3.8**
+(0.38 → 1.44).  The provers were never the constraint — they were the
+consequence.  Which also disposes of "better asynchronous primitives
+would let the provers fill the machine": there is no queue to schedule
+better.  `wait = 0.1 s` cannot be improved on, and the demand that
+would fill four slots does not exist until something produces it
+faster.  Where the scheduler's own quality *will* matter is one step
+later: `running` is a list walked with `List.mem` per event, the fd
+list is rebuilt every pass, and `read_to_stdout` does a synchronous
+4 KB read-write-flush inside the loop — the code says as much
+("Optimize it if you have max_threads > 100").  At four slots and 259
+selects that is noise; at 32-64 provers in flight it is the next
+constraint.  A prerequisite for the next stage, not a gain today.
+
+**Refuted along the way**: the process primitives are *not* a
+bottleneck.  Every attempt forks this process (a 1.5 GB heap) and execs
+`/bin/sh -c`, three processes per attempt, which looked expensive.
+`TLAPM_PROC_TIMES` says 10 437 launches cost **4.2 s of the 258.9 s**
+(0.40 ms each — Linux copies page tables lazily), `kill_tree` is called
+6 times, and `harvest_zombies` costs 0.2 s.  The 428 s of system time in
+the third row above is not the primitives; it is the leaked provers.
+
+**A warning about the metric.**  Busy cores alone prove nothing — the
+third row shows 96 % occupancy and takes 2.6× longer than the first,
+because the occupancy is leaked provers that the scheduler believes it
+killed (`SIGHUP` ignored under `nohup`; see the entry in `NEXT.md`, and
+the fix).  Occupancy is only meaningful read next to the wall time and
+the verdicts.
+
+**Scope of the claim.**  This is a corpus with very many very easy
+obligations.  On a spec where each `z3` call takes seconds, the balance
+inverts: the provers do saturate the cores, parallelising preparation
+buys nothing, and the scheduler's quality becomes the thing that
+matters.  The measurement above is the reason to parallelise
+preparation *for this shape of corpus*, not a general law.
 
 ## The pipelining that *is* left: preparation's own stages
 
