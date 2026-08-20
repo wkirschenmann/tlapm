@@ -242,6 +242,46 @@ technique, not just a measurement: splitting a large spec across
 processes by line range already gives ×2 on this corpus.  It also
 explains why chunked proving has been the practical workaround.
 
+## One process instead of several? Not portably
+
+The natural question — chunk the document and let threads take a chunk
+each, in one process — runs into two hard facts.
+
+**`Thread` gives no parallelism.**  The library is already linked in
+`src/dune`, but the OCaml runtime holds a master lock: one thread
+executes OCaml code at a time.  For CPU-bound preparation that is
+exactly 0 % gain.
+
+**`Domain` needs OCaml ≥ 5, and tlapm supports 4.14.**  The CI matrix
+builds `4.14.1` *and* `5.1.0`, which is precisely why the LSP library
+carries `(enabled_if (>= %{ocaml_version} "5.0.0"))` — eio needs 5.  So
+an in-process parallel preparation means either dropping 4.14 (a
+maintainer decision) or two compile-time code paths through the most
+delicate stage of the pipeline, plus making the ~25 scratch refs
+domain-local and keeping that discipline forever: a global `ref` added
+later by any contributor becomes a silent race.
+
+`Unix.fork` works on both compilers.  Its only conditionality is
+Unix-vs-Windows (tlapm supports Windows), which is a one-line runtime
+test with a sequential fallback — the same guard already in the LSP
+fork — not a second build configuration.
+
+**The memory argument for domains does not survive measurement.**  A
+domain shares the elaborated module for real, where separate processes
+duplicate it, so this looked like the deciding constraint given the
+corpus's OOM history.  Measured, four processes on quarters peak at
+**629 + 664 + 749 + 957 MB = 2.86 GB**, against **1.36 GB** for the
+sequential run: a factor 2.1, not 4, because each process prepares a
+quarter and its live working set shrinks accordingly.  That fits the
+7.7 GB target machine with room to spare, and a *fork* after
+elaboration does better still, sharing the module copy-on-write instead
+of duplicating it.
+
+So the decision goes to implementation cost, where fork wins outright:
+portable across both supported compilers, no shared-state refactoring,
+and a precedent already gated in the tree.  Domains remain the nicer
+destination if 4.14 is ever dropped.
+
 ## Risks, stated plainly
 
 * A stray access from the wrong domain is a data race, not an error.
