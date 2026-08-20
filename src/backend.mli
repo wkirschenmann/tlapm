@@ -44,6 +44,7 @@ module Fpfile: sig
     val fp_close_and_consolidate:
         string -> out_channel -> unit
     val load_fingerprints: string -> unit
+    val merge_files: string list -> string -> unit
     val print: string -> unit
     val erase_results:
         string -> Method.t -> unit

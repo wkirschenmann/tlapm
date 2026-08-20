@@ -131,21 +131,38 @@ let print_unproved_obligations
     let s = if n_obligations > 1 then "s" else "" in
     let n_neg = string_of_int n_unproved in
     let n_all = string_of_int n_obligations in
+    (* In a chunked run each worker sees only its own range, so its
+       per-module tally is a fragment: record it for the parent, which
+       prints one aggregate line, and skip the misleading local one. *)
+    let chunked = !Params.chunk_lines <> None in
+    if chunked then begin
+        let f = Filename.concat !Params.cachedir "chunk.summary" in
+        try
+            let oc = open_out f in
+            Printf.fprintf oc "%s %d %d\n"
+                tla_module.core.name.core n_obligations n_unproved ;
+            close_out oc
+        with Sys_error _ -> ()
+    end ;
     if n_unproved <> 0 then begin
-        Util.eprintf
-            ~at:tla_module "%s"
-            ~prefix:"[ERROR]: "
-            (n_neg ^ "/" ^ n_all ^ " obligation" ^ s ^ " failed.");
-        Util.eprintf
-            "There were backend errors processing module `%S`."
-            tla_module.core.name.core;
+        if not chunked then begin
+            Util.eprintf
+                ~at:tla_module "%s"
+                ~prefix:"[ERROR]: "
+                (n_neg ^ "/" ^ n_all ^ " obligation" ^ s ^ " failed.");
+            Util.eprintf
+                "There were backend errors processing module `%S`."
+                tla_module.core.name.core
+        end;
         if !Params.strict then
             (* Record the most severe condition and keep processing so that all
                modules are reported before exiting (see [Params.exit_status]). *)
             Params.note_strict_failure 10
-        else if not !Params.toolbox then
-            failwith "backend errors: there are unproved obligations"
-    end else begin
+        else if not !Params.toolbox then begin
+            if chunked then exit 10
+            else failwith "backend errors: there are unproved obligations"
+        end
+    end else if not chunked then begin
         Util.eprintf
             ~at:tla_module "%s"
             ~prefix:"[INFO]: "
@@ -457,14 +474,31 @@ let process_module
             && not !Params.suppress_all
             && not (Params.has_explicit_target ())
         in
+        (* Chunked runs (`--chunk-lines`, set by `--chunks` in the
+           children): restrict generation to the module units starting
+           in this line range.  A unit belongs to exactly one chunk, so
+           the union of the chunks generates every obligation exactly
+           once; out-of-range units still contribute their statements to
+           the running context, so the obligations that are generated
+           are identical to a whole-file run. *)
+        let gen_only =
+            match !Params.chunk_lines with
+            | None -> None
+            | Some (a, b) ->
+                Some (fun (mu: Module.T.modunit) ->
+                    match Util.query_locus mu with
+                    | Some { Loc.start = Loc.Actual p ; _ } ->
+                        a <= p.Loc.line && p.Loc.line <= b
+                    | _ -> true)
+        in
         (* Normalize the proofs in order to get proof obligations *)
         let (mcx, t, summ) =
             if stream_gen then
                 Module.Elab.normalize
                     ~stream:(fun st -> stepper := Some st)
-                    mcx Deque.empty t
+                    ?gen_only mcx Deque.empty t
             else
-                Module.Elab.normalize mcx Deque.empty t
+                Module.Elab.normalize ?gen_only mcx Deque.empty t
         in
         (* In stream mode the summary is empty at this point; the
            obligation count, where needed below, comes from the
@@ -843,6 +877,25 @@ let main fs =
         ignore (Sys.signal s (Sys.Signal_handle handle_abort))
     end [Sys.sigint ; Sys.sigabrt ; Sys.sigterm] in
   let () = Format.pp_set_max_indent Format.std_formatter 2_000_000 in
+  (* Chunked run (`--chunks`): prove contiguous line ranges in separate
+     processes and consolidate.  Refused where the output contract is
+     not a plain per-module report — the toolbox stream announces one
+     obligation total per run, and several inputs would make the ranges
+     ambiguous — in which case the run proceeds sequentially. *)
+  let chunked_status =
+    if !Params.chunks <= 1 then None
+    else if !Params.toolbox then begin
+      Errors.warn "--chunks is ignored in toolbox mode (the obligation                    count is announced once per run)." ;
+      None
+    end else match fs with
+      | [ file ] when !Params.chunk_lines = None -> Some (Chunked.run file)
+      | _ ->
+          Errors.warn "--chunks needs exactly one input file;                        proving sequentially." ;
+          None
+  in
+  match chunked_status with
+  | Some st -> if st <> 0 then exit st
+  | None ->
   let mcx = Module.Standard.initctx in
   (* reads the new modules and return both the map:name->module with the new
    * module and a list of the new modules*)

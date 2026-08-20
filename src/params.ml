@@ -26,6 +26,20 @@ let nprocs = Sysconf.nprocs ()
 
 let timeout_stretch = ref 1.0
 
+(* Chunked runs.  The parent splits the input into [chunks] contiguous
+   line ranges and runs at most [spawn] children concurrently; more
+   chunks than children balances the load (measured spread with one
+   chunk per child: 2.2x).  A child restricts itself to [chunk_lines]:
+   a *module unit* belongs to the chunk containing the line it starts
+   on, so the partition is exact.  Filtering per obligation cannot
+   work — a proof's locus is its keyword, while the obligations it
+   generates sit at the positions of the facts it cites, so adjacent
+   per-obligation ranges silently drop the ones beyond the keyword's
+   line. *)
+let chunks = ref 0
+let spawn = ref 0
+let chunk_lines : (int * int) option ref = ref None
+
 let tb_sl = ref 0 (* toolbox start line *)
 let tb_el = ref max_int (* toolbox end line *)
 let input_files = ref []  (* List of input file names *)

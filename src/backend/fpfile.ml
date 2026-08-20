@@ -996,3 +996,29 @@ let query fp meth =
   | Not_found -> (None, [])
 
 let get_length () = Hashtbl.length !fptbl
+
+(* Merge fingerprint files into one.  A chunked run gives each child
+   process its own cache directory — the files are separate tables over
+   the same deterministic keys — so consolidating is a per-fingerprint
+   union of result lists, which is exactly what [add_to_table] does for
+   a single entry.  Loading replaces the global table, hence the
+   accumulate-then-restore dance. *)
+let merge_files (sources: string list) (dest: string): unit =
+  let acc : (string, V13.str) Hashtbl.t = Hashtbl.create 5003 in
+  let absorb () =
+    Hashtbl.iter begin fun fp r ->
+      let cur = try Hashtbl.find acc fp with Not_found -> empty in
+      let l = List.sort ~cmp:order (record_to_list r @ record_to_list cur) in
+      Hashtbl.replace acc fp (list_to_record l)
+    end !fptbl
+  in
+  List.iter begin fun src ->
+    if Sys.file_exists src then begin
+      fptbl := Hashtbl.create 500 ;
+      load_fingerprints src ;
+      absorb ()
+    end
+  end sources ;
+  fptbl := acc ;
+  let oc = fp_init dest [] in
+  fp_close_and_consolidate dest oc

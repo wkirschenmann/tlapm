@@ -72,3 +72,9 @@ val query:
 
 val get_length: unit -> int
 (* Return the number of entries in the fingerprint table. *)
+
+val merge_files: string list -> string -> unit
+(* [merge_files sources dest] loads each existing fingerprint file in
+   [sources] and writes the per-fingerprint union of their results to
+   [dest].  Used to consolidate the per-chunk caches of a `--chunks`
+   run. *)

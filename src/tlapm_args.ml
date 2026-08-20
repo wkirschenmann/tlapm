@@ -45,6 +45,18 @@ let set_target_line s =
         tb_el := s
     end
 
+let set_chunks n =
+  if n < 1 then raise (Arg.Bad "--chunks requires a positive argument") ;
+  chunks := n
+
+let set_spawn n =
+  if n < 1 then raise (Arg.Bad "--spawn requires a positive argument") ;
+  spawn := n
+
+let chunk_lo = ref 0
+let set_chunk_lo n = chunk_lo := n
+let set_chunk_hi n = chunk_lines := Some (!chunk_lo, n)
+
 let set_default_method meth =
   try set_default_method meth
   with Failure msg -> raise (Arg.Bad ("--method: " ^ msg))
@@ -203,6 +215,18 @@ let init ?(out=Format.std_formatter) ?(err=Format.err_formatter) ?(terminate=exi
     "--prefer-stdlib", Arg.Set prefer_stdlib, " \
         prefer built-in standard modules if the module search path \
         contains files with the same names as modules in stdlib.";
+    "--chunks", Arg.Int set_chunks,
+               "<int> split the input into <int> contiguous line ranges \
+                and prove them in separate processes (preparation is \
+                single-threaded and dominates a run, so this is where \
+                the parallelism is)" ;
+    "--spawn", Arg.Int set_spawn,
+              "<int> run at most <int> chunk processes at a time \
+               (default: number of cores). Use more chunks than \
+               processes to balance the load." ;
+    "--chunk-lines", (Arg.Tuple [Arg.Int set_chunk_lo; Arg.Int set_chunk_hi]),
+                     "<int><int> prove only the module units starting in \
+                      this line range (set by --chunks in the children)" ;
     "--noproving", Arg.Set noproving,
                    " do not prove, report fingerprinted results only";
     blank;

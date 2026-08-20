@@ -81,6 +81,10 @@ val cachedir: string ref
 (* tlapm_args.ml *)
 val rm_debug_flag: string -> unit
 val add_debug_flag: string -> unit
+val chunks: int ref
+val spawn: int ref
+val chunk_lines: (int * int) option ref
+
 val tb_sl: int ref
 val tb_el: int ref
 val input_files: string list ref
