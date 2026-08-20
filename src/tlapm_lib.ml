@@ -990,6 +990,62 @@ let modctx_of_string ~(content : string) ~(filename : string) ~loader_paths ~pre
          | Some l, None -> Error (Some l, Printexc.to_string e)
          | None, None -> Error (None, Printexc.to_string e))
 
+(* In-process proving for the LSP.  Prove [obs] — the obligations of
+   the already-elaborated module [t], in document order, exactly as the
+   in-process pipeline produced them — the way a spawned `tlapm
+   --toolbox tb_sl tb_el` child would, with the same toolbox messages
+   on stderr, the same solver chatter on stdout and the same
+   fingerprint/theory files under the cache directory.
+
+   The caller is expected to run this in a FORKED process whose
+   stdout/stderr are the toolbox pipe and whose working directory is
+   the module's: like a CLI run, this function mutates global state
+   (Params, the loaded fingerprint table, clocks) and must not share an
+   address space with a live LSP server.  The fork replaces the child's
+   parse and elaboration of the whole file — the dominant cost of a
+   prove request — with copy-on-write reuse of the server's. *)
+let lsp_prove ~tb_sl ~tb_el (t : Module.T.mule)
+    (obs : Proof.T.obligation list) : unit =
+  Params.toolbox := true;
+  Params.toolbox_vsn := 2;
+  Params.printallobs := true;
+  Params.tb_sl := tb_sl;
+  Params.tb_el := (if tb_el = 0 then max_int else tb_el);
+  let modname = t.core.name.core in
+  modules_list := [modname];
+  let (_, tlapsdir) = mkdir_tlaps t in
+  Params.output_dir := tlapsdir;
+  let thyf = Filename.concat !Params.output_dir (modname ^ ".thy") in
+  let fpf = Filename.concat !Params.output_dir "fingerprints" in
+  Params.fpf_out := Some fpf;
+  (* Ids in document order before any filter, then the toolbox-range
+     and omitted filters — the same sequence as [process_module]. *)
+  let obs = List.mapi add_id obs in
+  let obs = List.filter toolbox_consider obs in
+  let obs =
+    List.filter
+      (fun ob ->
+        match ob.Proof.T.kind with Proof.T.Ob_omitted _ -> false | _ -> true)
+      obs in
+  let obs = Array.of_list obs in
+  (* Fingerprint loading: same policy as the CLI (no --cleanfp/--usefp
+     in this mode). *)
+  if Sys.file_exists fpf && Array.length obs > 0 then begin
+    Util.printf "(* loading fingerprints in %S *)%!" fpf;
+    Clocks.start Clocks.fp_loading;
+    Backend.Fpfile.load_fingerprints fpf;
+    Params.fp_loaded := true;
+    Params.fp_original_number := Backend.Fpfile.get_length ();
+    Clocks.stop ()
+  end;
+  Array.iter
+    (fun ob ->
+      Backend.Toolbox.toolbox_print ob "to be proved" None None 0. None
+        !Params.printallobs None "" None)
+    obs;
+  Backend.Toolbox.print_ob_number (Array.length obs);
+  process_obs t obs modname thyf fpf
+
 let module_of_string module_str =
     let hparse = Tla_parser.P.use Module.Parser.parse in
     let (flex, _) = Alexer.lex_string module_str in

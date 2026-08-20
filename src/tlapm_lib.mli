@@ -27,6 +27,15 @@ val modctx_of_string :
     from a specified string, assume it is located in the
     specified path. *)
 
+val lsp_prove :
+  tb_sl:int -> tb_el:int -> Module.T.mule -> Proof.T.obligation list -> unit
+(** Prove the given obligations of an already-elaborated module the way
+    a `tlapm --toolbox tb_sl tb_el` child would: same toolbox messages
+    on stderr, same solver output on stdout, same fingerprint and
+    theory files.  Mutates global state like a CLI run — the caller is
+    expected to invoke it in a forked process whose stdout/stderr are
+    the toolbox pipe and whose working directory is the module's. *)
+
 val module_of_string : string -> Module.T.mule option
 (** Parse the specified string as a module. No dependencies
     are considered, nor proof obligations are elaborated. *)
