@@ -1077,6 +1077,68 @@ let prune_context ob =
     { ob with obl = { ob.obl with core = { context ; active } } }
   end
 
+(* Cross-obligation prefix cache for `Expr.Elab.normalize`, same
+   principle as [expand_defs_cached]: consecutive obligations share a
+   long physically-identical (==) context prefix, and both normalization
+   passes visit hypotheses left to right with a state that only ever
+   grows (the scx of each pass's already-visited prefix), so the visit
+   can resume after the shared prefix instead of re-normalizing all of
+   it.  Checkpoint [i] stores each pass's scx context after the first
+   [i] hypotheses (except-pass outputs, then let-pass outputs).
+
+   The except pass runs only when the whole sequent is non-temporal, so
+   temporal and non-temporal obligations resume from separate slots
+   (the checkpoint states are not interchangeable between the two
+   pipelines).
+
+   Equivalence with `Expr.Elab.normalize Deque.empty (Sequent sq)`: that
+   function applies the except pass to the whole sequent and the let
+   pass to its result; each visitor's sequent case folds the hypotheses
+   through [#hyp] with the scx of its own outputs, then visits the
+   active with the full scx.  Interleaving the two passes per hypothesis
+   is the same computation because the let pass's input at position i
+   (the except output of hypothesis i) and its scx (let outputs of
+   except outputs [0..i)) are unchanged by the interleaving. *)
+let elab_cache :
+    (bool * Expr.T.hyp array
+     * (Expr.T.hyp Deque.dq * Expr.T.hyp Deque.dq) array) ref
+  = ref (true, [||], [||])
+
+let elab_normalize_cached ob =
+  let sq = ob.obl.core in
+  let nte = Expr.Elab.non_temporal (noprops (Expr.T.Sequent sq)) in
+  let raw = Array.of_list (Deque.to_list sq.context) in
+  let n = Array.length raw in
+  let (cnte, craw, cstates) = !elab_cache in
+  let m = if cnte = nte then min n (Array.length craw) else 0 in
+  let l = ref 0 in
+  while !l < m && raw.(!l) == craw.(!l) do incr l done;
+  let l = !l in
+  let states = Array.make (n + 1) (Deque.empty, Deque.empty) in
+  Array.blit cstates 0 states 0 (min (l + 1) (if cnte = nte then Array.length cstates else 0));
+  let rec fold i (ecx, lcx) =
+    if i = n then (ecx, lcx)
+    else begin
+      let (h, ecx) =
+        if nte then
+          let ((), ecx), h = Expr.Elab.except_normalize_hyp ((), ecx) raw.(i) in
+          (h, ecx)
+        else (raw.(i), ecx)
+      in
+      let ((), lcx), _h = Expr.Elab.let_normalize_hyp ((), lcx) h in
+      let st = (ecx, lcx) in
+      states.(i + 1) <- st;
+      fold (i + 1) st
+    end
+  in
+  let (ecx, lcx) = fold l states.(l) in
+  let active = sq.active in
+  let active = if nte then Expr.Elab.except_normalize ((), ecx) active
+               else active in
+  let active = Expr.Elab.let_normalize ((), lcx) active in
+  elab_cache := (nte, raw, states);
+  { ob with obl = { ob.obl with core = { context = lcx ; active } } }
+
 let normalize_expr ob =
     print_obl_and_msg ob (
         "Proof obligation before `Backend.Prep.expand_defs`:\n");
@@ -1088,11 +1150,16 @@ let normalize_expr ob =
     print_obl_and_msg ob (
         "Proof obligation after `Backend.Prep.expand_defs` and " ^
         "before `Expr.Elab.normalize`:\n");
-    let expr: Expr.T.expr =
-        let expr = expr_from_obl ob in
-        let cx = Deque.empty in
-        (Expr.Elab.normalize cx) expr in
-    let ob = obl_from_expr expr ob in
+    let ob =
+      if Params.debugging "noprepcache" then begin
+        let expr: Expr.T.expr =
+            let expr = expr_from_obl ob in
+            let cx = Deque.empty in
+            Expr.Elab.normalize cx expr in
+        obl_from_expr expr ob
+      end else
+        elab_normalize_cached ob
+    in
     print_obl_and_msg ob "Proof obligation after `Expr.Elab.normalize`:\n";
     ob
 
