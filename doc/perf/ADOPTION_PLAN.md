@@ -86,68 +86,94 @@ phase-0/1 sweep) and host B (4 cores, everything from the re-baseline
 on).  Absolute values are only ever compared inside one host and one
 boot.  Ratios inside a series are what carry over.
 
-## The recommended path
-
-Six steps.  Each is independently shippable and independently
-measurable; each ends at a state where the test suite passes and the
-dumps are clean.  Steps 1-3 are the ones with the extreme ratios: **293 added lines in six files** for most of the CLI and interactive gain.
-
-```
-1. latency floor      Deque + ENABLED scan + levels fast path        (+117/-74,  3 files)
-2. throughput unlock  single-pass expand + the two prunes            (+133/-29,  1 file)
-3. robustness         SIGTERM + early reap                           (+43/-1,    2 files)
-4. interactive floor  LSP obligation pool + parser memoization       (+175/-33,  2 files)
-5. the caches         prefix-resume for expand and normalize + oracle (+356/-51, 4 files)
-6. optional verticals chunked CLI | forked LSP prover | scoped LSP modes
-```
-
-Why this order and not the branch's: the branch measured the micro-fixes
-first because they were cheap to validate, and only reached the prunes
-in phase 1.5.  But the prunes carry the memory unlock (×8.7 on peak
-RSS) and half the throughput, so a maintainer evaluating the series
-should see them early.  Conversely the prefix caches (step 5) are the
-largest single diff on the branch and deliver less than the prunes —
-they belong after, not before.
-
-One real dependency constrains the order: **the facts prune extends the
-definitions prune** (same function, same marking pass), so they land as
-a pair.  Everything else in steps 1-5 is independent; the sweep
-measured each in isolation.
-
 ## Ranked by gain over modification
 
 Ratio is the headline gain divided by the diff size — a blunt
 instrument, deliberately, because it is what decides what to review
 first.
 
-| # | change | files | +/− | headline gain | metric |
-|---|---|---|---|---|---|
-| 1 | `util/Deque`: nth / first_n / equal on rear-heavy deques | 1 | +37/−27 | **×8.2** M0 on Ffi (32.1 s → 3.89 s), ×8.8 M2 | latency |
-| 2 | `fix`: kill timed-out provers with SIGTERM, not SIGHUP | 1 | +12/−1 | **×2.57** and −5.3 GB peak, in any run started with SIGHUP ignored | both |
-| 3 | `backend/prep`: prune unreachable hidden definitions, then unreferenced hidden facts | 1 | +102/−16 | **×2.7** M1 (30.2 → 11.2 s), **×8.7** M3 (1.50 GB → 173 MB) | throughput |
-| 4 | `backend/prep`: expand visible definitions in one pass | 1 | +31/−13 | ×1.45 M1, −17 % M3, and Ffi M1 goes from *timeout* to 458 s | throughput |
-| 5 | `lsp`: sorted obligation pool instead of per-step `RangeMap.partition` | 1 | +100/−12 | **×5.2** keystroke on the monolith (59.7 → 11.5 s) | latency |
-| 6 | `module/Elab`: linear ENABLED-axioms detection | 1 | +23/−18 | ×1.59 M0 on Ffi (3.74 → 2.35 s) | latency |
-| 7 | `expr/parser`: memoize the two instances of each grammar rule | 1 | +75/−21 | ×2.4 keystroke (2.9 → 1.2 s) | latency |
-| 8 | `util/property`: monomorphic pid equality, loop-based lookups | 1 | +43/−12 | −5..−6 % of *all* preparation, −8.2 % M4 monolith | throughput |
-| 9 | `backend/toolbox`: single-pass expansion in the result printer | 1 | +18/−11 | ×4.3 on the warm (all-fingerprints-present) path | throughput |
-| 10 | `expr/Levels`: stop the level cache pinning one context per obligation | 4 | +36/−1 | flat heap instead of monotonic growth | memory |
-| 11 | `expr/Subst`: memoized index lookup for deep substitutions | 4 | +37/−3 | ÷2.1 on the expansion tail | throughput |
-| 12 | `expr/Levels`: resolve reference levels without slicing the context | 1 | +57/−29 | ×49 on the analysis clock (with #6) | latency |
-| 13 | `expr/Constness`: O(1) De Bruijn resolution | 6 | +69/−4 | −73 % of the deque walks in `add_constness` | throughput |
-| 14 | `backend/schedule`: reap finished provers before launching | 1 | +31/−0 | removes spurious timeouts under slow preparation | correctness |
-| 15 | `backend/prep`: prefix-resume caches (expand, then `Elab.normalize`) + differential oracle | 4 | +356/−51 | ×1.32 M1 synthetic, **×2.15** M1 Ffi (55.1 → 25.7 s) | throughput |
-| 16 | `backend/schedule`: pull tasks from a stream | 3 | +57/−9 | removes the eager task array; the single-pass OOM unlock with #10 | memory |
-| 17 | `cli`: `--chunks N --spawn P` | 9 | +392/−13 | **×2.24** M4 monolith (284.5 → 127.2 s) | throughput |
-| 18 | `lsp`: forked in-process prover | 13 | +360/−36 | step verdict 5.1–7.9 s → **0.4–1.0 s** | latency |
-| 19 | `lsp`+`module`: scoped fingerprint carry, scoped generation, scoped re-elaboration | 10 | +889/−128 | keystroke 11.5 s → **2.0 s** after #5 | latency |
-| 20 | small independent micro-fixes: `Ctx` log lookup, smtlib regex hoisting, `app_ix` without allocation, identity-rebuild skip, obligation comments only when kept | 5 | +84/−23 | each below the noise floor individually; together they are the tail of the tier-1 ×1.35 | throughput |
+**Granularity: one row = one pull request.**  Eight rows are a group of
+commits that must land together (the `commits` column says how many);
+twelve are a single commit.  Two rows are prerequisites that buy no
+performance at all — the protocols below cannot be run without them —
+so they are marked rather than ranked.
+
+| # | change | commits | files | +/− | headline gain | metric |
+|---|---|---|---|---|---|---|
+| 0 | *prerequisite* — measurement instrumentation: the named clocks, the per-stage and per-tranche timers, the scheduler, process and context probes, the fingerprint-class and proof-tree probes | 17 | 22 | +876/−92 | none by construction — inert without its environment variables; every protocol below reads it | — |
+| 0b | *prerequisite* — measurement harness: synthetic generator, bench driver, obligation dump plus strict/subset checker, per-verdict monitor, scripted LSP client | 5 | 9 | +698/−0 | none — `test/perf/` only, no `src/` change; T1, T2, P1 and P3 *are* this code | — |
+| 1 | `util/Deque`: nth / first_n / equal on rear-heavy deques | 1 | 1 | +37/−27 | **×8.2** M0 on Ffi (32.1 s → 3.89 s), ×8.8 M2 | latency |
+| 2 | `fix`: kill timed-out provers with SIGTERM, not SIGHUP | 1 | 1 | +12/−1 | **×2.57** and −5.3 GB peak, in any run started with SIGHUP ignored | both |
+| 3 | `backend/prep`: prune unreachable hidden definitions, then unreferenced hidden facts | 2 | 1 | +102/−16 | **×2.7** M1 (30.2 → 11.2 s), **×8.7** M3 (1.50 GB → 173 MB) | throughput |
+| 4 | `backend/prep`: expand visible definitions in one pass | 1 | 1 | +31/−13 | ×1.45 M1, −17 % M3, and Ffi M1 goes from *timeout* to 458 s | throughput |
+| 5 | `lsp`: sorted obligation pool instead of per-step `RangeMap.partition` | 1 | 1 | +100/−12 | **×5.2** keystroke on the monolith (59.7 → 11.5 s) | latency |
+| 6 | `module/Elab`: linear ENABLED-axioms detection | 1 | 1 | +23/−18 | ×1.59 M0 on Ffi (3.74 → 2.35 s) | latency |
+| 7 | `expr/parser`: memoize the two instances of each grammar rule | 1 | 1 | +75/−21 | ×2.4 keystroke (2.9 → 1.2 s) | latency |
+| 8 | `util/property`: monomorphic pid equality, loop-based lookups | 1 | 1 | +43/−12 | −5..−6 % of *all* preparation, −8.2 % M4 monolith | throughput |
+| 9 | `backend/toolbox`: single-pass expansion in the result printer | 1 | 1 | +18/−11 | ×4.3 on the warm (all-fingerprints-present) path | throughput |
+| 10 | `expr/Levels`: stop the level cache pinning one context per obligation | 1 | 4 | +36/−1 | flat heap instead of monotonic growth | memory |
+| 11 | `expr/Subst`: memoized index lookup for deep substitutions | 1 | 4 | +37/−3 | ÷2.1 on the expansion tail | throughput |
+| 12 | `expr/Levels`: resolve reference levels without slicing the context | 1 | 1 | +57/−29 | ×49 on the analysis clock (with #6) | latency |
+| 13 | `expr/Constness`: O(1) De Bruijn resolution | 1 | 6 | +69/−4 | −73 % of the deque walks in `add_constness` | throughput |
+| 14 | `backend/schedule`: reap finished provers before launching | 1 | 1 | +31/−0 | removes spurious timeouts under slow preparation | correctness |
+| 15 | `backend/prep`: prefix-resume caches (expand, then `Elab.normalize`) + differential oracle | 3 | 4 | +356/−51 | ×1.32 M1 synthetic, **×2.15** M1 Ffi (55.1 → 25.7 s) | throughput |
+| 16 | `backend/schedule`: pull tasks from a stream | 1 | 3 | +57/−9 | removes the eager task array; the single-pass OOM unlock with #10 | memory |
+| 17 | `cli`: `--chunks N --spawn P` — the branch also holds an add-then-revert pair here (a prover-slot-division hypothesis, refuted by measurement) which must **not** be replayed | 2 | 9 | +392/−13 | **×2.24** M4 monolith (284.5 → 127.2 s) | throughput |
+| 18 | `lsp`: forked in-process prover | 3 | 13 | +360/−36 | step verdict 5.1–7.9 s → **0.4–1.0 s** | latency |
+| 19 | `lsp`+`module`: scoped fingerprint carry, scoped generation, scoped re-elaboration | 6 | 10 | +889/−128 | keystroke 11.5 s → **2.0 s** after #5 | latency |
+| 20 | small independent micro-fixes: `Ctx` log lookup, smtlib regex hoisting, `app_ix` without allocation, identity-rebuild skip, obligation comments only when kept | 5 | 5 | +84/−23 | each below the noise floor individually; together they are the tail of the tier-1 ×1.35 | throughput |
 
 Reading of the table: **items 1–9 are 441 added lines (−131) across
-eight files** and cover the ×8 latency drop, the ×2.7 throughput and the ×8.7
-memory reduction.  Items 15–19 are 2 000+ lines and each buys a
+eight files** and cover the ×8 latency drop, the ×2.7 throughput and the
+×8.7 memory reduction.  Items 15–19 are 2 000+ lines and each buys a
 specific, smaller multiple.  If only one thing ships, it is #1; if only
 one *day* is available, it is #1–#6.
+
+## Dependencies
+
+The ranking says what is worth most; this says what is not free to
+reorder.  Everything not listed here is independent — the per-commit
+sweep measured each in isolation, which is how we know.
+
+**Hard, in the code.**
+
+  * **#3's two commits, in order.**  The facts prune extends the
+    definitions prune: same function, same marking pass.
+  * **#11 requires #15.**  The memoized substitution is attached to the
+    *expansion fold's states*; without the prefix cache there are no
+    substitution values shared across obligations for its table to warm
+    on, so the change has nothing to attach to.
+  * **#15's three commits, in order**: the expansion cache, then the
+    normalization cache, then the differential oracle that validates the
+    second.
+  * **#19 requires #5.**  The scoped modes patch the proof-step tree that
+    #5 rebuilt; over the old quadratic association they would have to be
+    written twice.
+  * **#0 and #0b before any protocol.**  T1 and T2 *are* the checker of
+    #0b; P1's stage attribution and P2's per-verdict timing *are* the
+    probes of #0.  An optimization landed before them ships
+    unverifiable.
+
+**Hard by measurement — the one that is easy to miss.**  **#3 must not
+ship without #15** for INSTANCE-heavy specs: on that corpus the prune
+alone takes preparation from 458 s to 842 s while cutting peak memory
+from 13.9 GB to 5.1 GB, and the caches are what turn it back into a win.
+On the other two corpora #3 stands alone.
+
+**Soft, worth grouping anyway.**  #6 and #12 jointly produce the ×49 on
+the elaboration clock and neither is impressive alone.  #10 and #16
+jointly are the single-pass memory unlock — one stops the level cache
+pinning contexts, the other stops materialising the task array, and
+either alone leaves the run growing.  #18 and #19 touch adjacent code in
+the same three LSP files without depending on each other.
+
+**Batching, if it has to be batched.**  Three coherent series, grouped
+for review coherence rather than for performance — the ranking already
+covers that: *(a)* #0, #0b, the ground to stand on; *(b)* #1, #6, #12,
+#20 — pure hot-path fixes, all output-identical, reviewable by reading;
+*(c)* #4, then #3 + #15 + #11 — the throughput chain, where the semantic
+argument lives and where a reviewer should spend their attention.
+Everything else is standalone.
 
 ## Files touched, per item
 
@@ -299,7 +325,7 @@ the open ones.
 | **#248** "Upgrade Z3" | kape1395, open | Invalidates every absolute figure in this file; ratios inside a campaign survive. Re-baseline after it lands. |
 | **#264** "CONTRIBUTING.md: Add LLM contribution policy" | ahelwer, **closed without adopting a policy** | Bears on how this work is presented, and #286's author already flagged the uncertainty. Closed because it was "kicked up to the TLA+ Foundation board level"; the position lemmy stated in the thread is the one to assume: "Initial contact with the project must be made by a human. For each commit, any use of an LLM must be disclosed, including identification of the specific model(s) used", motivated by "maintaining a working theory of the codebase in the minds of the humans who work on it". Practically: a human opens the conversation, disclosure is per commit, and the review-cost argument of §"Ranked by gain over modification" — 441 lines for most of the gain — is the one that answers the workload concern. |
 
-## Per-item protocol
+## Verification: the protocols, and what differs per item
 
 The same two protocols recur, so they are stated once.
 
