@@ -143,9 +143,33 @@ let get_cached_level e =
   | _ -> assert false
   | exception Not_found -> assert false
 
+(* Registry of the cache cells filled since the last [reset_caches].
+
+   The cache cells are mutable refs carried by long-lived syntax nodes
+   (the module tree, shared by every obligation), and each filled cell
+   pins the CONTEXT of the query that filled it. During backend
+   preparation those are per-obligation contexts, so without a reset the
+   nodes collectively pin one context per obligation ever prepared — a
+   live-heap accumulation of hundreds of KB per obligation that no GC
+   can reclaim, and the reason very large single-pass runs died of
+   memory. The memoization only needs to survive within one query burst
+   (it exists to tame recomputation that is exponential in expression
+   depth), so callers reset it between obligations; a cross-obligation
+   hit required physically equal contexts, which preparation rebuilds
+   anyway. *)
+let filled_caches : elcache ref list ref = ref []
+
+let reset_caches () =
+  List.iter (fun r -> r := ELCache_empty) !filled_caches;
+  filled_caches := []
+
 let set_cached_level e cx l =
   match Property.get e exprlevel_cache with
-  | r -> r := ELCache_full (cx, e.core, l)
+  | r ->
+      (match !r with
+       | ELCache_empty -> filled_caches := r :: !filled_caches
+       | ELCache_full _ -> ());
+      r := ELCache_full (cx, e.core, l)
   | exception Not_found -> ()
 
 (*
