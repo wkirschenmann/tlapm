@@ -1799,6 +1799,10 @@ let is_trivial x =
    obligation.
 *)
 let ship ob fpout thyout record =
+  (* Level-cache cells filled while preparing the previous obligation pin
+     that obligation's contexts on shared syntax nodes; empty them so the
+     memoization stays bounded to the obligations in flight. *)
+  Expr.Levels.reset_caches ();
   vprintf "(* trying obligation %d generated from %s *)\n" (Option.get ob.id)
           (Util.location ~cap:false ob.obl);
   begin try
