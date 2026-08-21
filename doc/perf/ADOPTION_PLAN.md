@@ -246,19 +246,19 @@ that traps SIGTERM, which needs the scheduler to remember the pids it
 killed.  Item 14 makes a spurious timeout impossible; there is nothing
 to fall back to.
 
-## Upstream provenance: what is already public, and where it collides
+## Our own issue #286, and the part of this branch that is already in it
 
-Two upstream threads matter here, and they are different things.
+**#286 is ours** — *"tlapm scales poorly on INSTANCE/refinement-heavy
+specs (large per-obligation contexts)"*, opened 2026-07-27 by
+qdelamea-aneo, same team, still open with no maintainer reply.  It
+describes this exact problem — "the time is almost entirely tlapm-side,
+not the solvers: it comes from the very large contexts that deep INSTANCE
+hierarchies attach to every obligation" — and presents **four patch
+families with measured speedups**: 1.0–1.5× on small foundation modules,
+5.9× at 652 average hypotheses, **>41×** at 3 406 (baseline timed out
+after six hours, patched ~529 s).
 
-**Issue #286** — *"tlapm scales poorly on INSTANCE/refinement-heavy specs
-(large per-obligation contexts)"*, opened 2026-07-27 by qdelamea-aneo, no
-maintainer reply.  It describes this exact problem — "the time is almost
-entirely tlapm-side, not the solvers: it comes from the very large
-contexts that deep INSTANCE hierarchies attach to every obligation" —
-and presents **four patch families with measured speedups** (1.0–1.5× on
-small modules, 5.9× at 652 average hypotheses, >41× at 3 406, where the
-baseline had timed out after six hours).  Those four families are, in our
-numbering:
+Its four families are, in this file's numbering:
 
 | #286 family | our items |
 |---|---|
@@ -267,47 +267,37 @@ numbering:
 | context pruning of uncited hidden facts before encoding | 3 |
 | preparation reuse across obligations with identical context prefixes | 15 |
 
-So **items 3, 6, 14, 15 and 20 are not new ideas** — they are already
-described upstream, by the same organisation, with numbers.  What this
-branch adds on those is not novelty: it is re-implementation as
-single-topic reviewable commits, each with its invariant stated and a
-mechanical gate, plus attribution per commit rather than per patch set.
-Any upstream conversation should say so plainly and reference #286 rather
-than presenting them as findings.
+So **items 3, 6, 14, 15 and 20 are not new ideas, and not a
+contribution from this branch** — they are our own already-public
+proposal, re-implemented.  What the branch adds on them is the thing
+#286 could not offer: single-topic reviewable commits, each with its
+invariant stated and a mechanical gate, and attribution measured per
+commit instead of per patch set.  Any upstream conversation should open
+by pointing at #286 rather than presenting these as findings.
 
-**Not in #286, and new here**: items 1 (the deque lookups, whose ×8 on
-parse+elaborate is the single largest gain on the branch), 2 (the SIGHUP
-bug), 4 (single-pass expansion), 5, 7, 18, 19 (the whole editor track),
-8, 9, 10, 11, 12, 13, 16, 17 — and the five negative results, which are
-arguably the more useful contribution to a maintainer's time.
+**New on this branch relative to #286**: items 1 (the deque lookups,
+whose ×8 on parse+elaborate is the largest single gain here), 2 (the
+SIGHUP bug), 4 (single-pass expansion), 5, 7, 18, 19 (the whole editor
+track), 8, 9, 10, 11, 12, 13, 16, 17 — and the five negative results,
+which are arguably the more useful contribution to a maintainer's time.
 
-**PR #285** — *"Keep record-flattening refactorings tractable in TLAPS"*,
-by lemmy, opened 2026-07-26, open.  Different subject: folding
-record-literal `EXCEPT` chains during normalization ("the normalized
-obligation is ~5000 printed lines with the fold, >=39000 without, >=9M at
-6 layers") plus a backend rewrite `Encode.Rewrite.simpl_receq` that
-decomposes record-constructor equalities field-wise.  ~30 % wall-clock on
-its corpus and no more fallback solvers.  It is **orthogonal in intent
-but not in code**: it modifies `let_normalize` and `except_normalize` in
-`Expr.Elab`, and our item 15 exposes and calls exactly those two
-functions *per hypothesis* instead of once per sequent.  Consequences to
-plan for:
+## Other people's pull requests that touch this work
 
-* a textual conflict in `src/expr/e_elab.ml{,i}` is certain;
-* more important, our per-hypothesis equivalence argument ("interleaving
-  the two passes per hypothesis is the same computation, because the let
-  pass's input at position *i* and its scx are unchanged by the
-  interleaving") must be **re-established** after #285 lands, since a
-  fold that carried state across hypotheses would break it.  The
-  `TLAPM_CHECK_ELABCACHE` oracle is the tool for that, and rerunning it
-  on #285's regression test (`record_except_explosion_test.tla`) is the
-  concrete check;
-* #285's review is also a useful signal on the bar: the reviewer's
-  objection there was an O(n) list operation on a hot path, which is
-  precisely the class of defect our item 8 addresses.
+Upstream `master` is at `4600b24`, which is exactly this branch's base:
+**nothing has landed upstream since we forked**, so every merged PR below
+is already in our base and no merge drift exists today.  What matters is
+the open ones.
 
-Neither `simpl_receq` nor the `EXCEPT` fold is in this branch's base, so
-none of #285 is measured here.
+| PR | author, state | why it matters here |
+|---|---|---|
+| **#284** "Kill orphaned prover processes on Linux when tlapm dies" | tangruize, open, approved (LGTM by lemmy) | **Same problem family as our item 2, complementary failure mode.** #284 covers *tlapm dies* (SIGKILL, OOM): it wraps each prover in `exec setpriv --pdeathsig KILL` at `get_exec`, so the kernel kills the child when the parent goes. Ours covers *tlapm is alive but its kill is ignored*: it sent SIGHUP, which `nohup` and detached launchers set to `SIG_IGN`, inherited through exec — the scheduler announced the timeout, freed the slot, and the prover kept running (measured: one z3 at 6.86 GB while tlapm believed it dead). Neither subsumes the other; #284 also supplies the SIGKILL escalation our fix lacks. **Action: reference #284, do not duplicate it, and offer our measurement as further evidence for it.** |
+| **#285** "Keep record-flattening refactorings tractable in TLAPS" | lemmy, open | Different subject — folding record-literal `EXCEPT` chains during normalization ("~5000 printed lines with the fold, >=39000 without, >=9M at 6 layers") plus a field-wise rewrite of record-constructor equalities, ~30 % wall-clock on its corpus. **But not orthogonal in code:** it modifies `let_normalize` and `except_normalize` in `Expr.Elab`, the two functions our item 15 exposes and calls *per hypothesis* instead of once per sequent. A textual conflict in `src/expr/e_elab.ml{,i}` is certain, and our per-hypothesis equivalence argument must be re-established afterwards — a fold carrying state across hypotheses would break it. `TLAPM_CHECK_ELABCACHE` is the tool; rerunning it on that PR's own regression test is the concrete check. |
+| **#275** "Add SANY as a parser backend option" | ahelwer, open | Opt-in `--parser SANY`, supplementing the OCaml parser, which stays the default — so our item 7 keeps its value. Two consequences anyway: the editor floor is now **95 % parse**, so which parser wins decides that floor; and glondu's review found that "SANY … performs full semantic analysis (name resolution, level-checking) as part of what it calls 'parsing'", which our scoped re-elaboration (item 19) does not assume — it treats parse and elaborate as separable stages. |
+| **#268** "Proof decomposition by template" | kape1395, open (extends #241, merged and in our base) | **This is the feature our items 18–19 currently break**, and the reason they stay flag-gated: the decomposition code actions locate steps by *range* (`locate_proof_path`, `locate_proof_step`, `locate_proof_range`), and under scoped re-elaboration the inner expression positions of reused units are stale by design. Coordination, not conflict: the shifting must be applied to what the decomposition consumes before those modes can be defaults. |
+| **#283** "Add a deterministic Z3 rlimit budget via SMTT(rN)" | tangruize, merged (in our base) | Directly useful to our measurement protocol P2: a deterministic budget removes prover-side variance from A/B runs, which is the noise we currently absorb by interleaving arms. Worth adopting in the harness. |
+| **#266** "Fix SMT SetOf n-ary extensionality axiom" | ylht, open | Changes an SMT encoding axiom, i.e. what is shipped. If it lands, item 3's subset gate has to be re-run against it — the two touch the same output. |
+| **#248** "Upgrade Z3" | kape1395, open | Invalidates every absolute figure in this file; ratios inside a campaign survive. Re-baseline after it lands. |
+| **#264** "CONTRIBUTING.md: Add LLM contribution policy" | ahelwer, **closed without adopting a policy** | Bears on how this work is presented, and #286's author already flagged the uncertainty. Closed because it was "kicked up to the TLA+ Foundation board level"; the position lemmy stated in the thread is the one to assume: "Initial contact with the project must be made by a human. For each commit, any use of an LLM must be disclosed, including identification of the specific model(s) used", motivated by "maintaining a working theory of the codebase in the minds of the humans who work on it". Practically: a human opens the conversation, disclosure is per commit, and the review-cost argument of §"Ranked by gain over modification" — 441 lines for most of the gain — is the one that answers the workload concern. |
 
 ## Per-item protocol
 
