@@ -442,17 +442,16 @@ and `diff` the two arms — no checker needed; the normalisation only
 erases temporary paths.  Run it on the public synthetic module and on any
 real module the reviewer has.
 
-*T2, subset.*  Here the T1 stream is **not enough, and the reason is a
-defect in an earlier version of this file.**  Measured: two builds, one
-before both prune commits and one after, produce a **byte-identical**
-`--printallobs` stream — and an identical `--verbose` dump apart from six
-header lines — on a range where the prune demonstrably removes **5 664 of
-7 509 hypothesis slots (75.4 %)**.  The reason is that `really_ship`
-prints the obligation *after expansion and normalisation but before*
-`prune_context`; the pruned form is never printed.  So that stream
-verifies generation and expansion, not the prune, and what actually
-protected the prune commits was the `__pruned__` self-check plus
-real-prover verdict parity.
+*T2, subset.*  **The T1 stream does not show pruning**, so it cannot be
+the subset gate.  `really_ship` prints the obligation *after expansion and
+normalisation but before* `prune_context`; the pruned form is never
+printed.  Measured: two builds, one before both prune commits and one
+after, produce a **byte-identical** `--printallobs` stream — and an
+identical `--verbose` dump apart from six header lines — on a range where
+the prune removes **5 664 of 7 509 hypothesis slots (75.4 %)**.  That
+stream therefore verifies generation and expansion; the prune's own
+safety rests on the `__pruned__` self-check and on real-prover verdict
+parity.
 
 **The form the solvers do receive is observable — in the solver input
 files.**  `--debug tempfiles` keeps them, and each one opens with
@@ -616,8 +615,8 @@ Per item, then, only what differs from the above:
   substance of the change: reset signal dispositions, `clear_nonblock`
   after `dup2` (tlapm's printers die on `EAGAIN`), leave only through
   `Unix._exit`, parent reaps with `WNOHANG` and no systhreads.  P3, and
-  the byte-identical stream gate is not optional here — an earlier
-  version corrupted the parent's LSP stream mid-frame.
+  the byte-identical stream gate is not optional here — a first
+  implementation corrupted the parent's LSP stream mid-frame.
 * **#17 scoped modes** — the gates are `GEN3_STREAM_IDENTICAL`,
   `GEN3_INSERT_STREAM_IDENTICAL`, `GEN3_GAP_STREAM_IDENTICAL`: the
   client-visible notification stream must be byte-identical to full
