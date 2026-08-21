@@ -28,8 +28,8 @@ specification content appears here or anywhere in the repository.
 > `—` have not been measured yet; nothing here is filled in from another
 > boot or from an earlier campaign.  Outstanding:
 >
-> * ffi: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12, c13
-> * mono: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12, c13, c14
+> * ffi: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12
+> * mono: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12
 
 
 ## public synthetic, 1 800 obligations
@@ -148,7 +148,7 @@ specification content appears here or anywhere in the repository.
 | c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 3.80 s | — | — |
 | c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 3.81 s | — | — |
 | c12 | `991239f` backend/prep: differential oracle for the normalize cache | 3.93 s | — | — |
-| c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 3.85 s | — | — |
+| c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 3.85 s | 179.9 s | 4.00 GB |
 | c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 2.46 s | 177.7 s | 3.94 GB |
 | c15 | `809b30e` expr/Levels: resolve de Bruijn reference levels without slicing the context | 2.35 s | 175.4 s | 3.94 GB |
 | c16 | `393164e` backend/toolbox: single-pass definition expansion in the result printer | 2.30 s | 176.9 s | 3.94 GB |
@@ -181,8 +181,8 @@ specification content appears here or anywhere in the repository.
 | c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 10.6 s | — | — |
 | c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 10.5 s | — | — |
 | c12 | `991239f` backend/prep: differential oracle for the normalize cache | 10.5 s | — | — |
-| c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 10.3 s | — | — |
-| c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 6.69 s | — | — |
+| c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 10.3 s | 405.7 s | 11.10 GB |
+| c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 6.69 s | 389.9 s | 10.93 GB |
 | c15 | `809b30e` expr/Levels: resolve de Bruijn reference levels without slicing the context | 7.36 s | 397.6 s | 10.94 GB |
 | c16 | `393164e` backend/toolbox: single-pass definition expansion in the result printer | 6.16 s | 395.2 s | 10.94 GB |
 | c17 | `690a261` expr/parser: memoize the two instances of each grammar rule | 4.31 s | 395.7 s | 10.94 GB |

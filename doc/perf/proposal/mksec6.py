@@ -320,10 +320,16 @@ PRS = [
    the only pull request in the set that touches the language server.""",
    commits=[
     dict(pt="c19", sha="4e3ec9f", subject="lsp: replace the per-step RangeMap.partition by a sorted obligation pool",
-      what="""Sort the obligations once by position and consume them in step order, which is the same
-      assignment computed in one pass.""",
+      what="""Replace the map with a pool: entries sorted by range, a binary search to the window
+      start, a forward scan over the window, and a backward scan bounded by the longest obligation
+      span &mdash; an entry starting further back cannot reach the window. O(log n + matches) per step
+      instead of O(obligations). The claiming semantics are preserved exactly: first claimer wins, a
+      claim is a range intersection, and duplicate ranges collapse the way
+      <code>RangeMap.of_list</code> collapsed them.""",
       gate="""The notification stream the server emits is byte-identical before and after over a
-      recorded editing session, and <code>dune runtest lsp</code> is green.""",
+      recorded editing session, and <code>dune runtest lsp</code> is green. Editor-side, on the
+      30&nbsp;000-line module: the partition was 45&nbsp;s of a 59.7&nbsp;s keystroke over
+      13&nbsp;563 steps and 30&nbsp;872 obligations; after, the keystroke is 11.5&nbsp;s.""",
       model="unrecorded version"),
    ]),
 
@@ -367,7 +373,10 @@ PRS = [
    nothing, which is the common case.""",
    commits=[
     dict(pt="c23", sha="abf13ea", subject="backend+encode: skip identity rebuilds when flattening extracts nothing",
-      what="Return the input unchanged when the extracted set is empty, preserving physical sharing — which also helps pull request 4's prefix walk.",
+      what="""Two sites rebuilt the whole sequent under a shift of zero &mdash; the common
+      nothing-extracted case in <code>prep</code>, and an empty blueprint-hypothesis set in
+      <code>n_flatten</code>. Guard both: return the input unchanged, which also preserves the
+      physical sharing pull request 4&rsquo;s prefix walk depends on.""",
       gate="Output-preserving: identical obligation stream, both suites green.",
       model="Fable 5"),
    ]),
@@ -381,9 +390,10 @@ PRS = [
     dict(pt="c24", sha="1d1b05a", subject="backend/prep: emit obligation comments into solver files only when kept",
       what="Emit the comment under the same condition that keeps the file.",
       gate="""Output-preserving for the provers &mdash; and this is the one change that alters a byte
-      of solver input, so it is stated precisely: with <code>--debug tempfiles</code> the files are
-      byte-identical; without it, the comment is absent from files no one reads. The problem term sent
-      to the solver is unchanged in both cases.""",
+      of solver input, so it is stated precisely. The emission is guarded by exactly the flag that
+      keeps the file: with <code>--debug tempfiles</code> the files are byte-identical before and
+      after; without it, the comment is absent from files that are deleted unread. The problem term
+      sent to the solver is unchanged in both cases.""",
       model="Fable 5"),
    ]),
 
