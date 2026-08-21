@@ -808,6 +808,13 @@ module Elab: sig
     (* val prime_normalize : hyp Deque.dq -> expr -> expr *)
     val normalize:
         hyp Deque.dq -> expr -> expr
+    val non_temporal: expr -> bool
+    (* The pieces of [normalize], per hypothesis, for callers that fold
+       a context with a cross-obligation prefix cache (Backend.Prep). *)
+    val except_normalize: unit Visit.scx -> expr -> expr
+    val let_normalize: unit Visit.scx -> expr -> expr
+    val except_normalize_hyp: unit Visit.scx -> hyp -> unit Visit.scx * hyp
+    val let_normalize_hyp: unit Visit.scx -> hyp -> unit Visit.scx * hyp
     val replace_at:
         unit Visit.scx -> expr -> expr -> expr
     val get_at:

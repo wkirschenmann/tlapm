@@ -96,8 +96,7 @@ let fake_box =
   end in
   fun e -> visitor#expr ((), Deque.empty) e
 
-let except_normalize =
-  let visitor = object (self : 'self)
+let except_visitor = object (self : 'self)
     inherit [unit] Visit.map as super
 
     method expr scx e = match e.core with
@@ -130,11 +129,11 @@ let except_normalize =
           let xs = List.map (self#exspec scx) xs in
           simplify f xs
       | _ -> super#expr scx e
-  end in
-  fun scx e -> visitor#expr scx e
+  end
 
-let let_normalize =
-  let visitor = object (self : 'self)
+let except_normalize scx e = except_visitor#expr scx e
+
+let let_visitor = object (self : 'self)
     inherit [unit] Visit.map as super
     method expr scx e =
       let dest = e in
@@ -157,8 +156,18 @@ let let_normalize =
                   Errors.bug ~at:d "Expr.Elab.let_normalize"
           end
         | _ -> super#expr scx e
-  end in
-  fun scx e -> visitor#expr scx e
+  end
+
+let let_normalize scx e = let_visitor#expr scx e
+
+(* Per-hypothesis entry points into the two normalization passes, for
+   callers that fold a sequent's context hypothesis by hypothesis with a
+   cross-obligation prefix cache (see Backend.Prep). Visiting hypotheses
+   one at a time through [#hyp] is exactly what the visitors' sequent
+   case does internally, so the result is identical to normalizing the
+   whole sequent. *)
+let except_normalize_hyp scx h = except_visitor#hyp scx h
+let let_normalize_hyp scx h = let_visitor#hyp scx h
 
 let normalize cx e =
   let scx = ((), cx) in
