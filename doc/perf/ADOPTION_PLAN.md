@@ -94,14 +94,20 @@ first.
 
 **Granularity: one row = one pull request.**  Eight rows are a group of
 commits that must land together (the `commits` column says how many);
-twelve are a single commit.  Two rows are prerequisites that buy no
-performance at all — the protocols below cannot be run without them —
-so they are marked rather than ranked.
+twelve are a single commit.
+
+**No row is an instrumentation change, and none depends on one.**  The
+branch carries probes and a measurement harness, and they are what
+produced the numbers below — but they are *our* tooling, not part of the
+proposal.  An optimization must not have to wait for a maintainer to
+accept a probe.  So: each pull request states its measured effect,
+labelled as obtained with an instrumented build where that is the case,
+and carries a **reproduction recipe that runs on stock `tlapm`** — see
+"Local proof" below.  If the instrumentation is ever wanted, it is a
+separate proposal of its own, and it changes nothing here.
 
 | # | change | commits | files | +/− | headline gain | metric |
 |---|---|---|---|---|---|---|
-| 0 | *prerequisite* — measurement instrumentation: the named clocks, the per-stage and per-tranche timers, the scheduler, process and context probes, the fingerprint-class and proof-tree probes | 17 | 22 | +876/−92 | none by construction — inert without its environment variables; every protocol below reads it | — |
-| 0b | *prerequisite* — measurement harness: synthetic generator, bench driver, obligation dump plus strict/subset checker, per-verdict monitor, scripted LSP client | 5 | 9 | +698/−0 | none — `test/perf/` only, no `src/` change; T1, T2, P1 and P3 *are* this code | — |
 | 1 | `util/Deque`: nth / first_n / equal on rear-heavy deques | 1 | 1 | +37/−27 | **×8.2** M0 on Ffi (32.1 s → 3.89 s), ×8.8 M2 | latency |
 | 2 | `fix`: kill timed-out provers with SIGTERM, not SIGHUP | 1 | 1 | +12/−1 | **×2.57** and −5.3 GB peak, in any run started with SIGHUP ignored | both |
 | 3 | `backend/prep`: prune unreachable hidden definitions, then unreferenced hidden facts | 2 | 1 | +102/−16 | **×2.7** M1 (30.2 → 11.2 s), **×8.7** M3 (1.50 GB → 173 MB) | throughput |
@@ -149,10 +155,6 @@ sweep measured each in isolation, which is how we know.
   * **#19 requires #5.**  The scoped modes patch the proof-step tree that
     #5 rebuilt; over the old quadratic association they would have to be
     written twice.
-  * **#0 and #0b before any protocol.**  T1 and T2 *are* the checker of
-    #0b; P1's stage attribution and P2's per-verdict timing *are* the
-    probes of #0.  An optimization landed before them ships
-    unverifiable.
 
 **Hard by measurement — the one that is easy to miss.**  **#3 must not
 ship without #15** for INSTANCE-heavy specs: on that corpus the prune
@@ -167,13 +169,12 @@ pinning contexts, the other stops materialising the task array, and
 either alone leaves the run growing.  #18 and #19 touch adjacent code in
 the same three LSP files without depending on each other.
 
-**Batching, if it has to be batched.**  Three coherent series, grouped
-for review coherence rather than for performance — the ranking already
-covers that: *(a)* #0, #0b, the ground to stand on; *(b)* #1, #6, #12,
-#20 — pure hot-path fixes, all output-identical, reviewable by reading;
-*(c)* #4, then #3 + #15 + #11 — the throughput chain, where the semantic
-argument lives and where a reviewer should spend their attention.
-Everything else is standalone.
+**Batching, if it has to be batched.**  Two coherent series, grouped for
+review coherence rather than for performance — the ranking already covers
+that: *(a)* #1, #6, #12, #20 — pure hot-path fixes, all output-identical,
+reviewable by reading; *(b)* #4, then #3 + #15 + #11 — the throughput
+chain, where the semantic argument lives and where a reviewer should
+spend their attention.  Everything else is standalone.
 
 ## Files touched, per item
 
@@ -245,15 +246,21 @@ classification is mechanical, not a judgement call.
    argued output-identical and the golden dumps agree, but it is a
    rewrite of a substitution composition, and the cheapest bisection tool
    for a future "the prover now sees something different" report is the
-   old path behind `--debug oldexpand`.  Keep it for one release.
+   old path behind `--debug oldexpand`.  Keep it for one release — and
+   note the side benefit: like `--debug noprepcache` for #15, it makes
+   the item's own A/B observable **inside one binary**, which is the
+   strongest form of local proof a reviewer can be handed.
 
-3. **The probes should converge on the existing `--debug` namespace.**
-   `tlapm` already has `Params.debugging "…"` with a dozen switches
-   (`tempfiles`, `verbose`, `oldsmt`, `rw`, …).  This branch added a
-   second, undocumented namespace of 14 `TLAPM_*` environment variables.
-   Environment variables are the right mechanism only for what must be
-   read before argument parsing; everything else reads better, and
-   documents itself, as `--debug <name>`.  Expect this in review.
+3. **If the probes are ever proposed, they should converge on the
+   existing `--debug` namespace.**  This is not part of the adoption plan
+   — the instrumentation is deliberately outside it (see "Local proof")
+   — but the note belongs somewhere: `tlapm` already has
+   `Params.debugging "…"` with a dozen switches (`tempfiles`, `verbose`,
+   `oldsmt`, `rw`, …), and our branch grew a second, undocumented
+   namespace of 14 `TLAPM_*` environment variables.  Environment
+   variables are the right mechanism only for what must be read before
+   argument parsing; everything else reads better, and documents itself,
+   as `--debug <name>`.
 
 4. **The editor modes should graduate from environment variables to
    client settings** before they become defaults — the language server
@@ -325,6 +332,92 @@ the open ones.
 | **#248** "Upgrade Z3" | kape1395, open | Invalidates every absolute figure in this file; ratios inside a campaign survive. Re-baseline after it lands. |
 | **#264** "CONTRIBUTING.md: Add LLM contribution policy" | ahelwer, **closed without adopting a policy** | Bears on how this work is presented, and #286's author already flagged the uncertainty. Closed because it was "kicked up to the TLA+ Foundation board level"; the position lemmy stated in the thread is the one to assume: "Initial contact with the project must be made by a human. For each commit, any use of an LLM must be disclosed, including identification of the specific model(s) used", motivated by "maintaining a working theory of the codebase in the minds of the humans who work on it". Practically: a human opens the conversation, disclosure is per commit, and the review-cost argument of §"Ranked by gain over modification" — 441 lines for most of the gain — is the one that answers the workload concern. |
 
+## Local proof: what each pull request carries, on stock tlapm
+
+The rule: **a reviewer must be able to see the effect with the binary
+they already have**, before and after applying the patch, using nothing
+that the patch itself introduces.  Instrumented figures may appear in the
+description — they are how we found the effect — but they are labelled as
+such and they are never the reproduction path.
+
+**The stock instruments, all of them already in `main`:**
+
+| flag | what it gives |
+|---|---|
+| `-N` | parse + elaborate + generate, no backend at all — the interactive floor |
+| `--noproving` | the whole per-obligation preparation with no prover — the throughput term, reproducible without solvers installed |
+| `--toolbox a b` | one range, and the `@!!`-prefixed protocol messages, which are timestampable from outside |
+| `--printallobs` | every obligation printed in the toolbox messages — the golden dump, on stdout |
+| `--timing` | the phase table (`parsing`, `analysis`, `interaction`, `total`) |
+| `--nofp` / `--cache-dir` | force a cold run; keep arms from sharing a cache |
+| `--threads`, `--stretch`, `--debug` | hold the prover configuration fixed between arms |
+| `/usr/bin/time -v` | wall clock and **maximum resident set size** |
+| the editor itself | edit-to-diagnostics and step-to-verdict latency, observed client-side |
+
+**Two caveats to state in any PR that quotes the phase table.**  On stock
+`main` the clock accounting does not nest — a nested region is charged to
+the innermost clock that was started — so the *wall clock* is the number
+to argue from and the table is indicative.  And three rows
+(`generation`, `fp_compute`, `fp_saving`) are never started on `main`, so
+they read `0.000000` in the baseline arm: do not cite them.  `parsing`,
+`analysis`, `simplification`, `interaction` and `total` are populated in
+both arms and are safe.
+
+**The two test protocols, in stock form.**
+
+*T1, output-preserving.*  `dune runtest` green, and the known-failing set
+unchanged (40 of 48 fast tests pass without Isabelle; a change to *which*
+eight fail is a regression).  Then the obligation stream, twice:
+
+```
+tlapm -N --toolbox 0 0 --printallobs --nofp --cache-dir $D MODULE.tla \
+  | sed -e 's,/tmp/[^ ]*,TMP,g' > arm.txt
+```
+
+and `diff` the two arms — no checker needed; the normalisation only
+erases temporary paths.  Run it on the public synthetic module and on any
+real module the reviewer has.
+
+*T2, subset.*  The same diff, where the *expected* difference is
+hypotheses disappearing from the shipped form: the goal must be
+identical, no obligation may appear or disappear, and the removals are
+reviewable by eye on two or three obligations.  Then one real-prover run
+per arm, and the final `module "…": N/M obligations failed` line, plus
+the per-obligation result loci, must match.  Only #3 and #4 need this.
+
+**Per item: the command, and the number that moves.**
+
+| # | run this, before and after | what moves | signal |
+|---|---|---|---|
+| 1 | `tlapm -N --timing` on a large INSTANCE-heavy module | wall, `analysis` | **strong** — 32.1 s → 3.89 s |
+| 2 | the same real-prover run started **under `nohup`**; count prover processes with `ps` | wall, max RSS, live prover count | **strong** — 725 s → 282 s, 6.86 → 1.54 GB, 8 → 4 processes |
+| 3 | `tlapm --noproving --nofp --timing` on a large module | wall, `interaction`, max RSS | **strong** — ×2.7 wall, ×8.7 peak RSS |
+| 4 | idem | wall, `interaction` | **strong** — and one corpus stops timing out, which is its own proof |
+| 5 | edit inside a proof body in the editor, time to diagnostics; CLI proxy `tlapm --toolbox L L` | latency | **strong** — 59.7 s → 11.5 s |
+| 6 | `tlapm -N --timing` | `analysis` | **strong** — 3.74 s → 2.35 s |
+| 7 | `tlapm -N --timing`; and edit-to-diagnostics | `parsing`, latency | **strong** — 2.9 s → 1.2 s |
+| 8 | `tlapm --noproving --nofp`, median of 3 on a **large** module | wall | **weak per run** — −5…−6 %; needs repetition, invisible on small inputs |
+| 9 | run twice, cite the **second** (fingerprints present) | wall | **strong on the warm path**, zero on a cold one |
+| 10 | `/usr/bin/time -v`, and sample RSS with `ps` during the run | max RSS, and the *shape* of the curve | **strong** — growth becomes flat |
+| 11 | `tlapm --noproving --nofp --timing` on an INSTANCE-heavy module | wall, `interaction` | **medium** — visible on deep contexts, not on shallow ones |
+| 12 | `tlapm -N --timing` | `analysis` | **medium alone**, strong with #6 |
+| 13 | `tlapm --noproving --nofp` | wall | **weak** — the honest local proof here is the complexity argument (O(distance) index resolution made O(1)); the wall-clock share is a few per cent |
+| 14 | a run where preparation is slow, with `--threads 1` | the count and loci of obligations reported timed out | **functional, not timing** — no obligation may be reported timed out that was not before, and spurious ones disappear |
+| 15 | after the patch, the **same binary** with and without `--debug noprepcache` | wall, `interaction` | **strong, and self-contained** — the guard makes the A/B observable without two builds |
+| 16 | `/usr/bin/time -v`; and the timestamp of the first result message | max RSS, time to first verdict | **strong on memory**, visible on first-verdict latency |
+| 17 | `tlapm --chunks 16 --spawn 4` against a plain run | wall; the final failed-obligation line must be identical | **strong** — ×2.24 |
+| 18 | "prove this step" in the editor | step-to-verdict latency | **strong** — 5.1–7.9 s → 0.4–1.0 s |
+| 19 | edit-to-diagnostics in the editor | latency | **strong** — 11.5 s → 2.0 s |
+| 20 | `tlapm -N --timing` on a large module, the five commits together | wall, `parsing`/`analysis` | **weak individually** — each is below the noise floor; the local proof of each is its complexity, and the series is measured jointly |
+
+**Consequence, stated plainly.**  Items 8, 13 and 20 do not have a
+convincing single-run wall-clock signal on stock instrumentation.  Their
+pull requests should be argued on the complexity of the code path, with
+the instrumented figure quoted as supporting evidence and the joint
+measurement of the series as the observable one — not dressed up as
+individually measurable.  Everything else stands on its own with a stock
+binary and a stopwatch.
+
 ## Verification: the protocols, and what differs per item
 
 The same two protocols recur, so they are stated once.
@@ -345,14 +438,15 @@ real-prover run with **verdict parity at the locus level** — the same
 obligations proved and unproved at the same source positions.  Used by
 #3 and #4 only.
 
-**Measurement protocol P1 (cheap, per commit).**  `test/perf/bench.sh`,
-median of 3, on `Synth_L{100,300}` and the real corpora: M0, M1, M2, M3.
-Solver-free, so it is reproducible and fast.  This is what
-`_perf/sweep.csv` is.  **Known defect of the synthetic corpus**: its
-obligation contexts share no physical prefix, where real specs share
->99 %, so it mis-ranks anything that depends on the prefix caches (it
-told us the early prune was a ×2.1 win; on the real corpora it is ×3-4
-slower).  Never conclude from the synthetic corpus alone on a
+**Measurement protocol P1 (cheap, per commit) — our side.**  Median of 3,
+solver-free, on two synthetic sizes and the real corpora: M0, M1, M2, M3.
+This is what `_perf/sweep.csv` is, and it is how each commit's effect was
+attributed to *that* commit.  It uses our harness; the reviewer-facing
+equivalent is the stock recipe above.  **Known defect of the synthetic
+corpus**: its obligation contexts share no physical prefix, where real
+specs share >99 %, so it mis-ranks anything that depends on the prefix
+caches (it told us the early prune was a ×2.1 win; on the real corpora it
+is ×3-4 slower).  Never conclude from the synthetic corpus alone on a
 cache-sensitive change.
 
 **Measurement protocol P2 (per milestone).**  One real-prover run per
