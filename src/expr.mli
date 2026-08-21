@@ -775,8 +775,10 @@ module Constness: sig
         'a Property.wrapped -> bool
     val has_const:
         'a Property.wrapped -> bool
-    class virtual const_visitor:
-        [unit] Visit.map
+    class virtual const_visitor: object
+        inherit [unit] Visit.map
+        method ix_lookup: T.hyp Deque.dq -> int -> T.hyp option
+    end
 end
 
 
