@@ -1762,14 +1762,47 @@ let add_constness ob =
     while !l < m && raw.(!l) == craw.(!l) do incr l done;
     let l = !l in
     let rec take k lst =
-      if k = 0 then []
-      else match lst with
-        | x :: xs -> x :: take (k - 1) xs
-        | [] -> assert false
+        if k = 0 then []
+        else match lst with
+          | x :: xs -> x :: take (k - 1) xs
+          | [] -> assert false
     in
     let ann_prefix = take l cann in
+    (* Mirror the visitor's context in a growable array so the [Ix]
+       resolution of constness is O(1) instead of an O(distance) list
+       walk (measured: 49M lookups walking 5.5G cells on a 30k-obligation
+       run).  The mirror is exact whenever [alen] equals the context
+       size: [adj] appends (truncating first if an inner scope — e.g. a
+       statement's inner sequent — left the mirror longer than the
+       context it extends), and the lookup falls back to [Deque.nth]
+       whenever the sizes disagree.  Entries are indexed front-to-back,
+       so [Ix n] reads slot [size - n]. *)
+    let alen = ref 0 in
+    let arr = ref (Array.make 1024 None) in
+    List.iteri (fun i h ->
+        if i >= Array.length !arr then begin
+          let a = Array.make (2 * Array.length !arr) None in
+          Array.blit !arr 0 a 0 !alen; arr := a
+        end;
+        !arr.(i) <- Some h; incr alen)
+      ann_prefix;
     let visitor = object (self: 'self)
       inherit Expr.Constness.const_visitor
+      method! adj (s, cx) h =
+        let sz = Deque.size cx in
+        if sz < !alen then alen := sz;
+        if sz = !alen then begin
+          if sz >= Array.length !arr then begin
+            let a = Array.make (2 * Array.length !arr) None in
+            Array.blit !arr 0 a 0 !alen; arr := a
+          end;
+          !arr.(sz) <- Some h; incr alen
+        end;
+        (s, Deque.snoc cx h)
+      method! ix_lookup cx n =
+        let sz = Deque.size cx in
+        if sz = !alen && n >= 1 && n <= sz then !arr.(sz - n)
+        else Deque.nth ~backwards:true cx (n - 1)
     end in
     let scx = ((), Deque.of_list ann_prefix) in
     let suffix = Deque.of_list (Array.to_list (Array.sub raw l (n - l))) in

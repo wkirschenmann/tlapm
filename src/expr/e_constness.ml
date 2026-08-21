@@ -22,6 +22,14 @@ let is_const x = try Property.get x isconst with
 class virtual const_visitor = object (self : 'self)
   inherit [unit] Visit.map as super
 
+  method ix_lookup cx n = Deque.nth ~backwards:true cx (n - 1)
+  (* De Bruijn index resolution for the [Ix] case below.  Overridable:
+     [Deque.nth] walks a list, O(distance) per lookup, which dominates
+     constness annotation on wide contexts; a caller that controls the
+     visit (e.g. Backend.Prep.add_constness) can mirror the context in
+     an array and answer in O(1).  Must return exactly what [Deque.nth
+     ~backwards:true cx (n - 1)] returns. *)
+
   method expr scx e = match e.core with
     | Lambda (vss, le) ->
         let hs = List.map begin
@@ -65,7 +73,7 @@ class virtual const_visitor = object (self : 'self)
         let cx = snd scx in
         let const = match e.core with
           | Ix n -> begin
-              match Deque.nth ~backwards:true cx (n - 1) with
+              match self#ix_lookup cx n with
                 | Some h -> begin match h.core with
                     | Defn ({core = Operator (_, op)}, _, _, _) ->
                         is_const op
