@@ -174,12 +174,16 @@ PRS = [
    commits on the branch that change what the provers receive — everything else is byte-identical.""",
    commits=[
     dict(pt="c08", sha="dc37462", subject="backend/prep: prune hidden definitions unreachable from the goal",
-      what="""A marking pass from the goal and the visible facts computes the reachable set over the
-      hidden definitions; unreachable slots are replaced by <code>Opaque \"__pruned__\"</code>, which
-      makes a reachability mistake fail loudly at encoding time rather than silently changing a
-      verdict. Runs after expansion, normalisation and the triviality check, and after the fingerprint
-      is computed — so fingerprints and the <code>--printallobs</code> dump are unchanged by
-      construction.""",
+      what="""A marking pass from the goal and the facts computes the transitive reachable set over
+      the context; only unreferenced <em>hidden</em> operator and pragma definitions are dropped, and
+      their slots are replaced by <code>Opaque \"__pruned__\"</code>, so a reachability mistake fails
+      loudly at encoding time instead of silently changing a verdict. Declarations, recursive and
+      instance definitions and every fact are kept; an un-analysable hypothesis conservatively keeps
+      all its predecessors. Placement matters twice over: it runs after expansion, normalisation and
+      the triviality check — which can discharge a support obligation from a hidden fact equal to the
+      goal — and only on the backend path, so an obligation that never reaches a prover never pays
+      for it. It also runs after the fingerprint is computed, so fingerprints and the
+      <code>--printallobs</code> dump are unchanged by construction.""",
       gate="""Subset, not identity. The generated obligation stream is identical; the shipped form is
       checked on the solver input files, keyed by their <code>;; Generated from file &hellip;</code>
       line, with <code>diff -ru before/ after/ | grep '^+[^+]'</code> required to be empty. Plus

@@ -28,8 +28,8 @@ specification content appears here or anywhere in the repository.
 > `—` have not been measured yet; nothing here is filled in from another
 > boot or from an earlier campaign.  Outstanding:
 >
-> * ffi: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12
-> * mono: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12
+> * ffi: c01, c02, c03, c04, c05, c06, c07, c08, c10, c11
+> * mono: c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11
 
 
 ## public synthetic, 1 800 obligations
@@ -144,10 +144,10 @@ specification content appears here or anywhere in the repository.
 | c06 | `cb9ce43` util/Deque: cheaper nth, first_n and equal on rear-heavy deques | 3.91 s | — | — |
 | c07 | `0e47a7e` backend/prep: expand visible definitions in a single pass | 3.72 s | — | — |
 | c08 | `dc37462` backend/prep: prune hidden definitions unreachable from the goal | 3.71 s | — | — |
-| c09 | `be2cb6b` backend/prep: prune unreferenced hidden facts from obligation contexts | 3.95 s | — | — |
+| c09 | `be2cb6b` backend/prep: prune unreferenced hidden facts from obligation contexts | 3.95 s | 764.5 s | 4.88 GB |
 | c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 3.80 s | — | — |
 | c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 3.81 s | — | — |
-| c12 | `991239f` backend/prep: differential oracle for the normalize cache | 3.93 s | — | — |
+| c12 | `991239f` backend/prep: differential oracle for the normalize cache | 3.93 s | 177.8 s | 4.17 GB |
 | c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 3.85 s | 179.9 s | 4.00 GB |
 | c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 2.46 s | 177.7 s | 3.94 GB |
 | c15 | `809b30e` expr/Levels: resolve de Bruijn reference levels without slicing the context | 2.35 s | 175.4 s | 3.94 GB |
@@ -180,7 +180,7 @@ specification content appears here or anywhere in the repository.
 | c09 | `be2cb6b` backend/prep: prune unreferenced hidden facts from obligation contexts | 10.3 s | — | — |
 | c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 10.6 s | — | — |
 | c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 10.5 s | — | — |
-| c12 | `991239f` backend/prep: differential oracle for the normalize cache | 10.5 s | — | — |
+| c12 | `991239f` backend/prep: differential oracle for the normalize cache | 10.5 s | aborted | 11.19 GB |
 | c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 10.3 s | 405.7 s | 11.10 GB |
 | c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 6.69 s | 389.9 s | 10.93 GB |
 | c15 | `809b30e` expr/Levels: resolve de Bruijn reference levels without slicing the context | 7.36 s | 397.6 s | 10.94 GB |
