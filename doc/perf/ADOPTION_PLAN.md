@@ -86,6 +86,59 @@ phase-0/1 sweep) and host B (4 cores, everything from the re-baseline
 on).  Absolute values are only ever compared inside one host and one
 boot.  Ratios inside a series are what carry over.
 
+## Bugfixes that stand on their own
+
+Three of these pull requests need no performance argument at all: they
+repair behaviour the program already advertises.  They are the cheapest
+thing for a maintainer to accept, they are reproducible by reading a
+stock binary's own output, and two of the three are already described in
+#286.
+
+**B1 — `--timing` reports numbers that are wrong, and three rows that are
+always zero.**  3 commits, 6 files, **+95/−34**.  Not in the ranked table
+because it buys no performance: it is a defect in an existing documented
+flag ("show runtime statistics").  Two independent faults:
+
+  * *the accounting cannot nest.*  `start c` closed the running interval
+    and made `c` current, `stop` switched back to ambient — so a clocked
+    call inside another clocked region sends the **remainder of the
+    enclosing region to `other`**.  This is not hypothetical: `store_module`
+    is clocked as *analysis* and runs inside the *simplification* region,
+    so `simplification` is under-reported on every run.  Fixed by making
+    the current clock a stack whose bottom is ambient.
+  * *three declared and reported clocks are never started.*  `generation`,
+    `fp_compute` and `fp_saving` print `0.000000` on every run;
+    obligation generation is silently charged to *analysis* and
+    fingerprint computation and writing to *interaction*, so a `--timing`
+    report cannot separate tlapm's own cost from prover time.  Fixed by
+    starting them at their natural sites, all under `Std.finally` so a
+    raised exception cannot leave a clock running.
+
+  *How a reviewer sees it:* run `tlapm --timing` on anything.  Before,
+  three rows are zero and time sits in `other`; after, they are
+  populated.  Output-preserving otherwise — only the report changes.
+
+  *Ordering bonus, not a dependency:* taken first, B1 removes the
+  phase-table caveat that every later pull request otherwise has to carry
+  (see "Local proof").  Nothing depends on it — every optimization can be
+  argued on wall clock either way.
+
+**B2 — provers reported as timed out when they had already answered.**
+This is row 14.  Preparing the next obligation can take seconds, and
+during that time an exited prover sits unread past its deadline and is
+reported as a timeout.  Already described in #286.  No performance claim:
+the observable is the *set* of obligations reported timed out, which loses
+its spurious members and gains none.
+
+**B3 — timed-out provers are not killed when the hangup signal is
+ignored.**  This is row 2.  Signal 1 is the only kill path in the CLI, and
+`SIG_IGN` for it is inherited through `fork` *and* `exec`, so any run
+started under `nohup` or detached announces its timeouts, frees the
+scheduler slot, and leaves the prover running.  It does have a large
+measurable effect where it applies, which is why it stays in the ranked
+table — but it would be worth taking as a bugfix even at zero measured
+gain.
+
 ## Ranked by gain over modification
 
 Ratio is the headline gain divided by the diff size — a blunt
@@ -95,6 +148,11 @@ first.
 **Granularity: one row = one pull request.**  Eight rows are a group of
 commits that must land together (the `commits` column says how many);
 twelve are a single commit.
+
+**Three of these are bugfixes** rather than optimizations — rows 2 and 14
+here, plus one that is not ranked at all because it buys no performance.
+They are collected in "Bugfixes that stand on their own" above, and they
+are the cheapest place for a maintainer to start.
 
 **No row is an instrumentation change, and none depends on one.**  The
 branch carries probes and a measurement harness, and they are what
@@ -132,8 +190,7 @@ separate proposal of its own, and it changes nothing here.
 Reading of the table: **items 1–9 are 441 added lines (−131) across
 eight files** and cover the ×8 latency drop, the ×2.7 throughput and the
 ×8.7 memory reduction.  Items 15–19 are 2 000+ lines and each buys a
-specific, smaller multiple.  If only one thing ships, it is #1; if only
-one *day* is available, it is #1–#6.
+specific, smaller multiple.
 
 ## Dependencies
 
@@ -354,8 +411,9 @@ such and they are never the reproduction path.
 | `/usr/bin/time -v` | wall clock and **maximum resident set size** |
 | the editor itself | edit-to-diagnostics and step-to-verdict latency, observed client-side |
 
-**Two caveats to state in any PR that quotes the phase table.**  On stock
-`main` the clock accounting does not nest — a nested region is charged to
+**Two caveats to state in any PR that quotes the phase table** — both of
+them are what B1 above repairs, so they apply only while B1 has not
+landed.  On stock `main` the clock accounting does not nest — a nested region is charged to
 the innermost clock that was started — so the *wall clock* is the number
 to argue from and the table is indicative.  And three rows
 (`generation`, `fp_compute`, `fp_saving`) are never started on `main`, so
@@ -384,6 +442,27 @@ identical, no obligation may appear or disappear, and the removals are
 reviewable by eye on two or three obligations.  Then one real-prover run
 per arm, and the final `module "…": N/M obligations failed` line, plus
 the per-obligation result loci, must match.  Only #3 and #4 need this.
+
+**Optional, and offered as such: a comparison tool for what reaches the
+solvers.**  The `diff` recipe above is enough, but it makes the reviewer
+eyeball the difference and decide whether it is really "only hypotheses
+removed".  We have that rule mechanised — 55 lines of shell plus 167
+lines of Python, no dependencies beyond `python3`:
+
+  * a dump step runs one solver-free invocation and splits the toolbox
+    stream into two files: the obligations *generated*, and the material
+    that would be *shipped* to the backends;
+  * a check step compares two dumps and exits 0, 1 or 2, in one of two
+    modes — **identical** (both files byte-equal, for any
+    output-preserving change) or **subset** (the generated set identical;
+    per obligation, the goal identical and every candidate hypothesis
+    present among the baseline's).
+
+It is a `test/`-only addition with no `src/` change, it is what we used to
+gate every commit on this branch, and it is CI-usable.  **No optimization
+proposal depends on it**: it is a separate, optional pull request whose
+only claim is that it makes the subset rule checkable by a machine
+instead of by eye.  If it is declined, the recipes above still stand.
 
 **Per item: the command, and the number that moves.**
 
