@@ -155,9 +155,9 @@ Ratio is the headline gain divided by the diff size — a blunt
 instrument, deliberately, because it is what decides what to review
 first.
 
-**Granularity: one row = one pull request.**  Eight rows are a group of
-commits that must land together (the `commits` column says how many);
-twelve are a single commit.
+**Granularity: one row = one pull request.**  Five rows are a group of
+commits that must land together (the `commits` column says how many); the
+other seventeen are a single commit.
 
 **Bugfixes are not in this table**, by construction — including the two of
 them that do have a positive performance effect.  They are item #0 above,
@@ -192,12 +192,19 @@ separate proposal of its own, and it changes nothing here.
 | 15 | `cli`: `--chunks N --spawn P` — the branch also holds an add-then-revert pair here (a prover-slot-division hypothesis, refuted by measurement) which must **not** be replayed | 2 | 9 | +392/−13 | **×2.24** M4 monolith (284.5 → 127.2 s) | throughput |
 | 16 | `lsp`: forked in-process prover | 3 | 13 | +360/−36 | step verdict 5.1–7.9 s → **0.4–1.0 s** | latency |
 | 17 | `lsp`+`module`: scoped fingerprint carry, scoped generation, scoped re-elaboration | 6 | 10 | +889/−128 | keystroke 11.5 s → **2.0 s** after #4 | latency |
-| 18 | small independent micro-fixes: `Ctx` log lookup, smtlib regex hoisting, `app_ix` without allocation, identity-rebuild skip, obligation comments only when kept | 5 | 5 | +84/−23 | each below the noise floor individually; together they are the tail of the tier-1 ×1.35 | throughput |
+| 18 | `Ctx`: logarithmic index lookup | 1 | 1 | +23/−2 | below the noise floor alone — the argument is the mechanism: the context name index was a linear association list | throughput |
+| 19 | `backend/Smtlib`: compile the identifier-escaping regexes once | 1 | 1 | +25/−7 | below the noise floor alone — the regexes were rebuilt for every identifier printed | throughput |
+| 20 | `expr/Subst`: walk substitution spines in `app_ix` without allocating | 1 | 1 | +20/−10 | below the noise floor alone — one allocation per spine step, on the hottest walk | throughput |
+| 21 | `backend`+`encode`: skip identity rebuilds when flattening extracts nothing | 1 | 2 | +11/−3 | below the noise floor alone — the sequent was rebuilt even when the pass changed nothing | throughput |
+| 22 | `backend/prep`: write the obligation comment into solver files only when they are kept | 1 | 1 | +5/−1 | below the noise floor alone — the obligation was pretty-printed into a file deleted immediately after | throughput |
 
 Reading of the table: **items 1–8 are 429 added lines (−130) across
 seven files** and cover the ×8 latency drop, the ×2.7 throughput and the
-×8.7 memory reduction.  Items 13–17 are 2 000+ lines and each buys a
-specific, smaller multiple.
+×8.7 memory reduction.  Items 13, 15, 16 and 17 are 356 to 889 added
+lines each and buy one specific, smaller multiple.  Items 18 to 22 are
+five one-file fixes that are each below the noise floor on their own;
+jointly with 1, 5 and 11 they are the ×1.35 that the hot-path series
+delivers.
 
 ## Dependencies
 
@@ -235,7 +242,7 @@ the same three LSP files without depending on each other.
 
 **Batching, if it has to be batched.**  Two coherent series, grouped for
 review coherence rather than for performance — the ranking already covers
-that: *(a)* #1, #5, #11, #18 — pure hot-path fixes, all output-identical,
+that: *(a)* #1, #5, #11 and #18 to #22 — pure hot-path fixes, all output-identical,
 reviewable by reading; *(b)* #3, then #2 + #13 + #10 — the throughput
 chain, where the semantic argument lives and where a reviewer should
 spend their attention.  Everything else is standalone.
@@ -267,7 +274,11 @@ single file.
 | 15 | `src/chunked.ml{,i}` (new), `src/params.ml{,i}`, `src/tlapm_args.ml`, `src/tlapm_lib.ml`, `src/backend/fpfile.ml{,i}`, `src/backend.mli` |
 | 16 | `lsp/lib/prover/prover.ml{,i}`, `lsp/lib/docs/doc_actual.ml{,i}`, `lsp/lib/docs/docs.ml{,i}`, `lsp/lib/docs/obl.ml{,i}`, `lsp/lib/docs/proof_step.ml{,i}`, `lsp/lib/server/session.ml`, `src/tlapm_lib.ml{,i}` |
 | 17 | `lsp/lib/docs/doc_actual.ml`, `lsp/lib/docs/proof_step.ml{,i}`, `src/module.mli`, `src/module/m_elab.ml{,i}`, `src/module/m_gen.ml{,i}`, `src/tlapm_lib.ml{,i}` |
-| 18 | `src/ctx.ml`, `src/backend/smtlib.ml`, `src/expr/e_subst.ml`, `src/backend/prep.ml`, `src/encode/n_flatten.ml` |
+| 18 | `src/ctx.ml` |
+| 19 | `src/backend/smtlib.ml` |
+| 20 | `src/expr/e_subst.ml` |
+| 21 | `src/backend/prep.ml`, `src/encode/n_flatten.ml` |
+| 22 | `src/backend/prep.ml` |
 
 ## Guards: what needs a switch, and what does not
 
@@ -333,7 +344,7 @@ classification is mechanical, not a judgement call.
    though the set of messages is identical.
 
 **What deliberately needs no guard.**  Items 1, 5, 6, 7, 8, 10, 11, 12,
-14 and 18 are output-identical by construction and verified strict; a
+14 and 18 to 22 are output-identical by construction and verified strict; a
 switch would only add a code path nobody exercises.  Of item #0's
 bugfixes, B3 changes a signal number, not an output — what it is missing
 is not a guard but an *escalation*: SIGKILL after a grace period, for a
@@ -358,23 +369,23 @@ Its four families are, in this file's numbering:
 | #286 family | our items |
 |---|---|
 | ENABLED-axiom detection made linear | 5 |
-| backend micro-fixes (regex caching, substitution, spurious timeouts) | B2 of item #0, 18, part of 1 |
+| backend micro-fixes (regex caching, substitution, spurious timeouts) | B2 of item #0, 18–22, part of 1 |
 | context pruning of uncited hidden facts before encoding | 2 |
 | preparation reuse across obligations with identical context prefixes | 13 |
 
-So **items 2, 5, 13 and 18, and B2 of item #0, are not new ideas, and
-not a contribution from this branch** — they are our own already-public
+So **items 2, 5, 13 and 18–22, and B2 of item #0, are not new ideas,
+and not a contribution from this branch** — they are our own already-public
 proposal, re-implemented.  What the branch adds on them is the thing
 #286 could not offer: single-topic reviewable commits, each with its
 invariant stated and a mechanical gate, and attribution measured per
 commit instead of per patch set.  Any upstream conversation should open
 by pointing at #286 rather than presenting these as findings.
 
-**New on this branch relative to #286**: items 1 (the deque lookups,
-whose ×8 on parse+elaborate is the largest single gain here), 4
-(single-pass expansion), 5, 7, 18, 19 (the whole editor track), 8, 9, 10,
-11, 12, 13, 16, 17, and B1 and B3 of item #0 — and the five negative
-results,
+**New on this branch relative to #286**: everything else — items 1, 3,
+4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16 and 17, plus B1 and B3 of item #0.
+Item 1 (the deque lookups, whose ×8 on parse+elaborate is the largest
+single gain here), the editor track (4, 16, 17) and the parse floor it
+stands on (6) are the substantial ones — and the five negative results,
 which are arguably the more useful contribution to a maintainer's time.
 
 ## Other people's pull requests that touch this work
@@ -510,9 +521,13 @@ stands, and this is the argument for it.
 | 15 | `tlapm --chunks 16 --spawn 4` against a plain run | wall; the final failed-obligation line must be identical | **strong** — ×2.24 |
 | 16 | "prove this step" in the editor | step-to-verdict latency | **strong** — 5.1–7.9 s → 0.4–1.0 s |
 | 17 | edit-to-diagnostics in the editor | latency | **strong** — 11.5 s → 2.0 s |
-| 18 | `tlapm -N --timing` on a large module, the five commits together | wall, `parsing`/`analysis` | **weak individually** — each is below the noise floor; the local proof of each is its complexity, and the series is measured jointly |
+| 18 | `tlapm -N --timing` on a large module | wall, `analysis` | **weak** — below the noise floor; the local proof is the mechanism, and T1 shows the output is unchanged |
+| 19 | a real prover run on an SMT-heavy module | wall | **weak** — same; the regexes are recompiled once per identifier printed today |
+| 20 | `tlapm --noproving --timing` | wall, `interaction` | **weak** — same |
+| 21 | `tlapm --noproving --timing` | wall, `interaction` | **weak** — same |
+| 22 | a real prover run *without* `--debug tempfiles` | wall | **weak** — same |
 
-**Consequence, stated plainly.**  Items 7, 12 and 18 do not have a
+**Consequence, stated plainly.**  Items 7, 12 and 18 to 22 do not have a
 convincing single-run wall-clock signal on stock instrumentation.  Their
 pull requests should be argued on the complexity of the code path, with
 the instrumented figure quoted as supporting evidence and the joint
