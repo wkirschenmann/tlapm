@@ -149,6 +149,166 @@ memory reduction.  Items 15–19 are 2 000+ lines and each buys a
 specific, smaller multiple.  If only one thing ships, it is #1; if only
 one *day* is available, it is #1–#6.
 
+## Files touched, per item
+
+Diff sizes are in the table above; these are the paths, so a reviewer can
+see the blast radius before opening anything.  Note how concentrated it
+is: `src/backend/prep.ml` carries items 3, 4 and 15 — the whole
+throughput story — and every one of items 1, 2, 5, 6, 7, 8, 9, 12 is a
+single file.
+
+| # | paths |
+|---|---|
+| 1 | `src/util/deque.ml` |
+| 2 | `src/system.ml` |
+| 3 | `src/backend/prep.ml` |
+| 4 | `src/backend/prep.ml` |
+| 5 | `lsp/lib/docs/proof_step.ml` |
+| 6 | `src/module/m_elab.ml` |
+| 7 | `src/expr/e_parser.ml` |
+| 8 | `src/util/property.ml` |
+| 9 | `src/backend/toolbox.ml` |
+| 10 | `src/backend/prep.ml`, `src/expr.mli`, `src/expr/e_levels.ml{,i}` |
+| 11 | `src/backend/prep.ml`, `src/expr.mli`, `src/expr/e_subst.ml{,i}` |
+| 12 | `src/expr/e_levels.ml` |
+| 13 | `src/backend/prep.ml`, `src/expr.mli`, `src/expr/e_constness.ml{,i}`, `src/util/deque.ml{,i}` |
+| 14 | `src/backend/schedule.ml` |
+| 15 | `src/backend/prep.ml`, `src/expr.mli`, `src/expr/e_elab.ml{,i}` |
+| 16 | `src/backend/schedule.ml{,i}`, `src/tlapm_lib.ml` |
+| 17 | `src/chunked.ml{,i}` (new), `src/params.ml{,i}`, `src/tlapm_args.ml`, `src/tlapm_lib.ml`, `src/backend/fpfile.ml{,i}`, `src/backend.mli` |
+| 18 | `lsp/lib/prover/prover.ml{,i}`, `lsp/lib/docs/doc_actual.ml{,i}`, `lsp/lib/docs/docs.ml{,i}`, `lsp/lib/docs/obl.ml{,i}`, `lsp/lib/docs/proof_step.ml{,i}`, `lsp/lib/server/session.ml`, `src/tlapm_lib.ml{,i}` |
+| 19 | `lsp/lib/docs/doc_actual.ml`, `lsp/lib/docs/proof_step.ml{,i}`, `src/module.mli`, `src/module/m_elab.ml{,i}`, `src/module/m_gen.ml{,i}`, `src/tlapm_lib.ml{,i}` |
+| 20 | `src/ctx.ml`, `src/backend/smtlib.ml`, `src/expr/e_subst.ml`, `src/backend/prep.ml`, `src/encode/n_flatten.ml` |
+
+## Guards: what needs a switch, and what does not
+
+**The rule we applied.**  A change needs a runtime guard when it alters
+*what the provers receive*, or the *order and content of client-visible
+messages*.  A change that only alters how fast the same bytes are
+produced does not — and the golden-dump protocol (T1 vs T2 above) is
+exactly what classifies a change into one of the two, so the
+classification is mechanical, not a judgement call.
+
+**What is guarded today.**
+
+| guard | covers | default |
+|---|---|---|
+| `--debug noprepcache` | all three preparation caches — `expand_defs`, `Expr.Elab.normalize`, `add_constness` — restoring the uncached path (item 15, and the memoized substitution of item 11, which lives inside the cached fold) | caches on |
+| `TLAPM_CHECK_ELABCACHE` | differential oracle: runs the resumed *and* the whole-sequent normalization on every obligation and compares the terms structurally; fatal on divergence | off |
+| `--chunks N` / `--spawn P` / `--chunk-lines a b` | the whole parallel path; absent, the run is byte-for-byte the sequential one; refused under `--toolbox`, which warns and proves sequentially | off |
+| `TLAPM_LSP_SCOPED=1|2|3`, `TLAPM_LSP_FORK=1` | the editor's incremental modes and the forked prover (items 18, 19) | off |
+| `TLAPM_STREAM_GEN=1` | lazy generation, with eager fallbacks for `--summary`, `--check`, `--stats`, `--suppress` and explicit targets | off |
+| 14 `TLAPM_*` probes | measurement only, inert without the variable | off |
+
+**What is missing, in priority order.**
+
+1. **The context prunes (item 3) have no off switch, and they are the
+   one change on the list that alters prover input.**  They remove
+   hypotheses; a reachability mistake, or a backend that turns out to
+   need a hidden fact we judged unreferenced, leaves a user with a
+   failing proof and no way to test the hypothesis.  The
+   `Opaque "__pruned__"` self-check makes such a bug *loud*, which is
+   good, but loud is not the same as recoverable.  Recommendation:
+   `--prune-context=none|defs|defs+facts`, default `defs+facts`, or the
+   cheaper `--debug noprune`.  Either way the escape hatch should land
+   *with* the prune, not after the first bug report.
+
+2. **The single-pass `expand_defs` (item 4) cannot be turned off.**
+   `--debug noprepcache` restores the *cache*, not the *algorithm*: the
+   iterated formulation it replaced is gone from the file.  The change is
+   argued output-identical and the golden dumps agree, but it is a
+   rewrite of a substitution composition, and the cheapest bisection tool
+   for a future "the prover now sees something different" report is the
+   old path behind `--debug oldexpand`.  Keep it for one release.
+
+3. **The probes should converge on the existing `--debug` namespace.**
+   `tlapm` already has `Params.debugging "…"` with a dozen switches
+   (`tempfiles`, `verbose`, `oldsmt`, `rw`, …).  This branch added a
+   second, undocumented namespace of 14 `TLAPM_*` environment variables.
+   Environment variables are the right mechanism only for what must be
+   read before argument parsing; everything else reads better, and
+   documents itself, as `--debug <name>`.  Expect this in review.
+
+4. **The editor modes should graduate from environment variables to
+   client settings** before they become defaults — the language server
+   receives `initializationOptions`, which is where an editor-side toggle
+   belongs.  And `TLAPM_STREAM_GEN` must become a real flag if it is ever
+   enabled by default: it changes the *emission order* of the "being
+   proved" messages, which is part of a client-visible contract even
+   though the set of messages is identical.
+
+**What deliberately needs no guard.**  Items 1, 6, 7, 8, 9, 11, 12, 13,
+16 and 20 are output-identical by construction and verified strict; a
+switch would only add a code path nobody exercises.  Item 2 (SIGTERM)
+changes a signal number, not an output — what it is missing is not a
+guard but an *escalation*: SIGKILL after a grace period, for a backend
+that traps SIGTERM, which needs the scheduler to remember the pids it
+killed.  Item 14 makes a spurious timeout impossible; there is nothing
+to fall back to.
+
+## Upstream provenance: what is already public, and where it collides
+
+Two upstream threads matter here, and they are different things.
+
+**Issue #286** — *"tlapm scales poorly on INSTANCE/refinement-heavy specs
+(large per-obligation contexts)"*, opened 2026-07-27 by qdelamea-aneo, no
+maintainer reply.  It describes this exact problem — "the time is almost
+entirely tlapm-side, not the solvers: it comes from the very large
+contexts that deep INSTANCE hierarchies attach to every obligation" —
+and presents **four patch families with measured speedups** (1.0–1.5× on
+small modules, 5.9× at 652 average hypotheses, >41× at 3 406, where the
+baseline had timed out after six hours).  Those four families are, in our
+numbering:
+
+| #286 family | our items |
+|---|---|
+| ENABLED-axiom detection made linear | 6 |
+| backend micro-fixes (regex caching, substitution, spurious timeouts) | 14, 20, and part of 1 |
+| context pruning of uncited hidden facts before encoding | 3 |
+| preparation reuse across obligations with identical context prefixes | 15 |
+
+So **items 3, 6, 14, 15 and 20 are not new ideas** — they are already
+described upstream, by the same organisation, with numbers.  What this
+branch adds on those is not novelty: it is re-implementation as
+single-topic reviewable commits, each with its invariant stated and a
+mechanical gate, plus attribution per commit rather than per patch set.
+Any upstream conversation should say so plainly and reference #286 rather
+than presenting them as findings.
+
+**Not in #286, and new here**: items 1 (the deque lookups, whose ×8 on
+parse+elaborate is the single largest gain on the branch), 2 (the SIGHUP
+bug), 4 (single-pass expansion), 5, 7, 18, 19 (the whole editor track),
+8, 9, 10, 11, 12, 13, 16, 17 — and the five negative results, which are
+arguably the more useful contribution to a maintainer's time.
+
+**PR #285** — *"Keep record-flattening refactorings tractable in TLAPS"*,
+by lemmy, opened 2026-07-26, open.  Different subject: folding
+record-literal `EXCEPT` chains during normalization ("the normalized
+obligation is ~5000 printed lines with the fold, >=39000 without, >=9M at
+6 layers") plus a backend rewrite `Encode.Rewrite.simpl_receq` that
+decomposes record-constructor equalities field-wise.  ~30 % wall-clock on
+its corpus and no more fallback solvers.  It is **orthogonal in intent
+but not in code**: it modifies `let_normalize` and `except_normalize` in
+`Expr.Elab`, and our item 15 exposes and calls exactly those two
+functions *per hypothesis* instead of once per sequent.  Consequences to
+plan for:
+
+* a textual conflict in `src/expr/e_elab.ml{,i}` is certain;
+* more important, our per-hypothesis equivalence argument ("interleaving
+  the two passes per hypothesis is the same computation, because the let
+  pass's input at position *i* and its scx are unchanged by the
+  interleaving") must be **re-established** after #285 lands, since a
+  fold that carried state across hypotheses would break it.  The
+  `TLAPM_CHECK_ELABCACHE` oracle is the tool for that, and rerunning it
+  on #285's regression test (`record_except_explosion_test.tla`) is the
+  concrete check;
+* #285's review is also a useful signal on the bar: the reviewer's
+  objection there was an O(n) list operation on a hot path, which is
+  precisely the class of defect our item 8 addresses.
+
+Neither `simpl_receq` nor the `EXCEPT` fold is in this branch's base, so
+none of #285 is measured here.
+
 ## Per-item protocol
 
 The same two protocols recur, so they are stated once.
