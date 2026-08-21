@@ -875,6 +875,8 @@ module Levels: sig
         expr -> unit
     val kind_to_level:
         kind -> int
+    val reset_caches:
+        unit -> unit
 
     class virtual ['s] _rm_expr_level:
         ['s] Visit.map
