@@ -442,33 +442,53 @@ and `diff` the two arms — no checker needed; the normalisation only
 erases temporary paths.  Run it on the public synthetic module and on any
 real module the reviewer has.
 
-*T2, subset.*  The same diff, where the *expected* difference is
-hypotheses disappearing from the shipped form: the goal must be
-identical, no obligation may appear or disappear, and the removals are
-reviewable by eye on two or three obligations.  Then one real-prover run
-per arm, and the final `module "…": N/M obligations failed` line, plus
-the per-obligation result loci, must match.  Only #2 and #3 need this.
+*T2, subset.*  Here the T1 stream is **not enough, and the reason is a
+defect in an earlier version of this file.**  Measured: two builds, one
+before both prune commits and one after, produce a **byte-identical**
+`--printallobs` stream — and an identical `--verbose` dump apart from six
+header lines — on a range where the prune demonstrably removes **5 664 of
+7 509 hypothesis slots (75.4 %)**.  The reason is that `really_ship`
+prints the obligation *after expansion and normalisation but before*
+`prune_context`; the pruned form is never printed.  So that stream
+verifies generation and expansion, not the prune, and what actually
+protected the prune commits was the `__pruned__` self-check plus
+real-prover verdict parity.
 
-**Optional, and offered as such: a comparison tool for what reaches the
-solvers.**  The `diff` recipe above is enough, but it makes the reviewer
-eyeball the difference and decide whether it is really "only hypotheses
-removed".  We have that rule mechanised — 55 lines of shell plus 167
-lines of Python, no dependencies beyond `python3`:
+**The form the solvers do receive is observable — in the solver input
+files.**  `--debug tempfiles` keeps them, and each one opens with
+`;; Proof obligation:` followed by the shipped sequent and
+`;; Generated from file "…", line N, characters a-b`, which is a stable
+key.  Two caveats: it needs a **real prover run** (`--noproving` writes
+none — measured, zero files), and the names come from
+`Filename.open_temp_file`, i.e. random, so they must be renamed by their
+key before `diff` can pair them.  That is four lines of shell:
 
-  * a dump step runs one solver-free invocation and splits the toolbox
-    stream into two files: the obligations *generated*, and the material
-    that would be *shipped* to the backends;
-  * a check step compares two dumps and exits 0, 1 or 2, in one of two
-    modes — **identical** (both files byte-equal, for any
-    output-preserving change) or **subset** (the generated set identical;
-    per obligation, the goal identical and every candidate hypothesis
-    present among the baseline's).
+```
+for f in $D/*.tlaps/tlapm_*.smt $D/*.tlaps/tlapm_*.znn; do
+  k=$(sed -n 's/^;; Generated from file .*line \([0-9]*\), characters \(.*\)/\1-\2/p;/^;; Generated/q' "$f")
+  n=1; while [ -e "$OUT/$k.$n.${f##*.}" ]; do n=$((n+1)); done
+  cp "$f" "$OUT/$k.$n.${f##*.}"
+done
+```
 
-It is a `test/`-only addition with no `src/` change, it is what we used to
-gate every commit on this branch, and it is CI-usable.  **No optimization
-proposal depends on it**: it is a separate, optional pull request whose
-only claim is that it makes the subset rule checkable by a machine
-instead of by eye.  If it is declined, the recipes above still stand.
+after which the whole check is `diff`, and **the subset property is
+exactly "the unified diff has no `+` lines"**:
+
+```
+diff -ru before/ after/                      # what changed, per obligation
+diff -ru before/ after/ | grep '^+[^+]'      # must be empty  ==  subset
+```
+
+Verified on the pre-prune/post-prune pair: 11 solver inputs each, paired
+by key, **4 200 deleted lines and 0 added**.  That is a stronger property
+than "hypotheses only removed" — it forbids reordering too — and it needs
+no tool beyond `diff` and `grep`.  Only #2 and #3 need T2.
+
+**Consequence for the guards.**  Since *no* stock output prints what the
+solvers receive, and observing it costs a full prover run, the
+`--prune-context=none` switch recommended above is not a convenience: it
+is the only way a user can bisect a prune-related failure.  Priority 1
+stands, and this is the argument for it.
 
 **Per item: the command, and the number that moves.**
 
@@ -512,7 +532,9 @@ without Isabelle — any change to that set is a regression, see
 the synthetic family and both real corpora, with
 `test/perf/obldump.sh` + `test/perf/oblcheck.py --strict`.  Both dumps
 matter and they are different: the *generated* obligations ("to be
-proved") and the *shipped* form (what the backends receive).
+proved") and the form printed after expansion and normalisation.  Neither
+is what the backends receive — that is the solver input files, see
+"Local proof".
 
 **Test protocol T2 (subset change).**  As T1, but the shipped dump is
 checked with `--subset`: hypotheses may only be removed, the goal must
