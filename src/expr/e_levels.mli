@@ -24,6 +24,11 @@ val kind_to_level: kind -> int
 
 class virtual ['s] _rm_expr_level : ['s] E_visit.map_visible_hyp
 
+val reset_caches: unit -> unit
+(* Empty every level-cache cell filled since the previous call, so the
+   per-node memoization cannot pin query contexts beyond one obligation.
+   Call between independent query bursts (e.g. per prepared obligation). *)
+
 val compute_level: ctx -> expr -> expr
 val rm_expr_level: ctx -> expr -> expr
 
