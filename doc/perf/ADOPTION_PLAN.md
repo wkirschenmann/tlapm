@@ -12,6 +12,55 @@ Nothing here is a new claim: every number is one already recorded in
 (`_perf/sweep.csv`, `_perf/sweep_ffi.csv`).  What is new is the
 ordering, the diff sizes, and the per-item protocol.
 
+## Enough context to read this cold
+
+`tlapm` parses a TLA+ module, *elaborates* it (resolves names, expands
+`EXTENDS` and `INSTANCE` into one flat context), walks it to *generate*
+one obligation per proof leaf, *prepares* each obligation through seven
+stages, and only then starts a prover subprocess.  Two things hurt on
+large specifications, and they are different problems:
+
+* **latency** — in the editor, every interaction re-parses,
+  re-elaborates and re-fingerprints the whole file and its dependencies,
+  twice (server and child).  Measured on a 30k-line module before this
+  work: keystroke → diagnostics **59.7 s**, one step's verdict
+  **5.1–7.9 s**.
+* **throughput** — the same module was provable in five slices of
+  ~2 000 lines but not in one pass: live memory grew with the obligation
+  count until the heap gave out (**OOM at ~26 000 of 30 000** after
+  110 minutes).
+
+Where the branch leaves it, same machine, same module: keystroke
+**2.0 s**, step verdict **0.4–1.0 s**, single pass **285 s** at a flat
+1.5 GB, or **127 s** on four cores.
+
+**Where the time goes** (one solver-free run, 9 967 obligations, 190 s):
+parse 0.85 s, elaborate 1.99 s, generate 0.36 s — 1.7 % in total — and
+**182 s in per-obligation preparation**, single-threaded, of which
+expanding definitions alone is 108.8 s (57 % of the run).  The provers
+are subprocesses that already overlap the loop: the scheduler blocked on
+them for 0.1 s of 273 s over 259 waits.
+
+**The one mechanism to understand.**  Consecutive obligations share
+almost their whole context: median 743 hypotheses, of which 699 are the
+*physically same objects* as in the previous obligation, leaving a
+median divergent tail of **one** hypothesis.  Preparation exploits this
+by storing each pass's state per position and resuming where the
+contexts first differ.  That is what removed most of the throughput
+problem — and it is why pruning the (85 % dead) context *per obligation*
+makes things ×3-4 worse: it rebuilds each context and destroys the
+sharing.  See the entry in `NEXT.md`.
+
+**Vocabulary**, for the same reason: an *obligation* is one thing a
+prover must show; its *sequent* is a context (list of hypotheses) plus a
+goal; a *fingerprint* is the digest used as a cache key so a re-run
+skips what is proved, and its definition must not change or every
+existing cache is invalidated; a context entry is *hidden* when the
+prover never sees it unless something refers to it; a *module unit* is a
+top-level item (definition, declaration, theorem) — the granularity item
+#17 splits by, because a proof's position is its keyword while its
+obligations sit where the facts it cites are.
+
 ## How to read the numbers
 
 **Metrics** (defined in `BASELINE.md`, all reproducible with
