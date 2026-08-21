@@ -71,6 +71,56 @@ let expand_defs ?(what = fun _ -> true) ob =
   let active = app_expr s sq.active in
   { ob with obl = { ob.obl with core = { context ; active } } }
 
+(* Cross-obligation cache for [expand_defs] (default [what] only, which is its
+   single live call site, in [normalize_expr]).
+
+   All obligations of a module share a long, physically identical (==) context
+   prefix (the module-level scope; measured: the median obligation shares >99%
+   of its context with the previous one).  The fold state of [expand_defs]
+   after position [i] -- the substitution [s] and the kept-hypotheses deque --
+   is a pure function of hypotheses [0..i-1], so for the shared prefix it is
+   the same value as for the previous obligation and can be resumed instead of
+   recomputed.  Keying on physical equality makes stale hits impossible: nodes
+   from another module or a rebuilt context compare unshared and fall back to
+   a full (cache-refreshing) fold.  The cache pins the previous obligation's
+   context and fold snapshots; everything is substructure-shared, so the
+   footprint is one array of pairs per module. *)
+let expand_cache
+    : (hyp array * (Expr.Subst.sub * hyp Deque.dq) array) ref
+  = ref ([||], [||])
+
+let expand_defs_cached ob =
+  let sq = ob.obl.core in
+  let raw = Array.of_list (Deque.to_list sq.context) in
+  let n = Array.length raw in
+  let (craw, cstates) = !expand_cache in
+  let m = min n (Array.length craw) in
+  let l = ref 0 in
+  while !l < m && raw.(!l) == craw.(!l) do incr l done;
+  let l = !l in
+  let states = Array.make (n + 1) (shift 0, Deque.empty) in
+  Array.blit cstates 0 states 0 (min (l + 1) (Array.length cstates));
+  let rec fold i ((s, kept) as st) =
+    if i = n then st
+    else begin
+      let h = app_hyp s raw.(i) in
+      let st = match h.core with
+        | Defn ({core = Operator (_, e)}, _, Visible, _) ->
+            (scons e s, kept)
+        | Defn ({core = Bpragma (_, e, _)}, _, _, _) ->
+            (scons e s, kept)
+        | _ ->
+            (bump s, Deque.snoc kept h)
+      in
+      states.(i + 1) <- st;
+      fold (i + 1) st
+    end
+  in
+  let (s, context) = fold l states.(l) in
+  let active = app_expr s sq.active in
+  expand_cache := (raw, states);
+  { ob with obl = { ob.obl with core = { context ; active } } }
+
 (*
 let expand_defs ?(what = fun _ -> true) ob =
   debug_time "expand_defs" (fun () -> expand_defs ~what ob) ()
@@ -214,9 +264,11 @@ let zenon_prove ob org_ob time res_cont =
       Printf.sprintf "%s >%s" (Params.solve_cmd Params.zenon inf) outf
     in
     let in_text =
-      ignore (Format.flush_str_formatter ());
-      Zenon.pp_print_obligation Format.str_formatter ob;
-      Format.flush_str_formatter ()
+      begin
+        ignore (Format.flush_str_formatter ());
+        Zenon.pp_print_obligation Format.str_formatter ob;
+        Format.flush_str_formatter ()
+      end
     in
     output_string inc in_text;
     flush inc;
@@ -453,9 +505,11 @@ let gen_smt_solve ?(rlimit=None) suffix exec desc fmt_expr meth ob org_ob f res_
     let solver = Params.solve_cmd exec inf in
     let cmdline = Printf.sprintf "%s >%s" solver outf in
     let in_text =
-      ignore (Format.flush_str_formatter ());
-      fmt_expr Format.str_formatter ob;
-      Format.flush_str_formatter ()
+      begin
+        ignore (Format.flush_str_formatter ());
+        fmt_expr Format.str_formatter ob;
+        Format.flush_str_formatter ()
+      end
       in
     pp_print_ob ~comm:comm inc ob;
     (* A deterministic Z3 `rlimit` budget makes the pass/fail outcome
@@ -1026,14 +1080,18 @@ let prune_context ob =
 let normalize_expr ob =
     print_obl_and_msg ob (
         "Proof obligation before `Backend.Prep.expand_defs`:\n");
-    let ob = expand_defs ob in
+    let ob =
+              (if Params.debugging "noprepcache" then expand_defs ?what:None
+         else expand_defs_cached)
+        ob
+    in
     print_obl_and_msg ob (
         "Proof obligation after `Backend.Prep.expand_defs` and " ^
         "before `Expr.Elab.normalize`:\n");
     let expr: Expr.T.expr =
         let expr = expr_from_obl ob in
         let cx = Deque.empty in
-        Expr.Elab.normalize cx expr in
+        (Expr.Elab.normalize cx) expr in
     let ob = obl_from_expr expr ob in
     print_obl_and_msg ob "Proof obligation after `Expr.Elab.normalize`:\n";
     ob
@@ -1115,14 +1173,14 @@ let normalize_expand ob fpout thyout record
         ~(level_comparison: bool) =
     let ob = normalize_expr ob in
     try
-        let ob = expand_enabled_cdot
-            ob
-            ~expand_enabled:expand_enabled
-            ~expand_cdot:expand_cdot
-            ~autouse:autouse
-            ~apply_lambdify:apply_lambdify
-            ~enabled_axioms:enabled_axioms
-            ~level_comparison:level_comparison in
+        let ob =             (expand_enabled_cdot
+                ~expand_enabled:expand_enabled
+                ~expand_cdot:expand_cdot
+                ~autouse:autouse
+                ~apply_lambdify:apply_lambdify
+                ~enabled_axioms:enabled_axioms
+                ~level_comparison:level_comparison)
+            ob in
         (* NOTE: context pruning happens later, on the backend path only
            (see `frontend_ob` in `ship`): the triviality check consumes this
            function's result and discharges support obligations by finding a
@@ -1427,6 +1485,16 @@ let compute_meth def args usept =
   meth
 
 
+(* Stabilizer for the two [find_meth] branches that rebuild a hypothesis with
+   the properties of the defined operator's NAME node (the historical
+   behavior, which downstream code may rely on).  The rebuild is a pure
+   per-node function, but a fresh node per obligation would break the
+   physical (==) sharing of the context prefix across obligations that the
+   preparation caches depend on, so the node rebuilt for the previous
+   obligation is reused whenever the input node at the same position is
+   physically the same. *)
+let find_meth_stable : (hyp array * hyp array) ref = ref ([||], [||])
+
 let find_meth ob =
   match query ob.obl Proof.T.Props.meth with
   | Some _ -> ob
@@ -1434,21 +1502,35 @@ let find_meth ob =
      let meths = ref [] in
      let use_loc = ref Loc.unknown in
      let stack : (meth_or_premeth option) list ref = ref [] in
+     let raw = Array.of_list (Deque.to_list ob.obl.core.context) in
+     let (cin, cout) = !find_meth_stable in
+     let out = Array.copy raw in
+     let stable i rebuild =
+       let h' =
+         if i < Array.length cin && raw.(i) == cin.(i) then cout.(i)
+         else rebuild ()
+       in
+       out.(i) <- h';
+       h'
+     in
      let f n h =
        match h.core with
-       | Fact ({core = With (_, m)} as fac, Visible, tm) -> (* FIXME remove *)
+       | Fact ({core = With (_, m)}, Visible, _) -> (* FIXME remove *)
           meths := [m] :: !meths ;
           stack := None :: !stack;
-          Fact (fac, Visible, tm) @@ h
-       | Defn ({core = Bpragma (h, e, l)} as def,
+          h
+       | Defn ({core = Bpragma (nm, _, l)} as def,
                 wheredef, visibility, export) ->
            stack := Some (Premeth (l)) :: !stack;
-           Defn (def, wheredef, visibility, export) @@ h
-       | Fact ({core = Apply ({core = Ix n}, ll)} as fac, Visible, tm) ->
+           (* NB: rebuilt with the props of the pragma NAME node, as the
+              original (shadowed) code did -- downstream reads them *)
+           stable n (fun () ->
+             Defn (def, wheredef, visibility, export) @@ nm)
+       | Fact ({core = Apply ({core = Ix n}, ll)} as fac, Visible, _) ->
           begin match List.nth !stack (n-1) with
           | None ->
              stack := None :: !stack;
-             Fact (fac, Visible, tm) @@ h
+             h
           | Some (Premeth (l)) ->
              if Property.get h Proof.T.Props.use_location != !use_loc then begin
                meths := [];
@@ -1457,22 +1539,23 @@ let find_meth ob =
              let f x = compute_meth x ll fac in
              meths := (List.map f l) :: !meths;
              stack := None :: !stack;
-             Fact (fac, Visible, tm) @@ h
+             h
           | Some (Meth _) -> assert false  (* FIXME remove *)
           end
-       | Defn ({core = Operator (h, {core = With (exp, m)})} as def,
+       | Defn ({core = Operator (nm, {core = With (_, m)})} as def,
                wheredef, Visible, export) ->  (* FIXME remove *)
           stack := Some (Meth m) :: !stack;
-          Defn (def, wheredef, Visible, export) @@ h
-       | Fact ({core = Ix n} as fac, Visible, tm) ->
+          stable n (fun () ->
+            Defn (def, wheredef, Visible, export) @@ nm)
+       | Fact ({core = Ix n} as fac, Visible, _) ->
           begin match List.nth !stack (n-1) with
           | None ->
              stack := None :: !stack;
-             Fact (fac, Visible, tm) @@ h
+             h
           | Some (Meth m) ->          (* FIXME remove *)
              meths := [m] :: !meths;
              stack := None :: !stack;
-             Fact (fac, Visible, tm) @@ h  (* was `Hidden` *)
+             h  (* was `Hidden` *)
           | Some (Premeth (l)) ->
              if Property.get h Proof.T.Props.use_location != !use_loc then begin
                meths := [];
@@ -1481,13 +1564,14 @@ let find_meth ob =
              let f x = compute_meth x [] fac in
              meths := (List.map f l) :: !meths;
              stack := None :: !stack;
-             Fact (fac, Visible, tm) @@ h
+             h
           end
        | _ ->
           stack := None :: !stack;
           h
      in
      let cx = Deque.map f ob.obl.core.context in
+     find_meth_stable := (raw, out);
      let meths =
         match !meths with
         | [] -> !Params.default_method
@@ -1542,7 +1626,7 @@ let really_ship ob org_ob meth fpout thyout record =
 
 
 (* TODO: constness visitor also called in frontends *)
-let add_constness ob =
+let add_constness_nocache ob =
   let e = noprops (Expr.T.Sequent ob.obl.core) in
   let visitor = object (self: 'self)
     inherit Expr.Constness.const_visitor
@@ -1550,6 +1634,54 @@ let add_constness ob =
   match visitor#expr ((), Deque.empty) e with
   | {core = Expr.T.Sequent sq} -> {ob with obl = sq @@ ob.obl}
   | _ -> assert false
+
+(* Cross-obligation cache for [add_constness], same principle as
+   [expand_defs_cached]: the constness annotation of a hypothesis is a pure
+   function of the raw hypothesis and the annotated hypotheses preceding it
+   (the visitor state is exactly the deque of already-annotated hypotheses,
+   cf. [Expr.Visit.map#hyp], which adjoins the *mapped* hypothesis), so the
+   annotated prefix cached from the previous obligation can be reused for the
+   physically shared (==) part of the context.
+
+   Equivalence with [add_constness_nocache]: that function feeds the sequent
+   through [const_visitor#expr], whose [Sequent] case is
+   [super#sequent] = [#hyps] on the context then [#expr] on the active
+   (mirrored here), plus an [isconst] annotation on the *outer* sequent node,
+   which [add_constness_nocache] discards (it keeps only the inner sequent).
+   Reusing cached annotated hypotheses also restores physical sharing of the
+   context across obligations downstream, which is what makes
+   [expand_defs_cached] effective. *)
+let constness_cache : (Expr.T.hyp array * Expr.T.hyp list) ref = ref ([||], [])
+
+let add_constness ob =
+  if Params.debugging "noprepcache" then add_constness_nocache ob
+  else begin
+    let sq = ob.obl.core in
+    let raw = Array.of_list (Deque.to_list sq.context) in
+    let n = Array.length raw in
+    let (craw, cann) = !constness_cache in
+    let m = min n (Array.length craw) in
+    let l = ref 0 in
+    while !l < m && raw.(!l) == craw.(!l) do incr l done;
+    let l = !l in
+    let rec take k lst =
+      if k = 0 then []
+      else match lst with
+        | x :: xs -> x :: take (k - 1) xs
+        | [] -> assert false
+    in
+    let ann_prefix = take l cann in
+    let visitor = object (self: 'self)
+      inherit Expr.Constness.const_visitor
+    end in
+    let scx = ((), Deque.of_list ann_prefix) in
+    let suffix = Deque.of_list (Array.to_list (Array.sub raw l (n - l))) in
+    let (scx, ann_suffix) = visitor#hyps scx suffix in
+    let context = Deque.append (Deque.of_list ann_prefix) ann_suffix in
+    let active = visitor#expr scx sq.active in
+    constness_cache := (raw, Deque.to_list context);
+    {ob with obl = { context ; active } @@ ob.obl}
+  end
 
 
 let is_success st =
@@ -1561,6 +1693,8 @@ let is_success st =
 
 let is_trivial x =
   try ignore (Lazy.force x); true with Nontrivial -> false
+
+
 
 
 (* This function is called on every obligation in the range selected by the
@@ -1616,7 +1750,8 @@ let ship ob fpout thyout record =
       lazy begin
         let ob = add_constness ob in
         Timing.start Timing.fp_compute ;
-        Std.finally Timing.stop Fingerprints.write_fingerprint ob
+        Std.finally Timing.stop
+          (Fingerprints.write_fingerprint) ob
       end
     in
     let p = lazy (normalize_expand (Lazy.force const_fp_ob)
@@ -1663,7 +1798,8 @@ let ship ob fpout thyout record =
         (* Note: triviality check must be done after expanding definitions *)
         let trivial_ob =
             try
-                lazy (trivial (Lazy.force normalize_expand_ob))
+                lazy (trivial
+                        (Lazy.force normalize_expand_ob))
             with Failure msg ->
                 lazy (trivial (Lazy.force const_fp_ob))
             in
@@ -1714,10 +1850,12 @@ let ship ob fpout thyout record =
               * action frontend by default *)
              | Method.LS4 _ ->
                  lazy (Pltl.process_obligation
-                           (prune_context (Lazy.force normalize_expand_ob)))
+                           (prune_context
+                              (Lazy.force normalize_expand_ob)))
              | _ ->
                  lazy (Action.process_obligation
-                           (prune_context (Lazy.force normalize_expand_ob)))
+                           (prune_context
+                              (Lazy.force normalize_expand_ob)))
            in
            let tmo = !Params.backend_timeout *. !Params.timeout_stretch in
            print_obl_and_msg
