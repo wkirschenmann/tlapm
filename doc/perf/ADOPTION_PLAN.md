@@ -123,7 +123,12 @@ obligations proved and unproved at the same source positions.  Used by
 **Measurement protocol P1 (cheap, per commit).**  `test/perf/bench.sh`,
 median of 3, on `Synth_L{100,300}` and the real corpora: M0, M1, M2, M3.
 Solver-free, so it is reproducible and fast.  This is what
-`_perf/sweep.csv` is.
+`_perf/sweep.csv` is.  **Known defect of the synthetic corpus**: its
+obligation contexts share no physical prefix, where real specs share
+>99 %, so it mis-ranks anything that depends on the prefix caches (it
+told us the early prune was a ×2.1 win; on the real corpora it is ×3-4
+slower).  Never conclude from the synthetic corpus alone on a
+cache-sensitive change.
 
 **Measurement protocol P2 (per milestone).**  One real-prover run per
 arm, `test/perf/monitor_run.sh` (per-verdict timestamps + RSS samples),
@@ -215,8 +220,14 @@ They are here so the effort is not spent twice.
    dropped by `prune_context` — but dropping it *early* rebuilds the
    context per obligation and destroys the physical prefix sharing the
    caches live on.  Monolith M1 **286 s → 911 s (×3.2 slower)**, with
-   `expand_defs` 49 → 294 s.  The dead weight is free precisely
-   *because* it is shared.
+   `expand_defs` 49 → 294 s; Ffi **190 s → 842 s (×4.43)**, with
+   `expand_defs` 109 → 611 s and peak RSS *up* 0.63 → 0.92 GB.  The dead
+   weight is free precisely *because* it is shared: pruning per
+   obligation rebuilds the context and destroys the physical prefix
+   identity the caches resume from.  Reverted; only the drop-rate
+   counters were kept.  Corollary for anyone evaluating the lazy tree:
+   per-obligation minimality and cross-obligation prefix sharing
+   optimize the same cost and exclude each other.
 2. **Name-blind fingerprints.**  Merges 369 classes / 466 obligations on
    the monolith, and **3 of those classes have differing shipped
    forms** — one obligation's result would answer for a different

@@ -785,6 +785,56 @@ process primitives are negligible (10 437 forks + `/bin/sh` execs cost
 4.2 s of 258.9 s) and the per-worker redundant parse is ≈ 3 s, not the
 43 s previously assumed.
 
+### Pruning before expanding: measured, x3-4 SLOWER, withdrawn (2026-08-21)
+
+The question was whether the lazy tree's "only what is used
+materializes" is portable to the flat pipeline.  It measures as a clear
+negative, and the reason is worth keeping.
+
+`prune_context` drops **85 % of every obligation's hypothesis slots**
+(10.15 M of 11.88 M on the monolith, 2.28 M of 2.68 M on Ffi -- new
+counters under `TLAPM_PREP_TIMES`), and it runs after `expand_defs`,
+`Expr.Elab.normalize` and the triviality check, all of which walk the
+whole context.  `expand_defs` alone is 18 % of the monolith's
+preparation and **57 % of Ffi's** (108.8 s of 190.3 s).  So the dead
+weight looked expensive.  We implemented the early prune -- after the
+fingerprint so digests are untouched, dropping only unreachable *hidden
+definitions* (facts stay: the triviality check can discharge a support
+obligation from a hidden fact equal to the goal, which is why the
+existing pass sits where it does), old path for the
+ENABLED/`\cdot`/AutoUSE/Lambdify obligations.
+
+Measured, `--noproving`, one host, one boot:
+
+| corpus | off | on | `expand_defs` | the prune itself | peak RSS |
+|---|---|---|---|---|---|
+| monolith (29 965 obl.) | 285.9 s | **910.9 s** (x3.19) | 49.1 -> 294.1 s | 154.6 s | 1.16 -> 1.14 GB |
+| Ffi (9 967 obl.) | 190.3 s | **842.4 s** (x4.43) | 108.8 -> 610.5 s | 68.0 s | 0.63 -> 0.92 GB |
+
+**The dead weight is free precisely because it is shared.**  Pruning per
+obligation rebuilds the context, which destroys the physical prefix
+identity the expansion and normalization caches resume from; the median
+divergent suffix (1 hypothesis) becomes a full walk of ~400 entries.
+Memory gets worse too, for the same reason -- fresh nodes instead of
+shared ones.  The experiment is reverted; the drop-rate counters stay as
+a diagnostic.
+
+**What this says about C3.**  "Materialize only what is used" and "share
+context prefixes across obligations" optimize the same cost and exclude
+each other.  The flat pipeline chose sharing and that is where its speed
+comes from.  A lazy tree is only faster if its node addressing *also*
+delivers cross-obligation sharing -- design work, not a free consequence
+of the representation.  Third result of this family, with B2-lite and
+de-materialization.
+
+**And a harness defect worth fixing.**  The synthetic generator misled
+us: on `gen_synth.py` modules, adding 2 000 never-cited hidden
+definitions took the wall from 8.2 s to 52.9 s and the early prune won
+x2.1 -- because those contexts share *no* prefix (the expansion fold
+walks all ~2 050 entries per obligation, i.e. the cache resumes at 0),
+where the real corpora share >99 %.  A generator that does not reproduce
+prefix sharing mis-ranks every optimization that depends on it.
+
 ## Sequence
 
 A1 (user-side confirmation run on the 7.7 GB machine) →

@@ -129,7 +129,6 @@ let t_expand = prep_timer "expand_defs"
 let t_normalize = prep_timer "elab_normalize"
 let t_enabled = prep_timer "expand_enabled"
 let t_prune = prep_timer "prune_context"
-let t_prune_early = prep_timer "prune_early"
 let t_trivial = prep_timer "trivial_check"
 let t_action = prep_timer "action_frontend"
 let t_encode = prep_timer "encode"
@@ -1115,7 +1114,7 @@ let obl_from_expr
     | _ -> failwith "Backend.Prep.obl_from_expr"
 
 
-let prune_context ?(keep_facts = false) ob =
+let prune_context ob =
   (* Drop context hypotheses the obligation cannot reach.
 
      After `expand_defs` has inlined the visible definitions, the obligation
@@ -1157,14 +1156,11 @@ let prune_context ?(keep_facts = false) ob =
     in
     let mark_all_before p = for q = 0 to p - 1 do keep.(q) <- true done in
     (* seed: keep everything except hidden operator/pragma definitions and
-       hidden (uncited) facts.  With [keep_facts], hidden facts are kept
-       too: the early call site below runs before the triviality check,
-       which discharges support obligations from a hidden fact equal to
-       the goal. *)
+       hidden (uncited) facts *)
     for p = 0 to n - 1 do
       (match arr.(p).core with
         | Defn ({core = (Operator _ | Bpragma _)}, _, Hidden, _) -> ()
-        | Fact (_, Hidden, _) when not keep_facts -> ()
+        | Fact (_, Hidden, _) -> ()
         | _ -> keep.(p) <- true)
     done;
     (* the goal references hypotheses at any depth *)
@@ -1198,39 +1194,6 @@ let prune_context ?(keep_facts = false) ob =
     let active = app_expr s sq.active in
     { ob with obl = { ob.obl with core = { context ; active } } }
   end
-
-(* Experiment (TLAPM_PRUNE_EARLY=1, default off): prune the *definitions*
-   an obligation cannot reach BEFORE expanding, instead of only after.
-
-   Measured motivation: `prune_context` drops 85 % of all hypothesis
-   slots (10.2 M of 11.9 M on the 30k monolith, 2.28 M of 2.68 M on the
-   INSTANCE-heavy corpus), and every one of them was first carried
-   through `expand_defs`, `Expr.Elab.normalize` and the triviality
-   check, which walk the whole context of every obligation --
-   `expand_defs` alone is 18 % of the monolith's preparation and 57 % of
-   the other corpus's.  A synthetic module isolates the cost: adding
-   never-cited hidden definitions to a fixed set of 1 500 obligations
-   takes the wall from 8.2 s to 52.9 s (+2 000 definitions), nearly all
-   of it in `expand_defs`.
-
-   Why it can be sound where the late pass could not.  Only *hidden
-   definitions* are dropped here, never facts: the triviality check
-   needs hidden facts (it can discharge a support obligation from one
-   equal to the goal), and that is why the existing pass sits after it.
-   Unreachability is preserved by expansion -- inlining a visible
-   definition composes bodies that already could not reference the
-   dropped slot -- but the ENABLED/`\cdot`/AutoUSE/Lambdify machinery
-   introduces references of its own, so obligations carrying any of
-   those methods keep the old path.  The `Opaque "__pruned__"`
-   self-check applies unchanged: a reachability mistake surfaces as that
-   opaque leaking into a shipped obligation, never as a silent
-   miscompilation.
-
-   Observable difference, deliberately: the shipped form is expected
-   byte-identical (the late pass would remove the same slots), while the
-   `--printallobs` "normalized" inspection dump shows the pruned context
-   -- a subset, in the sense the checker already distinguishes. *)
-let prune_early_on = lazy (Sys.getenv_opt "TLAPM_PRUNE_EARLY" <> None)
 
 (* Cross-obligation prefix cache for `Expr.Elab.normalize`, same
    principle as [expand_defs_cached]: consecutive obligations share a
@@ -2069,24 +2032,14 @@ let ship ob fpout thyout record =
         ob
       end
     in
-    let p = lazy begin
-      let ob = Lazy.force const_fp_ob in
-      let ob =
-        if Lazy.force prune_early_on
-           && not (expand_enabled || expand_cdot || autouse || apply_lambdify
-                   || enabled_axioms || level_comparison)
-        then prep_time t_prune_early (prune_context ~keep_facts:true) ob
-        else ob
-      in
-      normalize_expand ob
+    let p = lazy (normalize_expand (Lazy.force const_fp_ob)
             fpout thyout record
             ~expand_enabled
             ~expand_cdot
             ~autouse
             ~apply_lambdify
             ~enabled_axioms
-            ~level_comparison
-    end
+            ~level_comparison)
     in
     let prep_meth m =
       let ob = Lazy.force const_fp_ob in
