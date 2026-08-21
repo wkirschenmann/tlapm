@@ -41,6 +41,15 @@ let vprintf fmt =
    function of document position (printed as one [PREP_BUCKETS] line per
    stage). Both are inert without their env var. *)
 let prep_times_on = lazy (Sys.getenv_opt "TLAPM_PREP_TIMES" <> None)
+
+(* Probe (TLAPM_PREP_TIMES): how much of every obligation's context the
+   backend path throws away, and how late.  `prune_context` runs after
+   `expand_defs`, `Expr.Elab.normalize` and the triviality check, all of
+   which walk the whole context of every obligation -- so a hypothesis
+   dropped there was carried through all of them first.  These counters
+   size what an earlier prune could avoid. *)
+let n_prune_kept = ref 0
+let n_prune_dropped = ref 0
 let prep_bucket_width = lazy begin
   match Sys.getenv_opt "TLAPM_PREP_BUCKETS" with
   | Some s -> (try max 1 (int_of_string s) with Failure _ -> 0)
@@ -84,6 +93,13 @@ let () = at_exit begin fun () ->
     List.iter
       (fun (n, r) -> Printf.eprintf "[PREP_TIMES] %-18s %8.3f s\n%!" n r.total)
       (List.rev !prep_timers);
+    let tot = !n_prune_kept + !n_prune_dropped in
+    if tot > 0 then
+      Printf.eprintf
+        "[PREP_TIMES] prune: kept=%d dropped=%d (%.1f%% of %d hypothesis slots \
+carried through expand+normalize+trivial)\n%!"
+        !n_prune_kept !n_prune_dropped
+        (100. *. float !n_prune_dropped /. float tot) tot;
     let w = Lazy.force prep_bucket_width in
     if w > 0 then
       List.iter
@@ -1170,6 +1186,11 @@ let prune_context ob =
           else fold (scons (Opaque "__pruned__" @@ h) s) (i + 1) kept hs
     in
     let (s, context) = fold (shift 0) 0 Deque.empty sq.context in
+    if Lazy.force prep_times_on then begin
+      let k = Deque.size context in
+      n_prune_kept := !n_prune_kept + k ;
+      n_prune_dropped := !n_prune_dropped + (n - k)
+    end ;
     let active = app_expr s sq.active in
     { ob with obl = { ob.obl with core = { context ; active } } }
   end
