@@ -108,6 +108,45 @@ def load_sweep(path=None, boot=None):
     return out, boot, drift
 
 
+def apply_reps(sweep, path=None, boot=None):
+    """Replace single-run values by the median of a repeated pass where one exists.
+
+    A run of tens of milliseconds is dominated by process start-up and page-cache
+    state, so one sample cannot separate two commits: the control corpus showed a
+    10 % step at a commit that only changes a kill signal, and re-measuring the two
+    ends back to back put them within 1 ms of each other.  Where a repeated,
+    point-interleaved pass exists, its median replaces the sample.
+    """
+    path = path or os.path.join(S, "short_reps.csv")
+    if not os.path.exists(path):
+        return sweep, {}
+    runs, boots = collections.defaultdict(list), set()
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            if int(r["rc"]) != 0:
+                continue
+            boots.add(r["boot"])
+            runs[(r["boot"], r["corpus"], r["metric"], r["point"])].append(
+                (int(r["ms"]), int(r["peak_kb"])))
+    if not boots:
+        return sweep, {}
+    boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
+    used = {}
+    for (b, cp, mt, pt), v in runs.items():
+        if b != boot or len(v) < 3:
+            continue
+        ms = sorted(m for m, _ in v)
+        med = ms[len(ms) // 2]
+        rec = sweep.setdefault((pt, cp), {})
+        rec["gen" if mt == "gen" else "prep"] = med
+        if mt == "prep":
+            pk = sorted(k for _, k in v if k)
+            if pk:
+                rec["peak"] = pk[len(pk) // 2]
+        used[(cp, mt)] = len(v)
+    return sweep, used
+
+
 def main_point(sweep, corpus, field):
     """main's value for a field: the mean of the two measurements when both
     completed, the single one when only one did, else the shared sentinel."""

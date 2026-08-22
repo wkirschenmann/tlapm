@@ -15,6 +15,7 @@ OUT = os.path.join(REPO, "doc", "perf", "SHORT_PROPOSAL.html")
 BRANCH = "tlapm-perf-short"
 
 sweep, boot, drift = L.load_sweep()
+sweep, REPS = L.apply_reps(sweep)
 iterlat, iboot = L.load_iteration_latency()
 keys, kboot = L.load_keystroke()
 
