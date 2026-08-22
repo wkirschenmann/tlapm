@@ -43,9 +43,9 @@ PRS = [
      "wait after one edit."),
 
     ("PR7", "Linear ENABLED scan", "t-lat", ["p15"],
-     "Elaborating <code>ENABLED</code> and <code>\\cdot</code> matched every "
-     "axiom against every hypothesis. It is quadratic in context size and it runs "
-     "on the editor's path."),
+     "Every <code>BY</code> and <code>OBVIOUS</code> asked whether the context cites "
+     "one pragma, and answered it by re-slicing the context once per fact. It is "
+     "quadratic in context size and it runs on the editor's path."),
 
     ("PR8", "Editor obligation pool", "t-lat", ["p16"],
      "Building the proof-step tree the editor displays scanned the whole obligation "
@@ -123,14 +123,22 @@ CM = {
       "changes.",
   off="No switch; there is no second implementation to fall back to."),
 "p07": dict(
-  what="<code>expand_defs</code> applied one substitution per visible definition, "
-       "each of which walked the entire context: for <em>k</em> definitions over a "
-       "context of <em>n</em> hypotheses it did <em>k</em> passes over <em>n</em>. "
-       "The substitutions compose, so one front-to-back pass with the composed "
-       "substitution produces the same term.",
-  how="Byte-identical obligation dumps, and the same fingerprints -- the "
-      "fingerprint is computed on the const-annotated pre-expansion obligation, so "
-      "this commit cannot move it.",
+  what="<code>expand_defs</code> recursed front to back and, for <em>each</em> "
+       "definition it expanded, applied a substitution to the whole remaining "
+       "sequent &mdash; rebuilding it once per expanded definition. For <em>k</em> "
+       "definitions over a context of <em>n</em> hypotheses that is <em>k</em> "
+       "rebuilds of <em>n</em>, quadratic on an INSTANCE-heavy context. One "
+       "front-to-back pass accumulates the composed substitution and rebuilds the "
+       "sequent once.",
+  how="The substitution accumulated is exactly the composition the iterated version "
+      "applied one definition at a time, with the same De Bruijn bookkeeping as "
+      "<code>Expr.Subst.app_hyps</code>: bump under a kept hypothesis, cons under an "
+      "inlined one. The point to check is that the definition body is read "
+      "<em>after</em> the accumulated substitution is applied to its hypothesis, so "
+      "earlier inlinings are already substituted into it &mdash; which is what makes "
+      "the one-pass result identical rather than merely equivalent. Byte-identical "
+      "obligation dumps, and the same fingerprints: the digest is computed on the "
+      "const-annotated pre-expansion obligation, so this commit cannot move it.",
   off="No switch."),
 "p08": dict(
   what="The driver built the whole task list before the scheduler started, so every "
@@ -159,28 +167,43 @@ CM = {
       "effect is peak resident set.",
   off="No switch."),
 "p10": dict(
-  what="After expansion and normalisation, an obligation's context still carries "
-       "the <em>hidden</em> operator and pragma definitions -- ones no longer "
-       "reachable from the goal, because expansion has already inlined every visible "
-       "use. Unreachable hidden definition slots become "
-       "<code>Opaque \"__pruned__\"</code>.",
-  how="Soundness is structural: pruning runs on the backend path only, after the "
-      "fingerprint is computed, so fingerprints and <code>--printallobs</code> are "
-      "unchanged by construction; and a slot that nothing references cannot change "
-      "what the sequent means. The gate is the test fail-set plus dump equality on "
-      "the generated obligations.",
-  off="No switch. The pruned form is what the prover receives; the "
-      "<code>__pruned__</code> marker makes an accidental reference fail loudly "
-      "rather than silently."),
+  what="After expansion has inlined every visible use, an obligation's context still "
+       "carries the hidden operator and pragma definitions imported by "
+       "<code>INSTANCE</code>, most of which the goal never references. The pass "
+       "computes what is transitively reachable from the goal and the facts through "
+       "De Bruijn references and drops the rest, renumbering with the same "
+       "substitution machinery <code>expand_defs</code> uses. This commit drops "
+       "<em>only</em> unreferenced hidden operator and pragma definitions: all "
+       "declarations, recursive and instance definitions, and every fact are kept.",
+  how="Three things make it checkable rather than merely plausible. References point "
+      "strictly front-ward, so one rear-to-front pass <em>is</em> the transitive "
+      "closure &mdash; there is no fixpoint to get wrong. A hypothesis the pass "
+      "cannot analyse conservatively keeps all of its predecessors. And a dropped "
+      "slot is filled with a distinctive <code>Opaque \"__pruned__\"</code>, which "
+      "because the slot is unreachable can never appear in the result: a "
+      "reachability bug surfaces as that marker leaking into an obligation and "
+      "failing a proof, never as a silent change of meaning. Structurally, the pass "
+      "runs on the backend path after the fingerprint is computed, so fingerprints "
+      "and <code>--printallobs</code> cannot move.",
+  off="No switch. The pruned form is what the prover receives."),
 "p11": dict(
-  what="The same treatment for hidden <em>facts</em>. On an INSTANCE-heavy module "
-       "these are the instantiated statements of every earlier theorem, and they are "
-       "most of the context by weight. A fact is hidden here only if no "
-       "<code>BY</code> or <code>USE</code> cited it during generation, and backends "
-       "assert only visible facts.",
-  how="Dropping a premise can never make an unprovable sequent provable, so the "
-      "risk is a lost proof, not a wrong one -- and that is what the test suite "
-      "measures. Fail-set identical to <code>main</code>'s on the full stack.",
+  what="The same reachability treatment for hidden <em>facts</em>. On an "
+       "<code>INSTANCE</code>-heavy module these are the instantiated statements of "
+       "every earlier theorem, and they are most of the context by weight. A fact is "
+       "hidden here only if no <code>BY</code> or <code>USE</code> cited it &mdash; a "
+       "citation marks it visible during proof generation, before this pass &mdash; "
+       "and the backend translations assert only visible facts, so an unreferenced "
+       "hidden fact is weight carried through every encoding pass and never used.",
+  how="Two arguments, and the second is the one that constrains where the pass may "
+      "run. First: dropping a premise can never make an unprovable sequent provable, "
+      "so the risk is a lost proof rather than a wrong result &mdash; which is "
+      "exactly what a test suite detects. Second: the triviality check discharges a "
+      "support obligation by finding a fact <em>equal to the goal</em>, hidden ones "
+      "included, so pruning before it would turn trivially discharged obligations "
+      "into prover work. The pass therefore runs on the backend path only, after "
+      "every expansion has introduced its references and after the triviality check "
+      "&mdash; which is also what puts it after the fingerprint. Gate: fail-set "
+      "identical to <code>main</code>'s on the full stack.",
   off="No switch."),
 "p12": dict(
   what="Consecutive obligations share a context prefix: on a 30k-obligation module "
@@ -207,12 +230,33 @@ CM = {
       "the whole corpus under it is how the cache was gated.",
   off="Off unless <code>TLAPM_CHECK_ELABCACHE</code> is set; inert otherwise."),
 "p15": dict(
-  what="Detecting which axioms an <code>ENABLED</code> or <code>\\cdot</code> "
-       "elaboration needs matched every candidate axiom against every hypothesis of "
-       "the context. Two linear passes -- collect what the context offers, then "
-       "select -- produce the same set.",
-  how="Same axiom set, so byte-identical dumps; the <code>enabled_cdot</code> test "
-      "family is the behavioural gate.",
+  what="Elaborating a <code>BY</code> or <code>OBVIOUS</code> asks one question of "
+       "the context: does any fact in it cite the <code>ENABLEDaxioms</code> pragma? "
+       "The old code answered it by walking every fact and, for each, building a "
+       "sliced copy of the context up to that position in order to resolve the "
+       "fact's De Bruijn reference &mdash; so the cost was the context size times the "
+       "number of facts, on modules whose contexts carry hundreds of imported facts. "
+       "Two linear passes replace it: mark which positions hold the pragma, then for "
+       "each fact resolve the reference by arithmetic (a fact at front-index "
+       "<em>i</em> whose body is <code>Ix k</code> refers to front-index "
+       "<em>i&nbsp;&minus;&nbsp;k</em>).",
+  how="The arithmetic is exactly what the slice-and-look-up computed, so the answer "
+      "is the same and the obligation dumps are byte-identical. The "
+      "<code>enabled_cdot</code> test family is the behavioural gate &mdash; a wrong "
+      "answer here changes which axioms are available to a proof, so it would show "
+      "as a proof that stops working rather than as a wrong result.",
+  off="No switch."),
+"p16": dict(
+  what="Building the proof-step tree ran <code>RangeMap.partition</code> over the "
+       "whole remaining obligation map for every step -- steps &times; obligations. "
+       "The pool keeps the exact claiming semantics (first claimer wins, a claim is "
+       "a range intersection, duplicate ranges collapse with the last one winning) "
+       "in logarithmic time: "
+       "entries sorted by range, a binary search to the window, a forward scan, and "
+       "a backward scan bounded by the longest obligation span.",
+  how="The gate is the client-visible notification stream: byte-identical between "
+      "the old and the new server on the corpora, proof-step marker payloads "
+      "included. <code>dune runtest lsp</code> green.",
   off="No switch."),
 "p17": dict(
   what="The expression grammar is a family of mutually recursive rules "
@@ -226,19 +270,7 @@ CM = {
        "<code>mk_*</code> functions behind a two-slot cache.",
   how="Byte-identical parse: the obligation dump under "
       "<code>-N --toolbox 0 0 --printallobs --nofp</code> is unchanged, and the "
-      "parser test family is the behavioural gate. A grammar change would show as a "
+      "parser test corpus is the behavioural gate. A grammar change would show as a "
       "parse error, not as a slow parse.",
-  off="No switch."),
-"p16": dict(
-  what="Building the proof-step tree ran <code>RangeMap.partition</code> over the "
-       "whole remaining obligation map for every step -- steps &times; obligations. "
-       "The pool keeps the exact claiming semantics (first claimer wins, a claim is "
-       "a range intersection, duplicate ranges collapse with the last one winning) "
-       "in logarithmic time: "
-       "entries sorted by range, a binary search to the window, a forward scan, and "
-       "a backward scan bounded by the longest obligation span.",
-  how="The gate is the client-visible notification stream: byte-identical between "
-      "the old and the new server on the corpora, proof-step marker payloads "
-      "included. <code>dune runtest lsp</code> green.",
   off="No switch."),
 }
