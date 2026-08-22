@@ -264,26 +264,47 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   hidden definitions and citations per <code>BY DEF</code>. Named lemmas become visible context
   definitions carrying their statement, which is what reproduces the growth term real proofs have.
   Two private specifications — an INSTANCE-heavy refinement chain (9 967 obligations) and a
-  single-module 30 000-line proof (29 965 obligations) — are used only where a figure is quoted for
-  the large end; no specification content appears here.</p>
+  single-module 30 000-line proof (29 965 obligations) — carry the figures that only a real proof
+  produces. All five corpora are listed below with what each is for.</p>
 
-  <h4>Three sizes, and the point of including the small ones</h4>
+  <h4>The five corpora, and what each one is for</h4>
   <div class="scroller" style="margin-top:12px">
     <table>
-      <thead><tr><th>case</th><th class="num">obligations</th><th class="num">main</th><th class="num">this branch</th><th class="num">ratio</th></tr></thead>
+      <thead><tr><th>corpus</th><th class="num">obligations</th><th>what it is for</th>
+        <th class="num"><code>main</code></th><th class="num">this branch</th></tr></thead>
       <tbody>
-        <tr><td>tiny — 5 lemmas, 3 steps, 4 definitions</td><td class="num">71</td><td class="num">110 ms</td><td class="num">110 ms</td><td class="num">×1.00 — identical</td></tr>
-        <tr><td>small — 100 lemmas, 5 steps, 50 definitions</td><td class="num">600</td><td class="num">3 938 ms</td><td class="num">692 ms</td><td class="num">×5.7</td></tr>
-        <tr><td>medium — 300 lemmas, 5 steps, 50 definitions</td><td class="num">1 800</td><td class="num">51.0 s</td><td class="num">5.57 s</td><td class="num">×9.2</td></tr>
+        <tr><td>tiny synthetic &mdash; 5 lemmas, 3 steps, 4 definitions</td><td class="num">71</td>
+          <td>the neutrality check: nothing here should change</td>
+          <td class="num" colspan="2">101&ndash;146 ms across all 20 points, no trend</td></tr>
+        <tr><td>small synthetic &mdash; 100 lemmas, 5 steps, 50 definitions</td><td class="num">600</td>
+          <td>where the growth term becomes visible at all</td>
+          <td class="num">3.94 s</td><td class="num">692 ms</td></tr>
+        <tr><td>medium synthetic &mdash; 300 lemmas, 5 steps, 50 definitions</td><td class="num">1 800</td>
+          <td>the reproducible curve: every chart&rsquo;s public series</td>
+          <td class="num">51.0 s</td><td class="num">5.57 s</td></tr>
+        <tr><td>refinement chain &mdash; private, INSTANCE-heavy</td><td class="num">9 967</td>
+          <td>the editor and warm-re-check case; 14 522 lines</td>
+          <td class="num">&gt; 900 s</td><td class="num">146.4 s</td></tr>
+        <tr><td>30k monolith &mdash; private, single module</td><td class="num">29 965</td>
+          <td>the memory case: where <code>main</code> does not finish</td>
+          <td class="num">aborts at 11.19 GB</td><td class="num">283.1 s at 1.09 GB</td></tr>
       </tbody>
     </table>
   </div>
-  <p style="margin-top:14px">At 71 obligations there is nothing to save and nothing is lost: the two
-  builds are within noise of each other. The gain appears at 600 and grows with the obligation count,
-  which is the shape of the problem stated in §1. <strong>No case in this table, at any size, is slower
-  on this branch than on <code>main</code></strong> — and that constraint is what removed two changes
-  from the proposal (§7).</p>
-
+  <p style="margin-top:14px">The figure quoted is preparation
+  (<code>tlapm --noproving --nofp</code>), so the five rows are comparable with each other. Every
+  corpus in this table is measured at every commit of the branch, and appears in the charts of
+  &sect;5 and in the per-commit tables of &sect;6 &mdash; including the tiny one, whose whole job is
+  to stay flat. It does: <strong>every one of the twenty points lies between 101 and 146 ms with no
+  trend</strong>, the two highest being the first two runs of the campaign against a cold page cache.
+  At that size process start-up dominates, so this row resolves nothing finer than about
+  &plusmn;20&nbsp;% &mdash; which is the point. It is there to show that no commit makes a small proof
+  slower, not to measure a gain, and none does.</p>
+  <p>The three synthetic sizes come from one generator, parameterised by lemma count, steps per
+  lemma, hidden definitions and citations per <code>BY DEF</code>; named lemmas become visible context
+  definitions carrying their statement, which is what reproduces the growth term real proofs have. The
+  two private specifications are used for the figures that only a real proof produces; no
+  specification content appears here.</p>
   <h4>What is run, and what is not</h4>
   <p>Two metrics, both from stock flags on a stock build, no probes, no patched binary:</p>
   <ul>
@@ -436,6 +457,28 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <circle cx="837.2" cy="33.7" r="2.6" fill="var(--s-pub)"/>
       <circle cx="880.0" cy="32.5" r="2.6" fill="var(--s-pub)"/>
       <text x="875.0" y="25.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">867</text>
+      <polyline points="66.0,49.9 108.8,58.9 151.7,43.0 194.5,43.8 237.4,42.1 280.2,43.4 323.1,44.3 365.9,46.8 408.7,43.0 451.6,42.5 494.4,44.7 537.3,47.2 580.1,46.0 622.9,42.1 665.8,45.1 708.6,48.0 751.5,43.8 794.3,43.8 837.2,42.5 880.0,46.0" fill="none" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="1 3"/>
+      <circle cx="66.0" cy="49.9" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="108.8" cy="58.9" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="151.7" cy="43.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="194.5" cy="43.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="237.4" cy="42.1" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="280.2" cy="43.4" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="323.1" cy="44.3" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="365.9" cy="46.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="408.7" cy="43.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="451.6" cy="42.5" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="494.4" cy="44.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="537.3" cy="47.2" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="580.1" cy="46.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="622.9" cy="42.1" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="665.8" cy="45.1" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="708.6" cy="48.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="751.5" cy="43.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="794.3" cy="43.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="837.2" cy="42.5" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="880.0" cy="46.0" r="2.6" fill="var(--s-pub)"/>
+      <text x="875.0" y="39.0" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">645</text>
       <polyline points="323.1,144.8 365.9,143.0 408.7,143.9 451.6,143.6 494.4,143.7 537.3,140.2 580.1,141.5 622.9,141.7 665.8,139.7 708.6,140.0 751.5,140.0 794.3,141.5 837.2,129.2 880.0,128.4" fill="none" stroke="var(--s-priv)" stroke-width="2"/>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="62.6" y1="241.6" x2="69.4" y2="248.4"/><line x1="62.6" y1="248.4" x2="69.4" y2="241.6"/></g>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="105.4" y1="241.6" x2="112.2" y2="248.4"/><line x1="105.4" y1="248.4" x2="112.2" y2="241.6"/></g>
@@ -505,10 +548,12 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="85" y="16" fill="currentColor">public synthetic, 1 800</text>
       <line x1="231" y1="13" x2="245" y2="13" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="4 2.5"/>
       <text x="250" y="16" fill="currentColor">public synthetic, 600</text>
-      <line x1="384" y1="13" x2="398" y2="13" stroke="var(--s-priv)" stroke-width="2"/>
-      <text x="403" y="16" fill="currentColor">private 30k monolith</text>
-      <line x1="532" y1="13" x2="546" y2="13" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="4 2.5"/>
-      <text x="551" y="16" fill="currentColor">private refinement chain</text>
+      <line x1="384" y1="13" x2="398" y2="13" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="1.5 2.5"/>
+      <text x="403" y="16" fill="currentColor">public synthetic, 71</text>
+      <line x1="532" y1="13" x2="546" y2="13" stroke="var(--s-priv)" stroke-width="2"/>
+      <text x="551" y="16" fill="currentColor">private 30k monolith</text>
+      <line x1="66" y1="28" x2="80" y2="28" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="4 2.5"/>
+      <text x="85" y="31" fill="currentColor">private refinement chain</text>
       </g>
       <text x="880" y="16" text-anchor="end" font-family="IBM Plex Sans, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">&times; = did not complete</text>
     </svg>
@@ -605,10 +650,12 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="85" y="16" fill="currentColor">public synthetic, 1 800</text>
       <line x1="231" y1="13" x2="245" y2="13" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="4 2.5"/>
       <text x="250" y="16" fill="currentColor">public synthetic, 600</text>
-      <line x1="384" y1="13" x2="398" y2="13" stroke="var(--s-priv)" stroke-width="2"/>
-      <text x="403" y="16" fill="currentColor">private 30k monolith</text>
-      <line x1="532" y1="13" x2="546" y2="13" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="4 2.5"/>
-      <text x="551" y="16" fill="currentColor">private refinement chain</text>
+      <line x1="384" y1="13" x2="398" y2="13" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="1.5 2.5"/>
+      <text x="403" y="16" fill="currentColor">public synthetic, 71</text>
+      <line x1="532" y1="13" x2="546" y2="13" stroke="var(--s-priv)" stroke-width="2"/>
+      <text x="551" y="16" fill="currentColor">private 30k monolith</text>
+      <line x1="66" y1="28" x2="80" y2="28" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="4 2.5"/>
+      <text x="85" y="31" fill="currentColor">private refinement chain</text>
       </g>
       <text x="880" y="16" text-anchor="end" font-family="IBM Plex Sans, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">&times; = did not complete</text>
     </svg>
@@ -629,6 +676,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <svg viewBox="0 0 900 320" role="img" aria-label="Peak resident memory in megabytes, one point per pull request, four corpora on a log axis; the drop comes from the prune of hidden facts and the level-cache lifetime fix.">
       <line x1="66" y1="254" x2="880" y2="254" stroke="currentColor" stroke-width="1" opacity=".35"/>
       <line x1="66" y1="236" x2="880" y2="236" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2 3" opacity=".3"/>
+      <line x1="66" y1="220.2" x2="880" y2="220.2" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
+      <text x="58" y="223.7" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">20</text>
       <line x1="66" y1="199.3" x2="880" y2="199.3" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
       <text x="58" y="202.8" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">50</text>
       <line x1="66" y1="183.5" x2="880" y2="183.5" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
@@ -691,6 +740,28 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <circle cx="837.2" cy="206.6" r="2.6" fill="var(--s-pub)"/>
       <circle cx="880.0" cy="206.8" r="2.6" fill="var(--s-pub)"/>
       <text x="875.0" y="199.8" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">36 MB</text>
+      <polyline points="66.0,218.6 108.8,218.7 151.7,218.6 194.5,218.6 237.4,218.7 280.2,218.8 323.1,218.7 365.9,218.7 408.7,218.6 451.6,218.7 494.4,218.8 537.3,218.8 580.1,218.7 622.9,218.6 665.8,218.8 708.6,218.6 751.5,218.7 794.3,218.7 837.2,218.8 880.0,218.8" fill="none" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="1 3"/>
+      <circle cx="66.0" cy="218.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="108.8" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="151.7" cy="218.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="194.5" cy="218.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="237.4" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="280.2" cy="218.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="323.1" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="365.9" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="408.7" cy="218.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="451.6" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="494.4" cy="218.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="537.3" cy="218.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="580.1" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="622.9" cy="218.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="665.8" cy="218.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="708.6" cy="218.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="751.5" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="794.3" cy="218.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="837.2" cy="218.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="880.0" cy="218.8" r="2.6" fill="var(--s-pub)"/>
+      <text x="875.0" y="211.8" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">21 MB</text>
       <polyline points="323.1,75.6 365.9,75.9 408.7,75.9 451.6,75.9 494.4,75.9 537.3,76.2 580.1,76.2 622.9,76.2 665.8,76.2 708.6,76.1 751.5,76.1 794.3,76.1 837.2,128.7 880.0,128.5" fill="none" stroke="var(--s-priv)" stroke-width="2"/>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="62.6" y1="241.6" x2="69.4" y2="248.4"/><line x1="62.6" y1="248.4" x2="69.4" y2="241.6"/></g>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="105.4" y1="241.6" x2="112.2" y2="248.4"/><line x1="105.4" y1="248.4" x2="112.2" y2="241.6"/></g>
@@ -760,10 +831,12 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="85" y="16" fill="currentColor">public synthetic, 1 800</text>
       <line x1="231" y1="13" x2="245" y2="13" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="4 2.5"/>
       <text x="250" y="16" fill="currentColor">public synthetic, 600</text>
-      <line x1="384" y1="13" x2="398" y2="13" stroke="var(--s-priv)" stroke-width="2"/>
-      <text x="403" y="16" fill="currentColor">private 30k monolith</text>
-      <line x1="532" y1="13" x2="546" y2="13" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="4 2.5"/>
-      <text x="551" y="16" fill="currentColor">private refinement chain</text>
+      <line x1="384" y1="13" x2="398" y2="13" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="1.5 2.5"/>
+      <text x="403" y="16" fill="currentColor">public synthetic, 71</text>
+      <line x1="532" y1="13" x2="546" y2="13" stroke="var(--s-priv)" stroke-width="2"/>
+      <text x="551" y="16" fill="currentColor">private 30k monolith</text>
+      <line x1="66" y1="28" x2="80" y2="28" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="4 2.5"/>
+      <text x="85" y="31" fill="currentColor">private refinement chain</text>
       </g>
       <text x="880" y="16" text-anchor="end" font-family="IBM Plex Sans, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">&times; = did not complete</text>
     </svg>
@@ -836,15 +909,15 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <tr><td class="num">#4</td><td>Prefix-resume caches</td><td class="num">&times;4.30</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#5</td><td>Pull tasks from a stream</td><td class="num">starts completing</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#6</td><td>Linear ENABLED-axioms detection</td><td class="num">&times;1.57</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
-    <tr><td class="num">#7</td><td>Reference levels without slicing the context</td><td class="num">&times;1.05 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#7</td><td>Reference levels without slicing the context</td><td class="num">&times;1.09 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#8</td><td>Single-pass expansion in the result printer</td><td class="num">&times;1.19 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#9</td><td>Memoize the grammar</td><td class="num">&times;1.43</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#10</td><td>Monomorphic property lookups</td><td class="num">&times;1.08 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#11</td><td>A sorted obligation pool in the editor</td><td class="num">not visible in &sect;5</td><td>the editor &mdash; a language-server change; no CLI run exercises it</td></tr>
-    <tr><td class="num">#12</td><td>Logarithmic context index</td><td class="num">&times;1.06 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#12</td><td>Logarithmic context index</td><td class="num">&times;1.09 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#13</td><td>Compile the SMT escaping regexes once</td><td class="num">not visible in &sect;5</td><td>a real prover run &mdash; the escaping regexes only run while solver input is written, and <code>--noproving</code> writes none</td></tr>
     <tr><td class="num">#14</td><td>Allocation-free spine walk in app_ix</td><td class="num">&times;1.04 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
-    <tr><td class="num">#15</td><td>Skip identity rebuilds when flattening extracts nothing</td><td class="num">&times;1.09 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#15</td><td>Skip identity rebuilds when flattening extracts nothing</td><td class="num">&times;1.10 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#16</td><td>Write the obligation comment only into files that are kept</td><td class="num">not visible in &sect;5</td><td>a real prover run &mdash; the comment is only written into a solver file, and <code>--noproving</code> writes none</td></tr>
     <tr><td class="num">#17</td><td>Stop the level cache pinning one context per obligation</td><td class="num">&times;10.25</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#18</td><td>Constant-time De Bruijn resolution in add_constness</td><td class="num">&times;1.07 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
@@ -876,6 +949,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.37 s &rarr; 2.07 s <span class="r">&times;1.14</span></td><td class="num">51.0 s &rarr; 50.4 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">321 ms &rarr; 241 ms <span class="r">&times;1.33</span></td><td class="num">3.94 s &rarr; 3.41 s <span class="r">&times;1.16</span></td><td class="num">232 MB &rarr; 232 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">124 ms &rarr; 89 ms <span class="r">&times;1.39</span></td><td class="num">120 ms &rarr; 105 ms <span class="r">&times;1.14</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">33.8 s &rarr; 32.5 s <span class="r">&times;1.04</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">64.2 s &rarr; 62.9 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
@@ -888,6 +962,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.07 s &rarr; 2.12 s</td><td class="num">50.4 s &rarr; 51.8 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">241 ms &rarr; 222 ms <span class="r">&times;1.09</span></td><td class="num">3.41 s &rarr; 3.63 s <span class="w">+7&thinsp;%</span></td><td class="num">232 MB &rarr; 232 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">89 ms &rarr; 89 ms</td><td class="num">105 ms &rarr; 113 ms <span class="w">+8&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">32.5 s &rarr; 32.9 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">62.9 s &rarr; 62.2 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
       </tbody></table></div>
@@ -900,6 +975,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.12 s &rarr; 2.20 s <span class="w">+4&thinsp;%</span></td><td class="num">51.8 s &rarr; 50.5 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">222 ms &rarr; 228 ms</td><td class="num">3.63 s &rarr; 3.65 s</td><td class="num">232 MB &rarr; 232 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">89 ms &rarr; 86 ms <span class="r">&times;1.03</span></td><td class="num">113 ms &rarr; 114 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">32.9 s &rarr; 33.4 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">62.2 s &rarr; 62.3 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
       </tbody></table></div>
@@ -912,6 +988,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.20 s &rarr; 2.18 s</td><td class="num">50.5 s &rarr; 49.7 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">228 ms &rarr; 213 ms <span class="r">&times;1.07</span></td><td class="num">3.65 s &rarr; 3.35 s <span class="r">&times;1.09</span></td><td class="num">232 MB &rarr; 232 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">86 ms &rarr; 91 ms <span class="w">+6&thinsp;%</span></td><td class="num">114 ms &rarr; 109 ms <span class="r">&times;1.05</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">33.4 s &rarr; 32.0 s <span class="r">&times;1.04</span></td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">62.3 s &rarr; 62.5 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
       </tbody></table></div>
@@ -924,6 +1001,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.18 s &rarr; 2.12 s</td><td class="num">49.7 s &rarr; 50.9 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">213 ms &rarr; 218 ms</td><td class="num">3.35 s &rarr; 3.33 s</td><td class="num">232 MB &rarr; 232 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">91 ms &rarr; 91 ms</td><td class="num">109 ms &rarr; 146 ms <span class="w">+34&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">32.0 s &rarr; 34.8 s <span class="w">+9&thinsp;%</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">62.5 s &rarr; 65.7 s <span class="w">+5&thinsp;%</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
@@ -943,6 +1021,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">&gt; 1800 s (3561/3774) &rarr; &gt; 1800 s (3578/3774)</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.12 s &rarr; 329 ms <span class="r">&times;6.46</span></td><td class="num">50.9 s &rarr; 45.0 s <span class="r">&times;1.13</span></td><td class="num">1.72 GB &rarr; 1.74 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">218 ms &rarr; 132 ms <span class="r">&times;1.65</span></td><td class="num">3.33 s &rarr; 2.87 s <span class="r">&times;1.16</span></td><td class="num">232 MB &rarr; 224 MB <span class="r">&times;1.04</span></td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">91 ms &rarr; 86 ms <span class="r">&times;1.06</span></td><td class="num">146 ms &rarr; 103 ms <span class="r">&times;1.42</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">34.8 s &rarr; 3.91 s <span class="r">&times;8.91</span></td><td class="num">&gt; 900 s &rarr; &gt; 900 s</td><td class="num">&gt; 0 s &rarr; &gt; 0 s</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">65.7 s &rarr; 9.93 s <span class="r">&times;6.62</span></td><td class="num">aborts on memory &rarr; aborts on memory</td><td class="num">aborts on memory &rarr; aborts on memory</td></tr>
       </tbody></table></div>
@@ -963,6 +1042,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">&gt; 1800 s (3578/3774) &rarr; 143.9 s <span class="r">starts finishing</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">329 ms &rarr; 335 ms</td><td class="num">45.0 s &rarr; 30.4 s <span class="r">&times;1.48</span></td><td class="num">1.74 GB &rarr; 1.42 GB <span class="r">&times;1.22</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">132 ms &rarr; 133 ms</td><td class="num">2.87 s &rarr; 2.75 s <span class="r">&times;1.04</span></td><td class="num">224 MB &rarr; 215 MB <span class="r">&times;1.04</span></td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">86 ms &rarr; 82 ms <span class="r">&times;1.05</span></td><td class="num">103 ms &rarr; 105 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.91 s &rarr; 3.72 s <span class="r">&times;1.05</span></td><td class="num">&gt; 900 s &rarr; aborts on memory</td><td class="num">&gt; 0 s &rarr; aborts on memory</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">9.93 s &rarr; 9.96 s</td><td class="num">aborts on memory &rarr; aborts on memory</td><td class="num">aborts on memory &rarr; aborts on memory</td></tr>
       </tbody></table></div>
@@ -981,6 +1061,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">335 ms &rarr; 338 ms</td><td class="num">30.4 s &rarr; 29.4 s <span class="r">&times;1.03</span></td><td class="num">1.42 GB &rarr; 1.42 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">133 ms &rarr; 138 ms <span class="w">+4&thinsp;%</span></td><td class="num">2.75 s &rarr; 2.76 s</td><td class="num">215 MB &rarr; 204 MB <span class="r">&times;1.05</span></td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">82 ms &rarr; 86 ms <span class="w">+5&thinsp;%</span></td><td class="num">105 ms &rarr; 105 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.72 s &rarr; 3.71 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">9.96 s &rarr; 11.5 s <span class="w">+15&thinsp;%</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
@@ -993,6 +1074,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">338 ms &rarr; 341 ms</td><td class="num">29.4 s &rarr; 8.95 s <span class="r">&times;3.29</span></td><td class="num">1.42 GB &rarr; 168 MB <span class="r">&times;8.63</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">138 ms &rarr; 134 ms</td><td class="num">2.76 s &rarr; 936 ms <span class="r">&times;2.94</span></td><td class="num">204 MB &rarr; 61 MB <span class="r">&times;3.34</span></td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">86 ms &rarr; 84 ms</td><td class="num">105 ms &rarr; 101 ms <span class="r">&times;1.04</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.71 s &rarr; 3.95 s <span class="w">+6&thinsp;%</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">11.5 s &rarr; 10.3 s <span class="r">&times;1.12</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
@@ -1011,6 +1093,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">341 ms &rarr; 319 ms <span class="r">&times;1.07</span></td><td class="num">8.95 s &rarr; 6.38 s <span class="r">&times;1.40</span></td><td class="num">168 MB &rarr; 167 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 138 ms</td><td class="num">936 ms &rarr; 828 ms <span class="r">&times;1.13</span></td><td class="num">61 MB &rarr; 60 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">84 ms &rarr; 91 ms <span class="w">+8&thinsp;%</span></td><td class="num">101 ms &rarr; 113 ms <span class="w">+12&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.95 s &rarr; 3.80 s <span class="r">&times;1.04</span></td><td class="num">764.5 s &rarr; 226.4 s <span class="r">&times;3.38</span></td><td class="num">4.88 GB &rarr; 4.50 GB <span class="r">&times;1.08</span></td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.3 s &rarr; 10.6 s</td><td class="num">&gt; 900 s &rarr; aborts on memory</td><td class="num">&gt; 0 s &rarr; aborts on memory</td></tr>
       </tbody></table></div>
@@ -1024,6 +1107,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">319 ms &rarr; 345 ms <span class="w">+8&thinsp;%</span></td><td class="num">6.38 s &rarr; 6.64 s <span class="w">+4&thinsp;%</span></td><td class="num">167 MB &rarr; 166 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">138 ms &rarr; 136 ms</td><td class="num">828 ms &rarr; 830 ms</td><td class="num">60 MB &rarr; 59 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">91 ms &rarr; 85 ms <span class="r">&times;1.07</span></td><td class="num">113 ms &rarr; 108 ms <span class="r">&times;1.05</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.80 s &rarr; 3.81 s</td><td class="num">226.4 s &rarr; 166.2 s <span class="r">&times;1.36</span></td><td class="num">4.50 GB &rarr; 4.17 GB <span class="r">&times;1.08</span></td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.6 s &rarr; 10.5 s</td><td class="num">aborts on memory &rarr; aborts on memory</td><td class="num">aborts on memory &rarr; aborts on memory</td></tr>
       </tbody></table></div>
@@ -1037,6 +1121,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">345 ms &rarr; 331 ms <span class="r">&times;1.04</span></td><td class="num">6.64 s &rarr; 6.39 s <span class="r">&times;1.04</span></td><td class="num">166 MB &rarr; 167 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">136 ms &rarr; 137 ms</td><td class="num">830 ms &rarr; 813 ms</td><td class="num">59 MB &rarr; 59 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">85 ms &rarr; 87 ms</td><td class="num">108 ms &rarr; 104 ms <span class="r">&times;1.04</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.81 s &rarr; 3.93 s</td><td class="num">166.2 s &rarr; 177.8 s <span class="w">+7&thinsp;%</span></td><td class="num">4.17 GB &rarr; 4.17 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.5 s &rarr; 10.5 s</td><td class="num">aborts on memory &rarr; aborts on memory</td><td class="num">aborts on memory &rarr; aborts on memory</td></tr>
       </tbody></table></div>
@@ -1056,6 +1141,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">34.6 s &rarr; 33.8 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">331 ms &rarr; 320 ms <span class="r">&times;1.03</span></td><td class="num">6.39 s &rarr; 7.14 s <span class="w">+12&thinsp;%</span></td><td class="num">167 MB &rarr; 154 MB <span class="r">&times;1.08</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">137 ms &rarr; 140 ms</td><td class="num">813 ms &rarr; 809 ms</td><td class="num">59 MB &rarr; 57 MB <span class="r">&times;1.05</span></td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">87 ms &rarr; 95 ms <span class="w">+9&thinsp;%</span></td><td class="num">104 ms &rarr; 106 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.93 s &rarr; 3.85 s</td><td class="num">177.8 s &rarr; 179.9 s</td><td class="num">4.17 GB &rarr; 4.00 GB <span class="r">&times;1.04</span></td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.5 s &rarr; 10.3 s</td><td class="num">aborts on memory &rarr; 405.7 s</td><td class="num">aborts on memory &rarr; 11.10 GB</td></tr>
       </tbody></table></div>
@@ -1075,6 +1161,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">33.8 s &rarr; 33.6 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">320 ms &rarr; 260 ms <span class="r">&times;1.23</span></td><td class="num">7.14 s &rarr; 6.42 s <span class="r">&times;1.11</span></td><td class="num">154 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">140 ms &rarr; 134 ms <span class="r">&times;1.04</span></td><td class="num">809 ms &rarr; 788 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">95 ms &rarr; 90 ms <span class="r">&times;1.06</span></td><td class="num">106 ms &rarr; 112 ms <span class="w">+6&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.85 s &rarr; 2.46 s <span class="r">&times;1.57</span></td><td class="num">179.9 s &rarr; 177.7 s</td><td class="num">4.00 GB &rarr; 3.94 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.3 s &rarr; 6.69 s <span class="r">&times;1.54</span></td><td class="num">405.7 s &rarr; 389.9 s <span class="r">&times;1.04</span></td><td class="num">11.10 GB &rarr; 10.93 GB</td></tr>
       </tbody></table></div>
@@ -1094,6 +1181,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">33.6 s &rarr; 32.6 s <span class="r">&times;1.03</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">260 ms &rarr; 249 ms <span class="r">&times;1.04</span></td><td class="num">6.42 s &rarr; 6.67 s <span class="w">+4&thinsp;%</span></td><td class="num">156 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 134 ms</td><td class="num">788 ms &rarr; 780 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">90 ms &rarr; 84 ms <span class="r">&times;1.07</span></td><td class="num">112 ms &rarr; 103 ms <span class="r">&times;1.09</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">2.46 s &rarr; 2.35 s <span class="r">&times;1.05</span></td><td class="num">177.7 s &rarr; 175.4 s</td><td class="num">3.94 GB &rarr; 3.94 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">6.69 s &rarr; 7.36 s <span class="w">+10&thinsp;%</span></td><td class="num">389.9 s &rarr; 397.6 s</td><td class="num">10.93 GB &rarr; 10.94 GB</td></tr>
       </tbody></table></div>
@@ -1113,6 +1201,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">32.6 s &rarr; 33.3 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">249 ms &rarr; 249 ms</td><td class="num">6.67 s &rarr; 6.37 s <span class="r">&times;1.05</span></td><td class="num">156 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 127 ms <span class="r">&times;1.06</span></td><td class="num">780 ms &rarr; 779 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">84 ms &rarr; 84 ms</td><td class="num">103 ms &rarr; 102 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">2.35 s &rarr; 2.30 s</td><td class="num">175.4 s &rarr; 176.9 s</td><td class="num">3.94 GB &rarr; 3.94 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">7.36 s &rarr; 6.16 s <span class="r">&times;1.19</span></td><td class="num">397.6 s &rarr; 395.2 s</td><td class="num">10.94 GB &rarr; 10.94 GB</td></tr>
       </tbody></table></div>
@@ -1132,6 +1221,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">33.3 s &rarr; 32.6 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">249 ms &rarr; 237 ms <span class="r">&times;1.05</span></td><td class="num">6.37 s &rarr; 6.55 s</td><td class="num">156 MB &rarr; 154 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">127 ms &rarr; 127 ms</td><td class="num">779 ms &rarr; 800 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">84 ms &rarr; 89 ms <span class="w">+6&thinsp;%</span></td><td class="num">102 ms &rarr; 107 ms <span class="w">+5&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">2.30 s &rarr; 1.79 s <span class="r">&times;1.28</span></td><td class="num">176.9 s &rarr; 179.4 s</td><td class="num">3.94 GB &rarr; 3.93 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">6.16 s &rarr; 4.31 s <span class="r">&times;1.43</span></td><td class="num">395.2 s &rarr; 395.7 s</td><td class="num">10.94 GB &rarr; 10.94 GB</td></tr>
       </tbody></table></div>
@@ -1151,6 +1241,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">32.6 s &rarr; 31.6 s <span class="r">&times;1.03</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">237 ms &rarr; 227 ms <span class="r">&times;1.04</span></td><td class="num">6.55 s &rarr; 6.29 s <span class="r">&times;1.04</span></td><td class="num">154 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">127 ms &rarr; 123 ms <span class="r">&times;1.03</span></td><td class="num">800 ms &rarr; 738 ms <span class="r">&times;1.08</span></td><td class="num">57 MB &rarr; 57 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">89 ms &rarr; 91 ms</td><td class="num">107 ms &rarr; 113 ms <span class="w">+6&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.79 s &rarr; 1.72 s <span class="r">&times;1.04</span></td><td class="num">179.4 s &rarr; 170.0 s <span class="r">&times;1.05</span></td><td class="num">3.93 GB &rarr; 3.91 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.31 s &rarr; 4.69 s <span class="w">+9&thinsp;%</span></td><td class="num">395.7 s &rarr; 366.7 s <span class="r">&times;1.08</span></td><td class="num">10.94 GB &rarr; 10.79 GB</td></tr>
       </tbody></table></div>
@@ -1170,6 +1261,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">31.6 s &rarr; 31.5 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">227 ms &rarr; 247 ms <span class="w">+9&thinsp;%</span></td><td class="num">6.29 s &rarr; 6.23 s</td><td class="num">156 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">123 ms &rarr; 125 ms</td><td class="num">738 ms &rarr; 723 ms</td><td class="num">57 MB &rarr; 58 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">91 ms &rarr; 90 ms</td><td class="num">113 ms &rarr; 110 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.72 s &rarr; 1.73 s</td><td class="num">170.0 s &rarr; 172.3 s</td><td class="num">3.91 GB &rarr; 3.91 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.69 s &rarr; 4.37 s <span class="r">&times;1.07</span></td><td class="num">366.7 s &rarr; 377.6 s</td><td class="num">10.79 GB &rarr; 10.79 GB</td></tr>
       </tbody></table></div>
@@ -1189,6 +1281,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">31.5 s &rarr; 30.7 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">247 ms &rarr; 233 ms <span class="r">&times;1.06</span></td><td class="num">6.23 s &rarr; 5.96 s <span class="r">&times;1.04</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">125 ms &rarr; 134 ms <span class="w">+7&thinsp;%</span></td><td class="num">723 ms &rarr; 704 ms</td><td class="num">58 MB &rarr; 57 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">90 ms &rarr; 85 ms <span class="r">&times;1.06</span></td><td class="num">110 ms &rarr; 101 ms <span class="r">&times;1.09</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.73 s &rarr; 1.77 s</td><td class="num">172.3 s &rarr; 178.5 s <span class="w">+4&thinsp;%</span></td><td class="num">3.91 GB &rarr; 3.91 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.37 s &rarr; 4.27 s</td><td class="num">377.6 s &rarr; 379.3 s</td><td class="num">10.79 GB &rarr; 10.80 GB</td></tr>
       </tbody></table></div>
@@ -1208,6 +1301,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">30.7 s &rarr; 32.1 s <span class="w">+5&thinsp;%</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">233 ms &rarr; 234 ms</td><td class="num">5.96 s &rarr; 6.38 s <span class="w">+7&thinsp;%</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 123 ms <span class="r">&times;1.09</span></td><td class="num">704 ms &rarr; 704 ms</td><td class="num">57 MB &rarr; 58 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">85 ms &rarr; 90 ms <span class="w">+6&thinsp;%</span></td><td class="num">101 ms &rarr; 108 ms <span class="w">+7&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.77 s &rarr; 1.70 s <span class="r">&times;1.04</span></td><td class="num">178.5 s &rarr; 168.7 s <span class="r">&times;1.06</span></td><td class="num">3.91 GB &rarr; 3.92 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.27 s &rarr; 4.38 s</td><td class="num">379.3 s &rarr; 362.5 s <span class="r">&times;1.05</span></td><td class="num">10.80 GB &rarr; 10.81 GB</td></tr>
       </tbody></table></div>
@@ -1227,6 +1321,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">32.1 s &rarr; 31.0 s <span class="r">&times;1.04</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">234 ms &rarr; 245 ms <span class="w">+5&thinsp;%</span></td><td class="num">6.38 s &rarr; 6.44 s</td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">123 ms &rarr; 122 ms</td><td class="num">704 ms &rarr; 723 ms</td><td class="num">58 MB &rarr; 58 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">90 ms &rarr; 92 ms</td><td class="num">108 ms &rarr; 115 ms <span class="w">+6&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.70 s &rarr; 1.65 s <span class="r">&times;1.03</span></td><td class="num">168.7 s &rarr; 173.9 s</td><td class="num">3.92 GB &rarr; 4.00 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.38 s &rarr; 4.22 s <span class="r">&times;1.04</span></td><td class="num">362.5 s &rarr; 364.9 s</td><td class="num">10.81 GB &rarr; 10.86 GB</td></tr>
       </tbody></table></div>
@@ -1246,6 +1341,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">31.0 s &rarr; 30.7 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">245 ms &rarr; 255 ms <span class="w">+4&thinsp;%</span></td><td class="num">6.44 s &rarr; 5.89 s <span class="r">&times;1.09</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">122 ms &rarr; 121 ms</td><td class="num">723 ms &rarr; 691 ms <span class="r">&times;1.05</span></td><td class="num">58 MB &rarr; 58 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">92 ms &rarr; 84 ms <span class="r">&times;1.10</span></td><td class="num">115 ms &rarr; 105 ms <span class="r">&times;1.10</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.65 s &rarr; 1.77 s <span class="w">+7&thinsp;%</span></td><td class="num">173.9 s &rarr; 174.4 s</td><td class="num">4.00 GB &rarr; 4.00 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.22 s &rarr; 4.19 s</td><td class="num">364.9 s &rarr; 365.2 s</td><td class="num">10.86 GB &rarr; 10.86 GB</td></tr>
       </tbody></table></div>
@@ -1265,6 +1361,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">30.7 s &rarr; 30.5 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">255 ms &rarr; 230 ms <span class="r">&times;1.11</span></td><td class="num">5.89 s &rarr; 5.88 s</td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">121 ms &rarr; 129 ms <span class="w">+7&thinsp;%</span></td><td class="num">691 ms &rarr; 701 ms</td><td class="num">58 MB &rarr; 58 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">84 ms &rarr; 83 ms</td><td class="num">105 ms &rarr; 105 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.77 s &rarr; 1.66 s <span class="r">&times;1.06</span></td><td class="num">174.4 s &rarr; 173.2 s</td><td class="num">4.00 GB &rarr; 4.00 GB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.19 s &rarr; 4.25 s</td><td class="num">365.2 s &rarr; 377.4 s <span class="w">+3&thinsp;%</span></td><td class="num">10.86 GB &rarr; 10.86 GB</td></tr>
       </tbody></table></div>
@@ -1284,6 +1381,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">30.5 s &rarr; 30.6 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">230 ms &rarr; 223 ms <span class="r">&times;1.03</span></td><td class="num">5.88 s &rarr; 5.97 s</td><td class="num">155 MB &rarr; 76 MB <span class="r">&times;2.03</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">129 ms &rarr; 121 ms <span class="r">&times;1.07</span></td><td class="num">701 ms &rarr; 711 ms</td><td class="num">58 MB &rarr; 36 MB <span class="r">&times;1.59</span></td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">83 ms &rarr; 86 ms <span class="w">+4&thinsp;%</span></td><td class="num">105 ms &rarr; 102 ms</td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.66 s &rarr; 1.76 s <span class="w">+6&thinsp;%</span></td><td class="num">173.2 s &rarr; 144.8 s <span class="r">&times;1.20</span></td><td class="num">4.00 GB &rarr; 400 MB <span class="r">&times;10.2</span></td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.25 s &rarr; 4.21 s</td><td class="num">377.4 s &rarr; 288.0 s <span class="r">&times;1.31</span></td><td class="num">10.86 GB &rarr; 1.08 GB <span class="r">&times;10.1</span></td></tr>
       </tbody></table></div>
@@ -1303,6 +1401,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">30.6 s &rarr; 30.4 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">223 ms &rarr; 240 ms <span class="w">+8&thinsp;%</span></td><td class="num">5.97 s &rarr; 5.57 s <span class="r">&times;1.07</span></td><td class="num">76 MB &rarr; 76 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">121 ms &rarr; 124 ms</td><td class="num">711 ms &rarr; 692 ms</td><td class="num">36 MB &rarr; 36 MB</td></tr>
+        <tr><td>tiny synthetic — 71 obligations</td><td class="num">86 ms &rarr; 93 ms <span class="w">+8&thinsp;%</span></td><td class="num">102 ms &rarr; 110 ms <span class="w">+8&thinsp;%</span></td><td class="num">21 MB &rarr; 21 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.76 s &rarr; 1.69 s <span class="r">&times;1.04</span></td><td class="num">144.8 s &rarr; 146.4 s</td><td class="num">400 MB &rarr; 407 MB</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">4.21 s &rarr; 4.35 s <span class="w">+3&thinsp;%</span></td><td class="num">288.0 s &rarr; 283.1 s</td><td class="num">1.08 GB &rarr; 1.09 GB</td></tr>
       </tbody></table></div>

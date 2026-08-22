@@ -14,7 +14,7 @@ ABORT = "ABORT"    # aborted against the address-space cap
 FAILED = (DNC, CEIL, ABORT)
 #  None = not measured at all
 
-OBL = {"synth300": 1800, "synth100": 600, "ffi": 9967, "mono": 29965}
+OBL = {"synth300": 1800, "synth100": 600, "tiny": 71, "ffi": 9967, "mono": 29965}
 PRS = [("main","c00","the base of the branch"),
        ("fixes","c05","the five bugfixes"),
        ("deque","c06","deque lookups"),
@@ -42,6 +42,7 @@ PTS = [p[1] for p in PRS]
 PUB, PRIV = "var(--s-pub)", "var(--s-priv)"
 SERIES = [("public synthetic, 1 800", "synth300", PUB,  None),
           ("public synthetic, 600",   "synth100", PUB,  "5 3"),
+          ("public synthetic, 71",    "tiny",     PUB,  "1 3"),
           ("private 30k monolith",    "mono",     PRIV, None),
           ("private refinement chain","ffi",      PRIV, "5 3")]
 
@@ -153,14 +154,17 @@ def chart(sub, aria, values, unit, fmt_end):
         o.append('<text x="%.1f" y="%d" text-anchor="end" font-family="IBM Plex Mono, monospace" '
                  'font-size="9.5" fill="currentColor" opacity=".7" transform="rotate(-45 %.1f %d)">%s</text>'
                  % (xs(i), H-B+15, xs(i), H-B+15, lab))
-    lx = L
+    lx, ly, row = L, T-13, 0
     o.append('<g font-family="IBM Plex Sans, sans-serif" font-size="11">')
     for lab, cp, col, dash in SERIES:
-        da = ' stroke-dasharray="4 2.5"' if dash else ""
+        w = 30 + int(5.9*len(lab))
+        if lx + w > W - R - 130 and row == 0:      # keep clear of the note on the right
+            row, lx, ly = 1, L, T + 2
+        da = ' stroke-dasharray="%s"' % ("4 2.5" if dash == "5 3" else "1.5 2.5") if dash else ""
         o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="2"%s/>'
-                 % (lx, T-13, lx+14, T-13, col, da))
-        o.append('<text x="%d" y="%d" fill="currentColor">%s</text>' % (lx+19, T-9.5, lab))
-        lx += 30 + int(5.9*len(lab))
+                 % (lx, ly, lx+14, ly, col, da))
+        o.append('<text x="%d" y="%d" fill="currentColor">%s</text>' % (lx+19, ly+3.5, lab))
+        lx += w
     o.append('</g>')
     o.append('<text x="%d" y="%d" text-anchor="end" font-family="IBM Plex Sans, sans-serif" '
              'font-size="10.5" fill="currentColor" opacity=".7">&times; = did not complete</text>'
@@ -237,7 +241,8 @@ A('    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">The wait a
 A('    ' + chart("Iteration latency",
     "Iteration latency after a single edit with a full fingerprint cache, one point per pull request: 8.8 seconds on main falling to 2.5 seconds, with the steps at the deque lookups, the single-pass expansion and the prefix caches.",
     {"synth300": [iterlat(p) for p in PTS], "synth100": [None]*len(PTS),
-     "ffi": [iterchain(p) for p in PTS], "mono": [None]*len(PTS)}, "ms",
+     "tiny": [None]*len(PTS), "ffi": [iterchain(p) for p in PTS],
+     "mono": [None]*len(PTS)}, "ms",
     lambda v: "%.2f s" % (v/1000.0)))
 A("""    <figcaption>On the public corpus three changes carry it &mdash; the deque lookups
     (&times;1.51), the single-pass expansion (&times;1.46) and the prefix-resume caches (&times;1.30).

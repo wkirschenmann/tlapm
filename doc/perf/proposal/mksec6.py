@@ -7,6 +7,7 @@ SWEEP = os.environ.get("SWEEP_CSV", os.path.join(S, "commit_sweep.csv"))
 
 CORPORA = [("synth300", "medium synthetic — 1 800 obligations"),
            ("synth100", "small synthetic — 600 obligations"),
+           ("tiny",     "tiny synthetic — 71 obligations"),
            ("ffi",      "refinement chain — 9 967 obligations"),
            ("mono",     "30k monolith — 29 965 obligations")]
 
@@ -523,7 +524,7 @@ A("""  <div class="claim"><strong>Reading the measurement tables.</strong> <code
   run stopped at the fifteen-minute ceiling.</div>""")
 # ---- classification: what carries each pull request, computed from the campaign
 METRICS = ["m0_ms", "m1_ms", "rss_kb"]
-CORPORA_K = ["synth300", "synth100", "ffi", "mono"]
+CORPORA_K = ["synth300", "synth100", "tiny", "ffi", "mono"]
 PR_POINTS = [("1","c05","c06"),("2","c06","c07"),("3","c07","c09"),
              ("4","c09","c12"),("5","c12","c13"),("6","c13","c14"),("7","c14","c15"),
              ("8","c15","c16"),("9","c16","c17"),("10","c17","c18"),("11","c18","c19"),
