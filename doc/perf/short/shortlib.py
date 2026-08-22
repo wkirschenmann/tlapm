@@ -62,9 +62,18 @@ def load_sweep(path=None, boot=None):
     boot = boot or max(boots, key=lambda b: sum(1 for r in raw if r["boot"] == b))
     out = collections.defaultdict(dict)
     anchors = [r for r in raw if r["phase"].startswith("K")]
+    # phase L re-runs a ceiling with a longer clock.  A ceiling only answers "not
+    # within 900 s", which is the wrong answer for a point that needs 950, so an L
+    # row supersedes the ceiling it was run to resolve -- and is itself a ceiling
+    # if the longer clock also ran out.
+    longer = {(r["point"], r["corpus"]) for r in raw
+              if r["phase"] == "L" and r["boot"] == boot}
     for r in raw:
         if r["boot"] != boot or r["phase"].startswith("K"):
             continue                      # phase K is the drift anchor, not a data point
+        if r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
+                and int(r["prep_rc"]) == 124:
+            continue                      # superseded by the longer run
         k = (r["point"], r["corpus"])
         out[k]["sha"] = r["sha"]
         g, grc = int(r["gen_ms"]), int(r["gen_rc"])
