@@ -222,6 +222,44 @@ A("""  <p><strong>The commit labels are colour-coded.</strong>
   obligation comment &mdash; comes from one commit of that issue, and none of it moves any metric here
   beyond its own spread. What survives from #286 is the deque lookups, the single-pass expansion, the
   two prunes and the linear ENABLED scan.</p>""")
+A("""  <h4 style="margin-top:22px">Three different counts, and why they differ</h4>
+  <p>The issue describes <strong>four families</strong> of optimization. The reference branch
+  implements them in <strong>eight commits</strong>. This branch carries <strong>twelve</strong>
+  commits derived from that work, and eleven of the labels above are marked as touching it. None of
+  those numbers is wrong; they count different things.</p>
+  <div class="scroller" style="margin-top:10px">
+    <table>
+      <thead><tr><th>reference commit</th><th>content</th><th class="num">commits here</th>
+        <th>short proposal</th></tr></thead>
+      <tbody>
+        <tr><td class="num"><code>9f9c5cf</code></td>
+          <td>one batch of seven independent output-preserving micro-fixes</td>
+          <td class="num"><strong>7</strong></td>
+          <td>keeps 2 &mdash; the deque lookups, and the reaper as a bugfix</td></tr>
+        <tr><td class="num"><code>5c1ae25</code></td><td>single-pass <code>expand_defs</code></td>
+          <td class="num">1</td><td>kept</td></tr>
+        <tr><td class="num"><code>4cc3aea</code></td><td>prune unreachable hidden definitions</td>
+          <td class="num">1</td><td>kept</td></tr>
+        <tr><td class="num"><code>01d3786</code></td><td>prune unreferenced hidden facts</td>
+          <td class="num">1</td><td>kept</td></tr>
+        <tr><td class="num"><code>6bb4a0b</code></td><td>linear ENABLED-axioms detection</td>
+          <td class="num">1</td><td>kept</td></tr>
+        <tr><td class="num"><code>e360684</code></td><td>reference levels without slicing the context</td>
+          <td class="num">1</td><td>dropped &mdash; &times;1.05, inside the spread</td></tr>
+        <tr><td class="num"><code>edd0129</code></td><td>prefix-resume cache</td>
+          <td class="num">0</td><td>rewritten here from scratch, as three commits, so it cites no
+          reference &mdash; kept</td></tr>
+        <tr><td class="num"><code>fd2d9ac</code></td><td>context-statistics probe</td>
+          <td class="num">0</td><td>instrumentation, excluded by construction</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:12px">So the fan-out is one commit: <code>9f9c5cf</code> was a batch, and this
+  branch splits it one subject per commit, which is the whole point of the exercise &mdash; each of the
+  seven is reviewable on its own, and measuring them separately is what showed that five of them move
+  nothing. Twelve commits from #286, six kept and six dropped. The eleven labels are pull requests
+  rather than commits: the bugfix group counts because one of its five commits, the reaper, comes from
+  that batch.</p>""")
 A("""  <p>A cross in the strip below the axis means the run <strong>did not complete</strong>. The table
   says which of the two ways: <code>&gt; 900 s</code> is a run stopped at the fifteen-minute ceiling,
   <code>aborts on memory</code> is one that hit the 12&nbsp;GB address-space cap it was run under
