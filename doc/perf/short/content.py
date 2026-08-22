@@ -90,6 +90,9 @@ CM = {
        "its prover, which can take seconds &mdash; so a prover that had already exited "
        "sat unread past its deadline and was then reported as a timeout it did not "
        "have. A zero-timeout <code>select</code> before each launch reaps it first. "
+       "PR4 widens that window &mdash; once tasks are pulled from a stream, a launch "
+       "also runs the obligation's whole preparation &mdash; which is why this commit "
+       "comes before it rather than with it. "
        "And the wall clock was read <em>before</em> <code>select</code> and reused "
        "after it, so run times were under-reported and kills postponed by however "
        "long the wait had been.",
