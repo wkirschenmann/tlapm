@@ -273,9 +273,9 @@ def sec_problem():
     it_main = iterlat.get(("ffi", "p00"), (None,))[0]
     it_tip = iterlat.get(("ffi", "p16"), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
-             "boundary is not gradual. The three specifications below are the same tool "
-             "on the same machine: a few dozen obligations finish before you notice, and "
-             "ten thousand do not finish at all.</p>")
+             "boundary is not gradual. The four specifications below are the same tool on "
+             "the same machine: seventy obligations finish before you notice, and ten "
+             "thousand do not finish at all.</p>")
     c.append('<div class="scroller"><table><thead><tr><th>specification</th>'
              '<th class="num">obligations</th><th class="num">prepare, <code>main</code></th>'
              '<th class="num">prepare, after</th></tr></thead><tbody>')
