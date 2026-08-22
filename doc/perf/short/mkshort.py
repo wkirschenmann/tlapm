@@ -57,33 +57,58 @@ TOTAL_ADD, TOTAL_DEL, TOTAL_FILES = _branch_diffstat()
 
 
 # ---------------------------------------------------------------- series
+def _cell(cp, pt):
+    if pt == "p00":
+        recs = [sweep.get((q, cp), {}) for q in ("p00", "p00b")]
+        return next((r for r in recs if r), {})
+    return sweep.get((pt, cp), {})
+
+
 def thr(cp):
-    """obligations prepared per second, per point"""
+    """Obligations prepared per second.  A run that did not complete prepared none of
+    them to the end, so its throughput is zero -- which a logarithmic axis cannot
+    show.  Those points keep their cross in the band below the axis; there is no
+    coordinate to give them."""
     d = {}
     for pt in L.POINTS:
-        v = L.main_point(sweep, cp, "prep") if pt == "p00" else sweep.get((pt, cp), {}).get("prep")
+        v = L.main_point(sweep, cp, "prep") if pt == "p00" else _cell(cp, pt).get("prep")
         if v is None:
             d[pt] = None
         elif v in L.FAILED:
-            d[pt] = v
+            d[pt] = {"kind": v, "at": None}
         else:
             d[pt] = L.OBL[cp] * 1000.0 / v
     return d
 
 
 def peak(cp):
+    """A memory abort has a real reading -- the resident set it reached before the
+    cap stopped it -- so its cross sits there.  A timeout has none: /usr/bin/time
+    is killed with the process, so that cross stays in the band."""
     d = {}
     for pt in L.POINTS:
-        v = L.main_point(sweep, cp, "peak") if pt == "p00" else sweep.get((pt, cp), {}).get("peak")
-        d[pt] = None if v is None else (v if v in L.FAILED else v / 1048576.0)
+        v = L.main_point(sweep, cp, "peak") if pt == "p00" else _cell(cp, pt).get("peak")
+        if v is None:
+            d[pt] = None
+        elif v in L.FAILED:
+            raw = _cell(cp, pt).get("peak_raw")
+            d[pt] = {"kind": v, "at": (raw / 1048576.0) if raw else None}
+        else:
+            d[pt] = v / 1048576.0
     return d
 
 
 def gen(cp):
     d = {}
     for pt in L.POINTS:
-        v = L.main_point(sweep, cp, "gen") if pt == "p00" else sweep.get((pt, cp), {}).get("gen")
-        d[pt] = None if v is None else (v if v in L.FAILED else v / 1000.0)
+        v = L.main_point(sweep, cp, "gen") if pt == "p00" else _cell(cp, pt).get("gen")
+        if v is None:
+            d[pt] = None
+        elif v in L.FAILED:
+            raw = _cell(cp, pt).get("gen_raw")
+            d[pt] = {"kind": v, "at": (raw / 1000.0) if raw else None}
+        else:
+            d[pt] = v / 1000.0
     return d
 
 
@@ -96,13 +121,16 @@ def prep(cp):
 
 
 def iters(cp):
+    """A run stopped at the ceiling has a coordinate on this axis: the ceiling."""
     d = {}
     for pt in L.POINTS:
         r = iterlat.get((cp, pt))
         if not r:
             d[pt] = None
+        elif r[0] in L.FAILED:
+            d[pt] = {"kind": r[0], "at": (r[4] / 1000.0) if len(r) > 4 and r[4] else None}
         else:
-            d[pt] = r[0] if r[0] in L.FAILED else r[0] / 1000.0
+            d[pt] = r[0] / 1000.0
     return d
 
 
@@ -137,7 +165,7 @@ def head():
   --warn:#8c4a12; --warn-soft:#f6ebe0;
   --good:#2b6134; --good-soft:#e6efe6;
   --shadow:0 1px 2px rgba(20,24,28,.05),0 8px 24px -16px rgba(20,24,28,.22);
-  --s-pub:#00969b; --s-priv:#c0762c;
+  --s-pub:#00969b; --s-priv:#c0762c; --fail:#b32450;
   --lbl-286:#4a3aa7; --lbl-keep:#0a7a54;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -147,7 +175,7 @@ def head():
   --warn:#e0a163; --warn-soft:#31251a;
   --good:#84c78e; --good-soft:#1a2a1d;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
-  --s-pub:#0b9ba0; --s-priv:#c9822f;
+  --s-pub:#0b9ba0; --s-priv:#c9822f; --fail:#dd4a6b;
   --lbl-286:#9085e9; --lbl-keep:#28a87e;}}
 :root[data-theme="dark"]{
   --paper:#12151a; --card:#191d24; --ink:#e9ecef; --ink-2:#aab2ba; --ink-3:#79828c;
@@ -156,7 +184,7 @@ def head():
   --warn:#e0a163; --warn-soft:#31251a;
   --good:#84c78e; --good-soft:#1a2a1d;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
-  --s-pub:#0b9ba0; --s-priv:#c9822f;
+  --s-pub:#0b9ba0; --s-priv:#c9822f; --fail:#dd4a6b;
   --lbl-286:#9085e9; --lbl-keep:#28a87e;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);
@@ -558,11 +586,13 @@ def _drift_sentence():
             "is the mean of the pair." % (100 * worst[1], worst[0][0], worst[0][1]))
 
 
-def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=None):
+def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=None,
+        rule=None):
     return ('<figure style="margin-top:20px"><h4 style="margin:0 0 2px">%s</h4>'
             '<p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">%s</p>%s'
             '<figcaption>%s</figcaption></figure>'
-            % (title, sub, C.chart(aria, values, unit, fmt_end, series, points), caption))
+            % (title, sub, C.chart(aria, values, unit, fmt_end, series, points, rule),
+               caption))
 
 
 def sec_curves():
@@ -591,9 +621,13 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "on a logarithmic axis; the two private specifications do not complete on main.",
     {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
     lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
-    "The two private specifications have no <code>main</code> point at all: one exceeds "
-    "the ceiling, the other exhausts the memory cap. They appear on the chart only once "
-    "a commit makes them runnable, which is the result rather than a gap in it."))
+    "A red cross below the axis is a run that did not complete. It has no height "
+    "because its throughput is <strong>zero</strong> &mdash; it never finished preparing "
+    "the corpus &mdash; and zero has no place on a logarithmic axis. That is why these "
+    "are crosses in a band rather than points on a curve: the other two charts can put a "
+    "failure somewhere meaningful, this one cannot. On the two private specifications "
+    "<code>main</code> is one of them, and the curve begins only where a commit makes "
+    "the specification runnable."))
 
     c.append(fig(
     "Peak memory of a preparation pass",
@@ -605,7 +639,12 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "The step is the fourth pull request, and it is a step rather than a slope: peak "
     "memory stops being a function of the file and becomes a function of one obligation. "
     "Everything to the right of it is flat, which is the point &mdash; no later commit "
-    "has to defend a memory budget."))
+    "has to defend a memory budget. A red cross on the cap line is a run the cap "
+    "stopped: that reading is real, it is the resident set reached before the "
+    "allocation that would have crossed 12&nbsp;GB. A cross in the band below the axis "
+    "is a run stopped by the clock instead, which leaves no memory reading at all "
+    "&mdash; <code>/usr/bin/time</code> is killed along with the process.",
+    rule=(12.0, "12 GB address-space cap")))
 
     c.append(fig(
     "Generation time",

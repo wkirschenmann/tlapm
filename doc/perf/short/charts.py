@@ -14,6 +14,7 @@ PADL, PADR, PADT, PADB = 66, 20, 30, 82
 ZONE = 18                              # the "did not complete" band above the baseline
 
 PUB, PRIV = "var(--s-pub)", "var(--s-priv)"
+FAIL = "var(--fail)"
 VIOLET, TEAL = "var(--lbl-286)", "var(--lbl-keep)"
 
 # hue = public or private, dash = size inside the family
@@ -64,14 +65,20 @@ def _tick(v):
     return "%g" % v
 
 
-def chart(aria, values, unit, fmt_end, series=None, points=None):
-    """values: {corpus: {point: number | sentinel | None}}"""
+def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
+    """values: {corpus: {point: number | {"kind","at"} | sentinel | None}}
+
+    rule: (value, label) drawn as a labelled horizontal reference line -- the cap a
+    failing run hit, so a cross sitting on it reads as "this is where it stopped"."""
     series = series or SERIES
     points = points or L.POINTS
     n = len(points)
     xs = lambda i: PADL + i * (W - PADL - PADR) / float(n - 1)
     flat = [v for cp in values for v in values[cp].values()
             if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    # a positioned cross has to fit inside the axis too
+    flat += [v["at"] for cp in values for v in values[cp].values()
+             if isinstance(v, dict) and v.get("at")]
     if not flat:
         return ('<svg viewBox="0 0 %d 46" role="img" aria-label="%s, not yet measured">'
                 '<text x="%d" y="27" font-family="IBM Plex Sans, sans-serif" font-size="12" '
@@ -102,11 +109,21 @@ def chart(aria, values, unit, fmt_end, series=None, points=None):
             o.append('<line x1="%.1f" y1="%d" x2="%.1f" y2="%d" stroke="currentColor" '
                      'stroke-width="0.6" opacity=".10"/>' % (xs(i) + xs(1) / 2 - PADL / 2, PADT - 4,
                                                              xs(i) + xs(1) / 2 - PADL / 2, H - PADB))
+    if rule:
+        rv, rl = rule
+        if lo <= rv <= hi:
+            ry = y(rv)
+            o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="%s" '
+                     'stroke-width="1" stroke-dasharray="5 4" opacity=".55"/>'
+                     % (PADL, ry, W - PADR, ry, FAIL))
+            o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, '
+                     'monospace" font-size="9.5" fill="%s" opacity=".9">%s</text>'
+                     % (W - PADR, ry - 4, FAIL, rl))
     for lab, cp, col, dash in series:
         vs = [values.get(cp, {}).get(p) for p in points]
         seg, segs = [], []
         for i, v in enumerate(vs):
-            if v is None or v in L.FAILED:
+            if v is None or isinstance(v, dict) or v in L.FAILED:
                 if seg:
                     segs.append(seg); seg = []
             else:
@@ -121,17 +138,20 @@ def chart(aria, values, unit, fmt_end, series=None, points=None):
         for i, v in enumerate(vs):
             if v is None:
                 continue
-            if v in L.FAILED:
-                cy = bot + ZONE / 2
-                o.append('<g stroke="%s" stroke-width="1.5" opacity=".9">'
+            if isinstance(v, dict) or v in L.FAILED:
+                at = v.get("at") if isinstance(v, dict) else None
+                cy = y(at) if at else bot + ZONE / 2
+                r = 4.0
+                o.append('<g stroke="%s" stroke-width="2" stroke-linecap="round">'
                          '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
                          '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/></g>'
-                         % (col, xs(i) - 3.4, cy - 3.4, xs(i) + 3.4, cy + 3.4,
-                            xs(i) - 3.4, cy + 3.4, xs(i) + 3.4, cy - 3.4))
+                         % (FAIL, xs(i) - r, cy - r, xs(i) + r, cy + r,
+                            xs(i) - r, cy + r, xs(i) + r, cy - r))
             else:
                 r = 3.2 if points[i] in PR_END else 2.2
                 o.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (xs(i), y(v), r, col))
-        done = [(i, v) for i, v in enumerate(vs) if not (v is None or v in L.FAILED)]
+        done = [(i, v) for i, v in enumerate(vs)
+                if not (v is None or isinstance(v, dict) or v in L.FAILED)]
         if done:
             i, v = done[-1]
             o.append('<text x="%.1f" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, monospace" '

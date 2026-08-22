@@ -70,10 +70,16 @@ def load_sweep(path=None, boot=None):
         p, prc = int(r["prep_ms"]), int(r["prep_rc"])
         if g != -2:
             out[k]["gen"] = _verdict(grc) or g
+            out[k]["gen_raw"] = g
         if p != -2:
             v = _verdict(prc)
             out[k]["prep"] = v or p
             out[k]["peak"] = v or int(r["peak_kb"])
+            # a failed run still has coordinates: the wall clock it died at, and --
+            # for a memory abort -- the resident set it reached.  A timeout has no
+            # memory reading at all, because /usr/bin/time is killed with the process.
+            out[k]["prep_raw"] = p
+            out[k]["peak_raw"] = int(r["peak_kb"]) or None
     out = dict(out)
     # the two main measurements, and the drift between them
     drift = {}
@@ -133,12 +139,14 @@ def load_iteration_latency(path=None, boot=None):
         if b != boot:
             continue
         if any(rc == 124 for _, rc in v):
-            out[(cp, pt)] = (CEIL, 0.0, len(v), rep[(b, cp, pt)])
+            # keep the wall clock the ceiling was hit at, so the point can be drawn
+            out[(cp, pt)] = (CEIL, 0.0, len(v), rep[(b, cp, pt)],
+                             max(m for m, _ in v))
             continue
         ms = [m for m, _ in v]
         med = int(statistics.median(ms))
         sp = (max(ms) - min(ms)) / float(max(ms)) if max(ms) else 0.0
-        out[(cp, pt)] = (med, sp, len(ms), rep[(b, cp, pt)])
+        out[(cp, pt)] = (med, sp, len(ms), rep[(b, cp, pt)], med)
     return out, boot
 
 
