@@ -214,8 +214,11 @@ CM = {
        "recomputed.",
   how="Keying the prefix on <em>physical</em> equality is what makes a stale hit "
       "impossible: hypotheses from another module or a rebuilt context compare "
-      "unshared and fall back to the full fold. Byte-identical dumps with and "
-      "without the cache.",
+      "unshared and fall back to the full fold, which also refreshes the cache. The "
+      "obvious worry is that a cache of contexts is itself the memory problem PR4 "
+      "just fixed: it is not, because the snapshots share substructure with the "
+      "context they came from, so the footprint is one array of pairs per module "
+      "rather than a copy. Byte-identical dumps with and without the cache.",
   off="<code>--debug noprepcache</code> restores the uncached path for both passes."),
 "p13": dict(
   what="The same treatment for <code>Elab.normalize</code>, the third and most "
