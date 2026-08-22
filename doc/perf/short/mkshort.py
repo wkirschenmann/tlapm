@@ -260,18 +260,21 @@ METRICS = [
 ]
 
 
+TIP = L.POINTS[-1]
+
+
 def sec_problem():
     c = []
     mono_main = L.main_point(sweep, "mono", "prep")
     ffi_main = L.main_point(sweep, "ffi", "prep")
     tiny_main = L.main_point(sweep, "tiny", "prep")
-    tiny_tip = val("tiny", "p16", "prep")
-    mono_tip = val("mono", "p16", "prep")
-    ffi_tip = val("ffi", "p16", "prep")
+    tiny_tip = val("tiny", TIP, "prep")
+    mono_tip = val("mono", TIP, "prep")
+    ffi_tip = val("ffi", TIP, "prep")
     ks_main = keys.get("p00", (None,))[0]
-    ks_tip = keys.get("p16", (None,))[0]
+    ks_tip = keys.get(TIP, (None,))[0]
     it_main = iterlat.get(("ffi", "p00"), (None,))[0]
-    it_tip = iterlat.get(("ffi", "p16"), (None,))[0]
+    it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
              "boundary is not gradual. The four specifications below are the same tool on "
              "the same machine: seventy obligations finish before you notice, and ten "
@@ -282,7 +285,7 @@ def sec_problem():
     for cp, name in (("tiny", "a small module"), ("synth300", "a 1&nbsp;800-obligation synthetic module"),
                      ("ffi", "a private refinement chain"), ("mono", "a private 30k-line monolith")):
         a = L.main_point(sweep, cp, "prep")
-        b = val(cp, "p16", "prep")
+        b = val(cp, TIP, "prep")
         c.append("<tr><td>%s</td><td class=\"num\">%s</td><td class=\"num\">%s</td>"
                  "<td class=\"num\">%s %s</td></tr>"
                  % (name, "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"),
@@ -429,6 +432,7 @@ removes context runs after that point, on the backend path only &mdash; so
 <code>--printallobs</code> output and cache hits are unchanged by construction rather
 than by testing.</p>""")
 
+    c.append(_completeness())
     c.append("""<h4>Measurement machine</h4>
 <div class="scroller"><table><tbody>
 <tr><td>CPU</td><td class="num">Intel Xeon @ 2.10 GHz, 4 cores</td></tr>
@@ -446,6 +450,42 @@ missing cell rather than as a step averaged into a curve. <code>main</code> is
 measured twice, at the start of the campaign and at the end; %s</p>""" % (
         boot or "&mdash;", _drift_sentence()))
     return "".join(c)
+
+
+def _completeness():
+    """What the campaign does not contain, counted rather than asserted."""
+    want = [(pt, cp) for pt in L.POINTS for cp in ("tiny", "synth100", "synth300")]
+    want += [(pt, cp) for pt in L.ENDPOINTS for cp in ("ffi", "mono")]
+    miss = [(pt, cp) for pt, cp in want
+            if not isinstance(sweep.get((pt, cp), {}).get("prep"), (int, str))]
+    tot = len(want)
+    out = ['<h4>What the campaign does not contain</h4>']
+    if not miss:
+        out.append("<p>Preparation and peak memory are measured at every one of the %d "
+                   "(commit, corpus) pairs the design calls for: all %d commits and "
+                   "<code>main</code> on the three public corpora, and the nine "
+                   "pull-request endpoints on the two private ones. There are no "
+                   "missing cells, so nothing in &sect;5 or &sect;6 rests on an "
+                   "absent measurement.</p>" % (tot, len(L.POINTS) - 1))
+    else:
+        by = collections.Counter(cp for _, cp in miss)
+        out.append("<p><strong>%d of %d</strong> (commit, corpus) pairs are missing: %s. "
+                   "A missing cell is shown as a dash, never inferred, and no ratio is "
+                   "formed across one.</p>"
+                   % (len(miss), tot,
+                      ", ".join("%d on %s" % (n, cp) for cp, n in sorted(by.items()))))
+        out.append('<p class="pr-meta">%s</p>'
+                   % " &middot; ".join("%s/%s" % (pt, cp) for pt, cp in sorted(miss)))
+    out.append("<p>The two private corpora are measured at the pull-request endpoints "
+               "rather than at every commit. That is a deliberate bound, not an "
+               "omission: a single preparation pass on the monolith is minutes when it "
+               "completes and a quarter of an hour when it does not, and the question "
+               "those corpora answer &mdash; does this pull request make the "
+               "specification runnable &mdash; is a property of the pull request. Where "
+               "a commit inside a pull request needed separating from its neighbour, "
+               "the public 1&nbsp;800-obligation corpus is measured at every commit and "
+               "answers it.</p>")
+    return "".join(out)
 
 
 def _drift_sentence():
