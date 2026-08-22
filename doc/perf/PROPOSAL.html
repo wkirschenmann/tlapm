@@ -342,9 +342,11 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
   because that is the only way the two ends of the range are legible together &mdash; and the range
   <em>is</em> the subject. Colour is the corpus family, public or private; the dashed line is the
   smaller of the two inside each family.</p>
-  <p>A cross in the strip below the axis means the run <strong>did not complete</strong> &mdash;
-  stopped at a fifteen-minute ceiling, or aborted against the 12&nbsp;GB address-space cap it was run
-  under. That is why the first chart is throughput and not a speedup: on the two private
+  <p>A cross in the strip below the axis means the run <strong>did not complete</strong>. The table
+  says which of the two ways: <code>&gt; 900 s</code> is a run stopped at the fifteen-minute ceiling,
+  <code>aborts on memory</code> is one that hit the 12&nbsp;GB address-space cap it was run under
+  &mdash; and the distinction matters, because a change that speeds preparation up reaches the memory
+  wall <em>sooner</em>, turning a timeout into an abort without being a regression. That is why the first chart is throughput and not a speedup: on the two private
   specifications there is no <code>main</code> value to form a ratio against. Every number comes from
   one campaign on one boot of one container; absolute values are not comparable across restarts.</p>
   <p><code>main</code> was measured at both ends of the campaign. On the private specifications its
@@ -420,6 +422,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="875.0" y="25.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">867</text>
       <polyline points="323.1,144.8 365.9,143.0 408.7,143.9 451.6,143.6 494.4,143.7 537.3,140.2 580.1,141.5 622.9,141.7 665.8,139.7 708.6,140.0 751.5,140.0 794.3,141.5 837.2,129.2 880.0,128.4" fill="none" stroke="var(--s-priv)" stroke-width="2"/>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="62.6" y1="241.6" x2="69.4" y2="248.4"/><line x1="62.6" y1="248.4" x2="69.4" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="191.1" y1="241.6" x2="197.9" y2="248.4"/><line x1="191.1" y1="248.4" x2="197.9" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="234.0" y1="241.6" x2="240.8" y2="248.4"/><line x1="234.0" y1="248.4" x2="240.8" y2="241.6"/></g>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="276.8" y1="241.6" x2="283.6" y2="248.4"/><line x1="276.8" y1="248.4" x2="283.6" y2="241.6"/></g>
       <circle cx="323.1" cy="144.8" r="2.6" fill="var(--s-priv)"/>
       <circle cx="365.9" cy="143.0" r="2.6" fill="var(--s-priv)"/>
@@ -438,6 +442,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="875.0" y="121.4" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-priv)">106</text>
       <polyline points="237.4,223.9 280.2,157.4 323.1,157.9 365.9,157.4 408.7,156.8 451.6,157.2 494.4,157.8 537.3,155.4 580.1,156.0 622.9,157.6 665.8,155.0 708.6,156.4 751.5,156.5 794.3,156.2 837.2,148.0 880.0,148.5" fill="none" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="5 3"/>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="62.6" y1="241.6" x2="69.4" y2="248.4"/><line x1="62.6" y1="248.4" x2="69.4" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="148.3" y1="241.6" x2="155.1" y2="248.4"/><line x1="148.3" y1="248.4" x2="155.1" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="191.1" y1="241.6" x2="197.9" y2="248.4"/><line x1="191.1" y1="248.4" x2="197.9" y2="241.6"/></g>
       <circle cx="237.4" cy="223.9" r="2.6" fill="var(--s-priv)"/>
       <circle cx="280.2" cy="157.4" r="2.6" fill="var(--s-priv)"/>
       <circle cx="323.1" cy="157.9" r="2.6" fill="var(--s-priv)"/>
@@ -709,6 +715,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="875.0" y="199.8" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">36 MB</text>
       <polyline points="323.1,75.6 365.9,75.9 408.7,75.9 451.6,75.9 494.4,75.9 537.3,76.2 580.1,76.2 622.9,76.2 665.8,76.2 708.6,76.1 751.5,76.1 794.3,76.1 837.2,128.7 880.0,128.5" fill="none" stroke="var(--s-priv)" stroke-width="2"/>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="62.6" y1="241.6" x2="69.4" y2="248.4"/><line x1="62.6" y1="248.4" x2="69.4" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="191.1" y1="241.6" x2="197.9" y2="248.4"/><line x1="191.1" y1="248.4" x2="197.9" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="234.0" y1="241.6" x2="240.8" y2="248.4"/><line x1="234.0" y1="248.4" x2="240.8" y2="241.6"/></g>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="276.8" y1="241.6" x2="283.6" y2="248.4"/><line x1="276.8" y1="248.4" x2="283.6" y2="241.6"/></g>
       <circle cx="323.1" cy="75.6" r="2.6" fill="var(--s-priv)"/>
       <circle cx="365.9" cy="75.9" r="2.6" fill="var(--s-priv)"/>
@@ -727,6 +735,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <text x="875.0" y="121.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-priv)">1.09 GB</text>
       <polyline points="237.4,94.3 280.2,97.9 323.1,98.8 365.9,99.2 408.7,99.2 451.6,99.2 494.4,99.3 537.3,99.4 580.1,99.4 622.9,99.4 665.8,99.3 708.6,98.8 751.5,98.8 794.3,98.9 837.2,151.9 880.0,151.5" fill="none" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="5 3"/>
       <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="62.6" y1="241.6" x2="69.4" y2="248.4"/><line x1="62.6" y1="248.4" x2="69.4" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="148.3" y1="241.6" x2="155.1" y2="248.4"/><line x1="148.3" y1="248.4" x2="155.1" y2="241.6"/></g>
+      <g stroke="var(--s-priv)" stroke-width="1.5" opacity=".9"><line x1="191.1" y1="241.6" x2="197.9" y2="248.4"/><line x1="191.1" y1="248.4" x2="197.9" y2="241.6"/></g>
       <circle cx="237.4" cy="94.3" r="2.6" fill="var(--s-priv)"/>
       <circle cx="280.2" cy="97.9" r="2.6" fill="var(--s-priv)"/>
       <circle cx="323.1" cy="98.8" r="2.6" fill="var(--s-priv)"/>
@@ -782,12 +792,12 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <table>
       <thead><tr><th>point</th><th>change</th><th class="num">gen, 1 800</th><th class="num">prep, 1 800</th><th class="num">peak, 1 800</th><th class="num">prep, chain</th><th class="num">prep, 30k</th><th class="num">peak, 30k</th></tr></thead>
       <tbody>
-        <tr><td class="num">main</td><td>the base of the branch</td><td class="num">2.37 s</td><td class="num">51.0 s</td><td class="num">1.72 GB</td><td class="num">does not complete</td><td class="num">does not complete</td><td class="num">aborts</td></tr>
+        <tr><td class="num">main</td><td>the base of the branch</td><td class="num">2.37 s</td><td class="num">51.0 s</td><td class="num">1.72 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
         <tr><td class="num">bugfixes</td><td>the five bugfixes</td><td class="num">2.12 s</td><td class="num">50.9 s</td><td class="num">1.72 GB</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td class="num">#1</td><td>deque lookups</td><td class="num">329 ms</td><td class="num">45.0 s</td><td class="num">1.74 GB</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td class="num">#2</td><td>single-pass expansion</td><td class="num">335 ms</td><td class="num">30.4 s</td><td class="num">1.42 GB</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td class="num">#3</td><td>the two context prunes</td><td class="num">341 ms</td><td class="num">8.95 s</td><td class="num">168 MB</td><td class="num">764.5 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td class="num">#4</td><td>prefix-resume caches</td><td class="num">331 ms</td><td class="num">6.39 s</td><td class="num">167 MB</td><td class="num">177.8 s</td><td class="num">does not complete</td><td class="num">aborts</td></tr>
+        <tr><td class="num">#1</td><td>deque lookups</td><td class="num">329 ms</td><td class="num">45.0 s</td><td class="num">1.74 GB</td><td class="num">&gt; 900 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td class="num">#2</td><td>single-pass expansion</td><td class="num">335 ms</td><td class="num">30.4 s</td><td class="num">1.42 GB</td><td class="num">aborts on memory</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
+        <tr><td class="num">#3</td><td>the two context prunes</td><td class="num">341 ms</td><td class="num">8.95 s</td><td class="num">168 MB</td><td class="num">764.5 s</td><td class="num">&gt; 900 s</td><td class="num">&mdash;</td></tr>
+        <tr><td class="num">#4</td><td>prefix-resume caches</td><td class="num">331 ms</td><td class="num">6.39 s</td><td class="num">167 MB</td><td class="num">177.8 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
         <tr><td class="num">#5</td><td>streamed task list</td><td class="num">320 ms</td><td class="num">7.14 s</td><td class="num">154 MB</td><td class="num">179.9 s</td><td class="num">405.7 s</td><td class="num">11.10 GB</td></tr>
         <tr><td class="num">#6</td><td>linear ENABLED scan</td><td class="num">260 ms</td><td class="num">6.42 s</td><td class="num">156 MB</td><td class="num">177.7 s</td><td class="num">389.9 s</td><td class="num">10.93 GB</td></tr>
         <tr><td class="num">#7</td><td>levels without slicing</td><td class="num">249 ms</td><td class="num">6.67 s</td><td class="num">156 MB</td><td class="num">175.4 s</td><td class="num">397.6 s</td><td class="num">10.94 GB</td></tr>
@@ -879,7 +889,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>4901a02</code> backend/schedule: reap finished provers early; refresh deadline clock <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +31/&minus;0</span> <code>src/backend/schedule.ml</code>&nbsp;<span class="pm">+31/&minus;0</span></p>
-      <p><span class="lbl">changes</span> The scheduler computed its <code>select</code> deadline once and then blocked on it even when children had already exited, so a finished prover's slot stayed occupied until the deadline elapsed. Reap non-blocking before each wait and recompute the deadline from the live set.</p>
+      <p><span class="lbl">changes</span> Two timing defects in the scheduler loop, both of which manufacture spurious timeouts. Constructing a task &mdash; encoding an obligation for its prover &mdash; can take seconds, during which a prover that has already exited sits unread past its deadline and is reported as timed out; so reap with a zero-timeout <code>select</code> before launching the next task, which costs nothing. And the loop dated its reaps and deadline checks with a timestamp taken <em>before</em> a <code>select</code> that may have slept up to a minute, which under-reports run times and postpones kills; so refresh the clock after the wait.</p>
       <p><span class="lbl">gate</span> Verdict parity on a real prover run: the set of timed-out obligations may only lose members, never gain them, and no obligation changes verdict.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.20 s &rarr; 2.18 s</td><td class="num">50.5 s &rarr; 49.7 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
@@ -892,7 +902,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p class="cm-h"><code>a0ed498</code> fix: kill timed-out provers with SIGTERM, not SIGHUP <span class="mdl">Opus 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +12/&minus;1</span> <code>src/system.ml</code>&nbsp;<span class="pm">+12/&minus;1</span></p>
       <p><span class="lbl">changes</span> <code>System.unix_kill</code> sent signal 1. A process started with <code>nohup</code>, or from any launcher that sets SIGHUP to <code>SIG_IGN</code>, inherits that disposition through both <code>fork</code> and <code>exec</code> — so the prover ignores the kill and the timeout silently stops working. Send SIGTERM.</p>
-      <p><span class="lbl">gate</span> Reproduced before the fix and absent after: the same module under <code>nohup</code>, with <code>ps</code> sampling the child set and <code>/usr/bin/time -v</code> the peak RSS. On <code>main</code> the run takes 725 s against 285 s in the foreground and leaks live provers; after the fix the two agree.</p>
+      <p><span class="lbl">gate</span> Reproduced before the fix and absent after: the same module under <code>nohup</code>, with <code>ps</code> sampling the child set and <code>/usr/bin/time -v</code> the peak RSS. Measured on the 30k monolith under <code>nohup</code>: 725 s against 290 s in the foreground, a mean of 4.6 concurrent provers against a limit of 4 with a peak of 8, and one <code>z3</code> grown to 6.9 GB &mdash; tlapm announcing timeouts and freeing scheduler slots while the provers it believed it had killed kept running. After the fix the two agree.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.18 s &rarr; 2.12 s</td><td class="num">49.7 s &rarr; 50.9 s</td><td class="num">1.72 GB &rarr; 1.72 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">213 ms &rarr; 218 ms</td><td class="num">3.35 s &rarr; 3.33 s</td><td class="num">232 MB &rarr; 232 MB</td></tr>
@@ -913,7 +923,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.12 s &rarr; 329 ms <span class="r">&times;6.46</span></td><td class="num">50.9 s &rarr; 45.0 s <span class="r">&times;1.13</span></td><td class="num">1.72 GB &rarr; 1.74 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">218 ms &rarr; 132 ms <span class="r">&times;1.65</span></td><td class="num">3.33 s &rarr; 2.87 s <span class="r">&times;1.16</span></td><td class="num">232 MB &rarr; 224 MB <span class="r">&times;1.04</span></td></tr>
-        <tr><td>refinement chain — 9 967 obligations</td><td class="num">34.8 s &rarr; 3.91 s <span class="r">&times;8.91</span></td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td>refinement chain — 9 967 obligations</td><td class="num">34.8 s &rarr; 3.91 s <span class="r">&times;8.91</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
         <tr><td>30k monolith — 29 965 obligations</td><td class="num">65.7 s &rarr; 9.93 s <span class="r">&times;6.62</span></td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
       </tbody></table></div>
     </div>
@@ -931,8 +941,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">329 ms &rarr; 335 ms</td><td class="num">45.0 s &rarr; 30.4 s <span class="r">&times;1.48</span></td><td class="num">1.74 GB &rarr; 1.42 GB <span class="r">&times;1.22</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">132 ms &rarr; 133 ms</td><td class="num">2.87 s &rarr; 2.75 s <span class="r">&times;1.04</span></td><td class="num">224 MB &rarr; 215 MB <span class="r">&times;1.04</span></td></tr>
-        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.91 s &rarr; 3.72 s <span class="r">&times;1.05</span></td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">9.93 s &rarr; 9.96 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.91 s &rarr; 3.72 s <span class="r">&times;1.05</span></td><td class="num">&gt; 900 s &rarr; aborts on memory</td><td class="num">&gt; 0 s &rarr; aborts on memory</td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">9.93 s &rarr; 9.96 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
     </div>
   </div>
@@ -949,8 +959,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">335 ms &rarr; 338 ms</td><td class="num">30.4 s &rarr; 29.4 s <span class="r">&times;1.03</span></td><td class="num">1.42 GB &rarr; 1.42 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">133 ms &rarr; 138 ms <span class="w">+4&thinsp;%</span></td><td class="num">2.75 s &rarr; 2.76 s</td><td class="num">215 MB &rarr; 204 MB <span class="r">&times;1.05</span></td></tr>
-        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.72 s &rarr; 3.71 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">9.96 s &rarr; 11.5 s <span class="w">+15&thinsp;%</span></td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.72 s &rarr; 3.71 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">9.96 s &rarr; 11.5 s <span class="w">+15&thinsp;%</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
     </div>
     <div class="cm">
@@ -962,7 +972,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">338 ms &rarr; 341 ms</td><td class="num">29.4 s &rarr; 8.95 s <span class="r">&times;3.29</span></td><td class="num">1.42 GB &rarr; 168 MB <span class="r">&times;8.63</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">138 ms &rarr; 134 ms</td><td class="num">2.76 s &rarr; 936 ms <span class="r">&times;2.94</span></td><td class="num">204 MB &rarr; 61 MB <span class="r">&times;3.34</span></td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.71 s &rarr; 3.95 s <span class="w">+6&thinsp;%</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">11.5 s &rarr; 10.3 s <span class="r">&times;1.12</span></td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">11.5 s &rarr; 10.3 s <span class="r">&times;1.12</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
     </div>
   </div>
@@ -980,13 +990,13 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">341 ms &rarr; 319 ms <span class="r">&times;1.07</span></td><td class="num">8.95 s &rarr; 6.38 s <span class="r">&times;1.40</span></td><td class="num">168 MB &rarr; 167 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 138 ms</td><td class="num">936 ms &rarr; 828 ms <span class="r">&times;1.13</span></td><td class="num">61 MB &rarr; 60 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.95 s &rarr; 3.80 s <span class="r">&times;1.04</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.3 s &rarr; 10.6 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.3 s &rarr; 10.6 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
       </tbody></table></div>
     </div>
     <div class="cm">
       <p class="cm-h"><code>a5158d1</code> backend/prep: prefix-resume cache for Elab.normalize <span class="mdl">Opus 5</span></p>
       <p class="cm-files"><span class="fl-h">4 files, +107/&minus;13</span> <code>src/backend/prep.ml</code>&nbsp;<span class="pm">+72/&minus;5</span> <code>src/expr.mli</code>&nbsp;<span class="pm">+7/&minus;0</span> <code>src/expr/e_elab.ml</code>&nbsp;<span class="pm">+17/&minus;8</span> <code>src/expr/e_elab.mli</code>&nbsp;<span class="pm">+11/&minus;0</span></p>
-      <p><span class="lbl">changes</span> The same prefix idea for <code>Expr.Elab.normalize</code>, which is the single most expensive per-obligation pass: normalise the divergent tail against the retained normalised prefix instead of the whole sequent.</p>
+      <p><span class="lbl">changes</span> The same prefix idea for <code>Expr.Elab.normalize</code>, the single most expensive per-obligation pass: normalise the divergent tail against the retained normalised prefix instead of the whole sequent. The two normalisation passes are interleaved per hypothesis so that one checkpoint serves both, which is the same computation because the let pass&rsquo;s input and scope at each position are unaffected by the interleaving. One subtlety carries a correctness obligation of its own: the except pass runs only on non-temporal sequents, so temporal and non-temporal obligations resume from <em>separate</em> slots &mdash; their checkpoints are not interchangeable.</p>
       <p><span class="lbl">gate</span> Output-preserving; same <code>--debug noprepcache</code> A/B; both suites green.</p>
       <p><span class="lbl">switch</span> <code>--debug noprepcache</code>.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
@@ -1017,13 +1027,13 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>b70585f</code> backend/schedule: pull tasks from a stream instead of a materialized list <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">3 files, +57/&minus;9</span> <code>src/backend/schedule.ml</code>&nbsp;<span class="pm">+26/&minus;2</span> <code>src/backend/schedule.mli</code>&nbsp;<span class="pm">+8/&minus;0</span> <code>src/tlapm_lib.ml</code>&nbsp;<span class="pm">+23/&minus;7</span></p>
-      <p><span class="lbl">changes</span> <code>Schedule.run</code> takes a producer it pulls from as slots free up; per-obligation data is live only while in flight. The sequential pull order is preserved, which is what keeps the prefix caches of pull request 4 effective.</p>
+      <p><span class="lbl">changes</span> <code>Schedule.run_stream</code> takes a producer it pulls from as slots free up, with at most one fresh task materialised ahead of the provers, so per-obligation data is live only while in flight and consumed cells become garbage as the run progresses. The list-taking <code>run</code> stays as a wrapper over the stream, so no existing caller changes. The sequential pull order is preserved, which is what keeps the prefix caches of pull request 4 effective.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream and identical result-message order. Both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">331 ms &rarr; 320 ms <span class="r">&times;1.03</span></td><td class="num">6.39 s &rarr; 7.14 s <span class="w">+12&thinsp;%</span></td><td class="num">167 MB &rarr; 154 MB <span class="r">&times;1.08</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">137 ms &rarr; 140 ms</td><td class="num">813 ms &rarr; 809 ms</td><td class="num">59 MB &rarr; 57 MB <span class="r">&times;1.05</span></td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.93 s &rarr; 3.85 s</td><td class="num">177.8 s &rarr; 179.9 s</td><td class="num">4.17 GB &rarr; 4.00 GB <span class="r">&times;1.04</span></td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.5 s &rarr; 10.3 s</td><td class="num">aborted &rarr; 405.7 s</td><td class="num">11.19 GB &rarr; 11.10 GB</td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.5 s &rarr; 10.3 s</td><td class="num">aborts on memory &rarr; 405.7 s</td><td class="num">aborts on memory &rarr; 11.10 GB</td></tr>
       </tbody></table></div>
     </div>
   </div>
@@ -1034,7 +1044,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>ba1df8c</code> module/Elab: make ENABLED-axioms detection linear in context size <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +23/&minus;18</span> <code>src/module/m_elab.ml</code>&nbsp;<span class="pm">+23/&minus;18</span></p>
-      <p><span class="lbl">changes</span> Two linear passes — collect, then intersect — producing the same set in the same order.</p>
+      <p><span class="lbl">changes</span> Two linear passes instead of one nested scan: mark the front-indices carrying the <code>ENABLEDaxioms</code> pragma into an array, then resolve each fact against it using the identity that a fact at front-index <em>fi</em> whose body is <code>Ix k</code> refers to the hypothesis at <em>fi&nbsp;&minus;&nbsp;k</em> &mdash; which is what the old code recomputed a whole <code>cx_front</code> slice to discover, for every fact of every <code>BY</code>/<code>OBVIOUS</code>. Same set, same order.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">320 ms &rarr; 260 ms <span class="r">&times;1.23</span></td><td class="num">7.14 s &rarr; 6.42 s <span class="r">&times;1.11</span></td><td class="num">154 MB &rarr; 156 MB</td></tr>
@@ -1068,7 +1078,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>393164e</code> backend/toolbox: single-pass definition expansion in the result printer <span class="mdl">unrecorded version</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +18/&minus;11</span> <code>src/backend/toolbox.ml</code>&nbsp;<span class="pm">+18/&minus;11</span></p>
-      <p><span class="lbl">changes</span> Compose the substitutions once, as in pull request 2, in the printer's own expansion.</p>
+      <p><span class="lbl">changes</span> Compose the substitutions once, as in pull request 2, in the printer&rsquo;s own expansion &mdash; restricted to this printer&rsquo;s historical filter, visible <code>Operator</code> definitions only, so the printed obligation is identical rather than merely equivalent.</p>
       <p><span class="lbl">gate</span> Output-preserving: the printed obligations are byte-identical, which is directly observable since this code path <em>is</em> the output. Both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">249 ms &rarr; 249 ms</td><td class="num">6.67 s &rarr; 6.37 s <span class="r">&times;1.05</span></td><td class="num">156 MB &rarr; 156 MB</td></tr>
@@ -1085,7 +1095,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>690a261</code> expr/parser: memoize the two instances of each grammar rule <span class="mdl">unrecorded version</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +75/&minus;21</span> <code>src/expr/e_parser.ml</code>&nbsp;<span class="pm">+75/&minus;21</span></p>
-      <p><span class="lbl">changes</span> Hoist the two instances into memoized thunks; the grammar is built once per process.</p>
+      <p><span class="lbl">changes</span> The rules build position-independent parser values, so each rule has exactly two useful instances; memoize those two per rule instead of re-allocating the whole combinator family &mdash; choice lists, thunks and all &mdash; at every token position. The rule bodies themselves are unchanged.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream and identical parse errors, including their positions, on the test suite and on both private specifications.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">249 ms &rarr; 237 ms <span class="r">&times;1.05</span></td><td class="num">6.37 s &rarr; 6.55 s</td><td class="num">156 MB &rarr; 154 MB</td></tr>
@@ -1102,7 +1112,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>9a08f81</code> util/property: monomorphic pid equality, loop-based lookups <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +43/&minus;12</span> <code>src/util/property.ml</code>&nbsp;<span class="pm">+43/&minus;12</span></p>
-      <p><span class="lbl">changes</span> Integer equality on the property id, and hand-written loops instead of the closures.</p>
+      <p><span class="lbl">changes</span> Integer equality on the property id instead of generic structural equality, which costs a C call per list element, and direct loops instead of the higher-order searches: no closure per call, and no <code>Not_found</code> round-trip on a miss &mdash; and misses are the common case.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">237 ms &rarr; 227 ms <span class="r">&times;1.04</span></td><td class="num">6.55 s &rarr; 6.29 s <span class="r">&times;1.04</span></td><td class="num">154 MB &rarr; 156 MB</td></tr>
@@ -1136,7 +1146,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>fba0670</code> Ctx: logarithmic index lookup <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +23/&minus;2</span> <code>src/ctx.ml</code>&nbsp;<span class="pm">+23/&minus;2</span></p>
-      <p><span class="lbl">changes</span> A map beside the list, kept in step with it; the list stays authoritative for ordering.</p>
+      <p><span class="lbl">changes</span> A map beside the list, keyed by position from the bottom, so <code>index</code> is a logarithmic lookup instead of a <code>List.nth</code> walk. The list stays authoritative for ordering and the two are kept in step at every insertion and every map operation.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">247 ms &rarr; 233 ms <span class="r">&times;1.06</span></td><td class="num">6.23 s &rarr; 5.96 s <span class="r">&times;1.04</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
@@ -1153,7 +1163,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>3525625</code> backend/Smtlib: compile identifier-escaping regexes once <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +25/&minus;7</span> <code>src/backend/smtlib.ml</code>&nbsp;<span class="pm">+25/&minus;7</span></p>
-      <p><span class="lbl">changes</span> Module-level compiled regexes.</p>
+      <p><span class="lbl">changes</span> Compile the twenty-two escaping regexes once, at module level. The previous partial-application form rebuilt all of them on every call &mdash; once per identifier printed. Same list, same order, same replacements, so the output is byte-identical.</p>
       <p><span class="lbl">gate</span> Output-preserving, and observable directly: the solver input files are byte-identical across the change under <code>--debug tempfiles</code>.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">233 ms &rarr; 234 ms</td><td class="num">5.96 s &rarr; 6.38 s <span class="w">+7&thinsp;%</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
@@ -1170,7 +1180,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <div class="cm">
       <p class="cm-h"><code>16becd8</code> expr/Subst: walk substitution spines in app_ix without allocating <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +20/&minus;10</span> <code>src/expr/e_subst.ml</code>&nbsp;<span class="pm">+20/&minus;10</span></p>
-      <p><span class="lbl">changes</span> An accumulator loop over the spine; same result, no intermediates.</p>
+      <p><span class="lbl">changes</span> Walk the spine with a plain integer counter instead of re-wrapping the index at each step. The equivalence is worth stating because it is not purely syntactic: every intermediate wrapper carried the original index&rsquo;s properties, and every terminal case built its result from the current wrapper, so constructing only the terminal value from the original is the same result.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">234 ms &rarr; 245 ms <span class="w">+5&thinsp;%</span></td><td class="num">6.38 s &rarr; 6.44 s</td><td class="num">155 MB &rarr; 155 MB</td></tr>
@@ -1239,7 +1249,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p class="cm-h"><code>bd0ecd1</code> expr/Constness: constant-time De Bruijn resolution in add_constness <span class="mdl">Opus 5</span></p>
       <p class="cm-files"><span class="fl-h">6 files, +70/&minus;8</span> <code>src/backend/prep.ml</code>&nbsp;<span class="pm">+37/&minus;4</span> <code>src/expr.mli</code>&nbsp;<span class="pm">+4/&minus;2</span> <code>src/expr/e_constness.ml</code>&nbsp;<span class="pm">+9/&minus;1</span> <code>src/expr/e_constness.mli</code>&nbsp;<span class="pm">+7/&minus;1</span> <code>src/util/deque.ml</code>&nbsp;<span class="pm">+8/&minus;0</span> <code>src/util/deque.mli</code>&nbsp;<span class="pm">+5/&minus;0</span></p>
       <p><span class="lbl">changes</span> Maintain a mirror array of the deque's entries alongside the fold, indexed directly, so resolution is O(1). Kept consistent with the deque at every push, and reset with the fold.</p>
-      <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green. Measured with the instrumented build at &minus;73 % of the deque walks in the stage; the wall-clock share is a few per cent, so the local proof is the complexity argument, not the point in the curve.</p>
+      <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green. The mirror is exact only while its length matches the context: it truncates first if an inner scope left it longer, and the lookup falls back to <code>Deque.nth</code> whenever the sizes disagree, so a bookkeeping mistake degrades to the old path instead of returning a wrong index. Measured with an instrumented build: 49 million lookups walking 5.5 billion cells on a 30&nbsp;000-obligation run. The wall-clock share is a few per cent, so the local proof is the complexity argument, not the point in the curve.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">223 ms &rarr; 240 ms <span class="w">+8&thinsp;%</span></td><td class="num">5.97 s &rarr; 5.57 s <span class="r">&times;1.07</span></td><td class="num">76 MB &rarr; 76 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">121 ms &rarr; 124 ms</td><td class="num">711 ms &rarr; 692 ms</td><td class="num">36 MB &rarr; 36 MB</td></tr>

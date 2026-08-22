@@ -51,10 +51,16 @@ def cell(pt_before, pt_after, corpus, field):
         ms = row[field]
         if rc == 124:
             return None, "&gt; %d s" % round(ms/1000)
-        if rc != 0 and field == "m1_ms":
-            return None, "aborted"
+        if rc in (134, 137):
+            return None, "aborts on memory"
+        if rc != 0:
+            return None, "does not complete"
         if field == "rss_kb":
+            if row.get("m1_rc") == 124:
+                return None, "&mdash;"
             v = row["rss_kb"]
+            if row.get("m1_rc") in (134, 137):
+                return None, ("%s at the cap" % fmt_mb(v)) if v else "at the cap"
             return (v, fmt_mb(v)) if v else (None, "&mdash;")
         return ms, fmt_ms(ms)
     va, sa = val(a); vb, sb = val(b)
@@ -113,9 +119,13 @@ PRS = [
       gate="Both suites green; the three rows become non-zero and <em>total</em> is unchanged, so nothing was double-counted.",
       model="Fable 5"),
     dict(pt="c04", sha="4901a02", subject="backend/schedule: reap finished provers early; refresh deadline clock",
-      what="""The scheduler computed its <code>select</code> deadline once and then blocked on it even
-      when children had already exited, so a finished prover's slot stayed occupied until the deadline
-      elapsed. Reap non-blocking before each wait and recompute the deadline from the live set.""",
+      what="""Two timing defects in the scheduler loop, both of which manufacture spurious timeouts.
+      Constructing a task &mdash; encoding an obligation for its prover &mdash; can take seconds,
+      during which a prover that has already exited sits unread past its deadline and is reported as
+      timed out; so reap with a zero-timeout <code>select</code> before launching the next task, which
+      costs nothing. And the loop dated its reaps and deadline checks with a timestamp taken
+      <em>before</em> a <code>select</code> that may have slept up to a minute, which under-reports run
+      times and postpones kills; so refresh the clock after the wait.""",
       gate="""Verdict parity on a real prover run: the set of timed-out obligations may only lose
       members, never gain them, and no obligation changes verdict.""",
       model="Fable 5"),
@@ -126,8 +136,10 @@ PRS = [
       silently stops working. Send SIGTERM.""",
       gate="""Reproduced before the fix and absent after: the same module under <code>nohup</code>,
       with <code>ps</code> sampling the child set and <code>/usr/bin/time -v</code> the peak RSS.
-      On <code>main</code> the run takes 725 s against 285 s in the foreground and leaks live provers;
-      after the fix the two agree.""",
+      Measured on the 30k monolith under <code>nohup</code>: 725 s against 290 s in the
+      foreground, a mean of 4.6 concurrent provers against a limit of 4 with a peak of 8, and one
+      <code>z3</code> grown to 6.9 GB &mdash; tlapm announcing timeouts and freeing scheduler slots
+      while the provers it believed it had killed kept running. After the fix the two agree.""",
       model="Opus 5"),
    ]),
 
@@ -222,9 +234,14 @@ PRS = [
       guard="<code>--debug noprepcache</code> restores the uncached path for all three folds. Caches on by default.",
       model="Opus 5"),
     dict(pt="c11", sha="a5158d1", subject="backend/prep: prefix-resume cache for Elab.normalize",
-      what="""The same prefix idea for <code>Expr.Elab.normalize</code>, which is the single most
-      expensive per-obligation pass: normalise the divergent tail against the retained normalised
-      prefix instead of the whole sequent.""",
+      what="""The same prefix idea for <code>Expr.Elab.normalize</code>, the single most expensive
+      per-obligation pass: normalise the divergent tail against the retained normalised prefix instead
+      of the whole sequent. The two normalisation passes are interleaved per hypothesis so that one
+      checkpoint serves both, which is the same computation because the let pass&rsquo;s input and
+      scope at each position are unaffected by the interleaving. One subtlety carries a correctness
+      obligation of its own: the except pass runs only on non-temporal sequents, so temporal and
+      non-temporal obligations resume from <em>separate</em> slots &mdash; their checkpoints are not
+      interchangeable.""",
       gate="Output-preserving; same <code>--debug noprepcache</code> A/B; both suites green.",
       guard="<code>--debug noprepcache</code>.",
       model="Opus 5"),
@@ -247,9 +264,12 @@ PRS = [
    which is one half of the single-pass memory wall.""",
    commits=[
     dict(pt="c13", sha="b70585f", subject="backend/schedule: pull tasks from a stream instead of a materialized list",
-      what="""<code>Schedule.run</code> takes a producer it pulls from as slots free up; per-obligation
-      data is live only while in flight. The sequential pull order is preserved, which is what keeps
-      the prefix caches of pull request 4 effective.""",
+      what="""<code>Schedule.run_stream</code> takes a producer it pulls from as slots free up, with
+      at most one fresh task materialised ahead of the provers, so per-obligation data is live only
+      while in flight and consumed cells become garbage as the run progresses. The list-taking
+      <code>run</code> stays as a wrapper over the stream, so no existing caller changes. The
+      sequential pull order is preserved, which is what keeps the prefix caches of pull request 4
+      effective.""",
       gate="""Output-preserving: identical obligation stream and identical result-message order.
       Both suites green.""",
       model="Fable 5"),
@@ -262,7 +282,12 @@ PRS = [
    operators, theorems and hypotheses.""",
    commits=[
     dict(pt="c14", sha="ba1df8c", subject="module/Elab: make ENABLED-axioms detection linear in context size",
-      what="Two linear passes — collect, then intersect — producing the same set in the same order.",
+      what="""Two linear passes instead of one nested scan: mark the front-indices carrying the
+      <code>ENABLEDaxioms</code> pragma into an array, then resolve each fact against it using the
+      identity that a fact at front-index <em>fi</em> whose body is <code>Ix k</code> refers to the
+      hypothesis at <em>fi&nbsp;&minus;&nbsp;k</em> &mdash; which is what the old code recomputed a
+      whole <code>cx_front</code> slice to discover, for every fact of every
+      <code>BY</code>/<code>OBVIOUS</code>. Same set, same order.""",
       gate="Output-preserving: identical obligation stream, both suites green.",
       model="Fable 5"),
    ]),
@@ -286,7 +311,10 @@ PRS = [
    cost of a warm run, where every fingerprint is present.""",
    commits=[
     dict(pt="c16", sha="393164e", subject="backend/toolbox: single-pass definition expansion in the result printer",
-      what="Compose the substitutions once, as in pull request 2, in the printer's own expansion.",
+      what="""Compose the substitutions once, as in pull request 2, in the printer&rsquo;s own
+      expansion &mdash; restricted to this printer&rsquo;s historical filter, visible
+      <code>Operator</code> definitions only, so the printed obligation is identical rather than
+      merely equivalent.""",
       gate="""Output-preserving: the printed obligations are byte-identical, which is directly
       observable since this code path <em>is</em> the output. Both suites green.""",
       model="unrecorded version"),
@@ -299,7 +327,10 @@ PRS = [
    edit-to-diagnostics latency.""",
    commits=[
     dict(pt="c17", sha="690a261", subject="expr/parser: memoize the two instances of each grammar rule",
-      what="Hoist the two instances into memoized thunks; the grammar is built once per process.",
+      what="""The rules build position-independent parser values, so each rule has exactly two
+      useful instances; memoize those two per rule instead of re-allocating the whole combinator
+      family &mdash; choice lists, thunks and all &mdash; at every token position. The rule bodies
+      themselves are unchanged.""",
       gate="""Output-preserving: identical obligation stream and identical parse errors, including
       their positions, on the test suite and on both private specifications.""",
       model="unrecorded version"),
@@ -312,7 +343,10 @@ PRS = [
    <em>all</em> preparation.""",
    commits=[
     dict(pt="c18", sha="9a08f81", subject="util/property: monomorphic pid equality, loop-based lookups",
-      what="Integer equality on the property id, and hand-written loops instead of the closures.",
+      what="""Integer equality on the property id instead of generic structural equality, which
+      costs a C call per list element, and direct loops instead of the higher-order searches: no
+      closure per call, and no <code>Not_found</code> round-trip on a miss &mdash; and misses are the
+      common case.""",
       gate="Output-preserving: identical obligation stream, both suites green.",
       model="Fable 5"),
    ]),
@@ -343,7 +377,9 @@ PRS = [
    its own; the argument is the complexity of a structure consulted once per name resolved.""",
    commits=[
     dict(pt="c20", sha="fba0670", subject="Ctx: logarithmic index lookup",
-      what="A map beside the list, kept in step with it; the list stays authoritative for ordering.",
+      what="""A map beside the list, keyed by position from the bottom, so <code>index</code> is a
+      logarithmic lookup instead of a <code>List.nth</code> walk. The list stays authoritative for
+      ordering and the two are kept in step at every insertion and every map operation.""",
       gate="Output-preserving: identical obligation stream, both suites green.",
       model="Fable 5"),
    ]),
@@ -354,7 +390,9 @@ PRS = [
    identifier, so once per identifier written to every solver file.""",
    commits=[
     dict(pt="c21", sha="3525625", subject="backend/Smtlib: compile identifier-escaping regexes once",
-      what="Module-level compiled regexes.",
+      what="""Compile the twenty-two escaping regexes once, at module level. The previous
+      partial-application form rebuilt all of them on every call &mdash; once per identifier printed.
+      Same list, same order, same replacements, so the output is byte-identical.""",
       gate="""Output-preserving, and observable directly: the solver input files are byte-identical
       across the change under <code>--debug tempfiles</code>.""",
       model="Fable 5"),
@@ -366,7 +404,11 @@ PRS = [
    spine, on the hottest walk in substitution.""",
    commits=[
     dict(pt="c22", sha="16becd8", subject="expr/Subst: walk substitution spines in app_ix without allocating",
-      what="An accumulator loop over the spine; same result, no intermediates.",
+      what="""Walk the spine with a plain integer counter instead of re-wrapping the index at each
+      step. The equivalence is worth stating because it is not purely syntactic: every intermediate
+      wrapper carried the original index&rsquo;s properties, and every terminal case built its result
+      from the current wrapper, so constructing only the terminal value from the original is the same
+      result.""",
       gate="Output-preserving: identical obligation stream, both suites green.",
       model="Fable 5"),
    ]),
@@ -424,9 +466,13 @@ PRS = [
     dict(pt="c26", sha="bd0ecd1", subject="expr/Constness: constant-time De Bruijn resolution in add_constness",
       what="""Maintain a mirror array of the deque's entries alongside the fold, indexed directly, so
       resolution is O(1). Kept consistent with the deque at every push, and reset with the fold.""",
-      gate="""Output-preserving: identical obligation stream, both suites green. Measured with the
-      instrumented build at &minus;73 % of the deque walks in the stage; the wall-clock share is a few
-      per cent, so the local proof is the complexity argument, not the point in the curve.""",
+      gate="""Output-preserving: identical obligation stream, both suites green. The mirror is exact
+      only while its length matches the context: it truncates first if an inner scope left it longer,
+      and the lookup falls back to <code>Deque.nth</code> whenever the sizes disagree, so a
+      bookkeeping mistake degrades to the old path instead of returning a wrong index. Measured with
+      an instrumented build: 49 million lookups walking 5.5 billion cells on a 30&nbsp;000-obligation
+      run. The wall-clock share is a few per cent, so the local proof is the complexity argument, not
+      the point in the curve.""",
       model="Opus 5"),
    ]),
 ]

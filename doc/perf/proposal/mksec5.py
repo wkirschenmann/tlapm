@@ -6,7 +6,11 @@ import os, math, sweeplib
 S = os.environ.get("SWEEP_DIR", os.path.dirname(os.path.abspath(__file__)))
 rows, BOOT = sweeplib.load()
 SPREAD = rows.get("_spread", {})
-DNC = "DNC"                      # measured, run did not complete;  None = not measured
+DNC   = "DNC"      # measured, run did not complete (generic)
+CEIL  = "CEIL"     # stopped at the timeout ceiling
+ABORT = "ABORT"    # aborted against the address-space cap
+FAILED = (DNC, CEIL, ABORT)
+#  None = not measured at all
 
 OBL = {"synth300": 1800, "synth100": 600, "ffi": 9967, "mono": 29965}
 PRS = [("main","c00","the base of the branch"),
@@ -47,16 +51,19 @@ def xs(i): return L + i*(W-L-R)/(len(PRS)-1)
 def get(pt, cp, f):
     r = rows.get((pt, cp))
     if not r or f not in r: return None
-    return DNC if r["m0_rc" if f == "m0_ms" else "m1_rc"] != 0 else r[f]
+    rc = r["m0_rc" if f == "m0_ms" else "m1_rc"]
+    if rc == 0: return r[f]
+    return CEIL if rc == 124 else (ABORT if rc in (134, 137) else DNC)
 
 def thr(pt, cp):
     v = get(pt, cp, "m1_ms")
-    return v if (v is None or v is DNC) else OBL[cp]*1000.0/v
+    return v if (v is None or v in FAILED) else OBL[cp]*1000.0/v
 
 def peak(pt, cp):
     r = rows.get((pt, cp))
     if not r or "rss_kb" not in r: return None
-    return DNC if r["m1_rc"] != 0 else r["rss_kb"]/1024.0
+    if r["m1_rc"] == 0: return r["rss_kb"]/1024.0
+    return CEIL if r["m1_rc"] == 124 else (ABORT if r["m1_rc"] in (134, 137) else DNC)
 
 def decades(lo, hi):
     a = math.floor(math.log10(lo)); b = math.ceil(math.log10(hi))
@@ -101,7 +108,7 @@ def chart(sub, aria, values, unit, fmt_end):
         vs = values[cp]
         seg, segs = [], []
         for i, v in enumerate(vs):
-            if v is None or v is DNC:
+            if v is None or v in FAILED:
                 if seg: segs.append(seg); seg = []
             else: seg.append((i, v))
         if seg: segs.append(seg)
@@ -112,7 +119,7 @@ def chart(sub, aria, values, unit, fmt_end):
                          % (" ".join("%.1f,%.1f" % (xs(i), y(v)) for i, v in sg), col, da))
         for i, v in enumerate(vs):
             if v is None: continue
-            if v is DNC:
+            if v in FAILED:
                 cy = bot + ZONE/2
                 o.append('<g stroke="%s" stroke-width="1.5" opacity=".9"><line x1="%.1f" y1="%.1f" '
                          'x2="%.1f" y2="%.1f"/><line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/></g>'
@@ -120,7 +127,7 @@ def chart(sub, aria, values, unit, fmt_end):
                             xs(i)-3.4, cy+3.4, xs(i)+3.4, cy-3.4))
             else:
                 o.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (xs(i), y(v), col))
-        last = [(i, v) for i, v in enumerate(vs) if not (v is None or v is DNC)]
+        last = [(i, v) for i, v in enumerate(vs) if not (v is None or v in FAILED)]
         if last:
             i, v = last[-1]
             o.append('<text x="%.1f" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, monospace" '
@@ -147,6 +154,8 @@ def chart(sub, aria, values, unit, fmt_end):
 
 def fmt_ms(v):
     if v is None: return "&mdash;"
+    if v is CEIL: return "&gt; 900 s"
+    if v is ABORT: return "aborts on memory"
     if v is DNC: return "does not complete"
     if v >= 10000: return "%.1f s" % (v/1000.0)
     if v >= 1000: return "%.2f s" % (v/1000.0)
@@ -154,7 +163,8 @@ def fmt_ms(v):
 
 def fmt_mb(v):
     if v is None: return "&mdash;"
-    if v is DNC: return "aborts"
+    if v is CEIL: return "&mdash;"
+    if v in (ABORT, DNC): return "at the cap"
     return "%.2f GB" % (v/1024.0) if v >= 1024 else "%d MB" % round(v)
 
 o = []
@@ -166,9 +176,11 @@ A("""  <p>The x axis is the branch, in order: <code>main</code>, then the five b
   because that is the only way the two ends of the range are legible together &mdash; and the range
   <em>is</em> the subject. Colour is the corpus family, public or private; the dashed line is the
   smaller of the two inside each family.</p>""")
-A("""  <p>A cross in the strip below the axis means the run <strong>did not complete</strong> &mdash;
-  stopped at a fifteen-minute ceiling, or aborted against the 12&nbsp;GB address-space cap it was run
-  under. That is why the first chart is throughput and not a speedup: on the two private
+A("""  <p>A cross in the strip below the axis means the run <strong>did not complete</strong>. The table
+  says which of the two ways: <code>&gt; 900 s</code> is a run stopped at the fifteen-minute ceiling,
+  <code>aborts on memory</code> is one that hit the 12&nbsp;GB address-space cap it was run under
+  &mdash; and the distinction matters, because a change that speeds preparation up reaches the memory
+  wall <em>sooner</em>, turning a timeout into an abort without being a regression. That is why the first chart is throughput and not a speedup: on the two private
   specifications there is no <code>main</code> value to form a ratio against. Every number comes from
   one campaign on one boot of one container; absolute values are not comparable across restarts.</p>""")
 A("""  <p><code>main</code> was measured at both ends of the campaign. On the private specifications its
