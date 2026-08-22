@@ -10,12 +10,6 @@ open Ext
 type 'a dq = { front : 'a list ; flen : int ;
                rear : 'a list  ; rlen : int }
 
-(* Random-access cost counters (see [nth]): total calls and total list
-   cells walked.  Read by the TLAPM_DEQUE_STATS probe; two int increments
-   on the nth path otherwise. *)
-let nth_calls = ref 0
-let nth_walk = ref 0
-
 let empty = { front = [ ] ; flen = 0 ;
               rear  = [ ] ; rlen = 0 }
 
@@ -125,8 +119,6 @@ let nth ?(backwards=false) q n =
   else if n < 0 then failwith "Deque.nth: internal error"
   else
     let n = if backwards then size q - 1 - n else n in
-    let i = if n < q.flen then n else size q - 1 - n in
-    incr nth_calls; nth_walk := !nth_walk + i;
     if n < q.flen then Some (List.nth q.front n)
     else Some (List.nth q.rear (size q - 1 - n))
 

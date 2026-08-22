@@ -182,11 +182,7 @@ let flatten ob =
             prefix := Deque.snoc !prefix (Fact (app_expr (shift (n + k)) eq, Visible, tm) @@ h)
         end eqs ;
         let sq = { sq with context = cx } in
-        (* shift 0 is the common no-equalities-extracted case: skip the
-           full sequent rebuild (the input is beta-normal here, so the
-           rebuild is the identity) *)
-        let m = List.length eqs + k - 1 in
-        let sq = if m = 0 then sq else app_sequent (shift m) sq in
+        let sq = app_sequent (shift (List.length eqs + k - 1)) sq in
         rewrite sq
       end
     | Some (h, cx) ->
@@ -515,11 +511,7 @@ let gen_smt_solve ?(rlimit=None) suffix exec desc fmt_expr meth ob org_ob f res_
         Format.flush_str_formatter ()
       end
       in
-    (* The pretty-printed obligation header is a debugging aid for humans
-       reading the solver input file; solvers ignore it.  Printing it costs
-       a full Proof.Fmt render plus a regex pass per attempt, so only emit
-       it when the temp files are actually kept. *)
-    if Params.debugging "tempfiles" then pp_print_ob ~comm:comm inc ob;
+    pp_print_ob ~comm:comm inc ob;
     (* A deterministic Z3 `rlimit` budget makes the pass/fail outcome
        independent of CPU speed and load, so it reproduces on any machine and
        every rerun (see issue #281). It is a Z3 mechanism, hence only emitted
@@ -1009,104 +1001,6 @@ let obl_from_expr
     | _ -> failwith "Backend.Prep.obl_from_expr"
 
 
-let prune_context ob =
-  (* Drop context hypotheses the obligation cannot reach.
-
-     After `expand_defs` has inlined the visible definitions, the obligation
-     still carries every hidden definition and fact imported by `INSTANCE` --
-     most of which a given goal never references.  This pass keeps only the
-     hypotheses transitively reachable, via de Bruijn references, from the goal
-     and the facts, and drops the rest, renumbering with the same
-     substitution machinery as `expand_defs`.
-
-     Only UNREFERENCED HIDDEN hypotheses are dropped, of two kinds: hidden
-     operator/pragma definitions (opaque declarations: when nothing
-     transitively refers to one, the backends never see it) and hidden facts
-     (a fact is hidden here only when the obligation does not cite it -- a
-     `BY`/`USE` citation marks it Visible during proof generation, before this
-     pass -- and the backend translations only assert visible facts, so an
-     unreferenced hidden fact is dead weight carried through every backend
-     encoding pass; dropping a premise can also never turn an unprovable
-     sequent provable).  Everything else is kept -- all declarations
-     (`Fresh`/`Flex`/`FreshTuply`), recursive/instance definitions, visible or
-     referenced hypotheses; un-analyzable hypotheses conservatively keep all
-     their predecessors.
-
-     Self-checking: a dropped slot is filled with a distinctive
-     `Opaque "__pruned__"`.  Because dropped hypotheses are unreachable, it
-     never appears in the result; a reachability bug would surface as that
-     opaque leaking into an obligation (a failing proof), never as a silent
-     miscompilation. *)
-  let sq = ob.obl.core in
-  let n = Deque.size sq.context in
-  if n = 0 then ob else begin
-    let arr = Array.of_list (Deque.to_list sq.context) in  (* arr.(0) = front *)
-    let keep = Array.make n false in
-    let mark m fv =
-      (* mark the positions referenced by free indices `fv` of a node whose
-         enclosing context has size `m` (de Bruijn index k -> position m - k) *)
-      Util.Coll.Is.iter
-        (fun k -> let pos = m - k in if pos >= 0 && pos < n then keep.(pos) <- true)
-        fv
-    in
-    let mark_all_before p = for q = 0 to p - 1 do keep.(q) <- true done in
-    (* seed: keep everything except hidden operator/pragma definitions and
-       hidden (uncited) facts *)
-    for p = 0 to n - 1 do
-      (match arr.(p).core with
-        | Defn ({core = (Operator _ | Bpragma _)}, _, Hidden, _) -> ()
-        | Fact (_, Hidden, _) -> ()
-        | _ -> keep.(p) <- true)
-    done;
-    (* the goal references hypotheses at any depth *)
-    mark n (Expr.Collect.fvs sq.active);
-    (* close: references point strictly front-ward, so one rear-to-front pass
-       reaches the transitive closure *)
-    for p = n - 1 downto 0 do
-      if keep.(p) then begin
-        match arr.(p).core with
-          | Defn ({core = Operator (_, e)}, _, _, _)
-          | Defn ({core = Bpragma (_, e, _)}, _, _, _) -> mark p (Expr.Collect.fvs e)
-          | Fact (e, _, _) -> mark p (Expr.Collect.fvs e)
-          | Fresh (_, _, _, Bounded (dom, _)) -> mark p (Expr.Collect.fvs dom)
-          | Fresh _ | Flex _ | Defn ({core = Recursive _}, _, _, _) -> ()
-          | _ -> mark_all_before p
-      end
-    done;
-    (* rebuild: `bump s` under a kept hypothesis, `scons placeholder s` to drop *)
-    let rec fold s i kept cx = match Deque.front cx with
-      | None -> (s, kept)
-      | Some (h, hs) ->
-          if keep.(i) then fold (bump s) (i + 1) (Deque.snoc kept (app_hyp s h)) hs
-          else fold (scons (Opaque "__pruned__" @@ h) s) (i + 1) kept hs
-    in
-    let (s, context) = fold (shift 0) 0 Deque.empty sq.context in
-    let active = app_expr s sq.active in
-    { ob with obl = { ob.obl with core = { context ; active } } }
-  end
-
-(* Cross-obligation prefix cache for `Expr.Elab.normalize`, same
-   principle as [expand_defs_cached]: consecutive obligations share a
-   long physically-identical (==) context prefix, and both normalization
-   passes visit hypotheses left to right with a state that only ever
-   grows (the scx of each pass's already-visited prefix), so the visit
-   can resume after the shared prefix instead of re-normalizing all of
-   it.  Checkpoint [i] stores each pass's scx context after the first
-   [i] hypotheses (except-pass outputs, then let-pass outputs).
-
-   The except pass runs only when the whole sequent is non-temporal, so
-   temporal and non-temporal obligations resume from separate slots
-   (the checkpoint states are not interchangeable between the two
-   pipelines).
-
-   Equivalence with `Expr.Elab.normalize Deque.empty (Sequent sq)`: that
-   function applies the except pass to the whole sequent and the let
-   pass to its result; each visitor's sequent case folds the hypotheses
-   through [#hyp] with the scx of its own outputs, then visits the
-   active with the full scx.  Interleaving the two passes per hypothesis
-   is the same computation because the let pass's input at position i
-   (the except output of hypothesis i) and its scx (let outputs of
-   except outputs [0..i)) are unchanged by the interleaving. *)
 let elab_cache :
     (bool * Expr.T.hyp array
      * (Expr.T.hyp Deque.dq * Expr.T.hyp Deque.dq) array) ref
@@ -1278,11 +1172,6 @@ let normalize_expand ob fpout thyout record
                 ~enabled_axioms:enabled_axioms
                 ~level_comparison:level_comparison)
             ob in
-        (* NOTE: context pruning happens later, on the backend path only
-           (see `frontend_ob` in `ship`): the triviality check consumes this
-           function's result and discharges support obligations by finding a
-           fact -- hidden ones included -- equal to the goal, so pruning here
-           would lose those premises. *)
         (ob, true)
     with Failure msg ->
         (* `msg` is the message from soundness checks,
@@ -1762,47 +1651,14 @@ let add_constness ob =
     while !l < m && raw.(!l) == craw.(!l) do incr l done;
     let l = !l in
     let rec take k lst =
-        if k = 0 then []
-        else match lst with
-          | x :: xs -> x :: take (k - 1) xs
-          | [] -> assert false
+      if k = 0 then []
+      else match lst with
+        | x :: xs -> x :: take (k - 1) xs
+        | [] -> assert false
     in
     let ann_prefix = take l cann in
-    (* Mirror the visitor's context in a growable array so the [Ix]
-       resolution of constness is O(1) instead of an O(distance) list
-       walk (measured: 49M lookups walking 5.5G cells on a 30k-obligation
-       run).  The mirror is exact whenever [alen] equals the context
-       size: [adj] appends (truncating first if an inner scope — e.g. a
-       statement's inner sequent — left the mirror longer than the
-       context it extends), and the lookup falls back to [Deque.nth]
-       whenever the sizes disagree.  Entries are indexed front-to-back,
-       so [Ix n] reads slot [size - n]. *)
-    let alen = ref 0 in
-    let arr = ref (Array.make 1024 None) in
-    List.iteri (fun i h ->
-        if i >= Array.length !arr then begin
-          let a = Array.make (2 * Array.length !arr) None in
-          Array.blit !arr 0 a 0 !alen; arr := a
-        end;
-        !arr.(i) <- Some h; incr alen)
-      ann_prefix;
     let visitor = object (self: 'self)
       inherit Expr.Constness.const_visitor
-      method! adj (s, cx) h =
-        let sz = Deque.size cx in
-        if sz < !alen then alen := sz;
-        if sz = !alen then begin
-          if sz >= Array.length !arr then begin
-            let a = Array.make (2 * Array.length !arr) None in
-            Array.blit !arr 0 a 0 !alen; arr := a
-          end;
-          !arr.(sz) <- Some h; incr alen
-        end;
-        (s, Deque.snoc cx h)
-      method! ix_lookup cx n =
-        let sz = Deque.size cx in
-        if sz = !alen && n >= 1 && n <= sz then !arr.(sz - n)
-        else Deque.nth ~backwards:true cx (n - 1)
     end in
     let scx = ((), Deque.of_list ann_prefix) in
     let suffix = Deque.of_list (Array.to_list (Array.sub raw l (n - l))) in
@@ -1970,22 +1826,15 @@ let ship ob fpout thyout record =
         | None -> Schedule.Immediate has_success
         | Some meth ->
            let frontend_ob =
-             (* Prune the context only on the backend path: it must happen
-                after every expansion (`expand_defs`, `Expr.Elab.normalize`,
-                the ENABLED/`\cdot` machinery) has introduced its references,
-                and after the triviality check, which can discharge a support
-                obligation from a hidden fact equal to the goal. *)
              match meth with
              (* The obligations sent to FOL backends are normalized using the
               * action frontend by default *)
              | Method.LS4 _ ->
                  lazy (Pltl.process_obligation
-                           (prune_context
-                              (Lazy.force normalize_expand_ob)))
+                           (Lazy.force normalize_expand_ob))
              | _ ->
                  lazy (Action.process_obligation
-                           (prune_context
-                              (Lazy.force normalize_expand_ob)))
+                           (Lazy.force normalize_expand_ob))
            in
            let tmo = !Params.backend_timeout *. !Params.timeout_stretch in
            print_obl_and_msg
