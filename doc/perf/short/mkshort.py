@@ -432,6 +432,7 @@ removes context runs after that point, on the backend path only &mdash; so
 <code>--printallobs</code> output and cache hits are unchanged by construction rather
 than by testing.</p>""")
 
+    c.append(_noise_sentence())
     c.append(_completeness())
     c.append("""<h4>Measurement machine</h4>
 <div class="scroller"><table><tbody>
@@ -450,6 +451,45 @@ missing cell rather than as a step averaged into a curve. <code>main</code> is
 measured twice, at the start of the campaign and at the end; %s</p>""" % (
         boot or "&mdash;", _drift_sentence()))
     return "".join(c)
+
+
+def _noise_sentence():
+    """A known-zero pair: the editor pool touches only lsp/, so the preparation
+    path cannot change across it.  Whatever it measures is the noise."""
+    zero = None
+    for pid, title, tag, cms, _ in CT.PRS:
+        files = {f for cm in cms for f, _, _ in BY_LABEL[cm][3]}
+        if len(cms) == 1 and files and all(f.startswith("lsp/") for f in files):
+            zero = cms[0]
+    if zero is None:
+        return ""
+    i = L.POINTS.index(zero)
+    prev = L.POINTS[i - 1]
+    parts = []
+    for cp in L.CORPORA:
+        a, b = val(cp, prev, "prep"), val(cp, zero, "prep")
+        pa, pb = val(cp, prev, "peak"), val(cp, zero, "peak")
+        if isinstance(a, int) and isinstance(b, int) and a and b:
+            d = abs(a - b) / float(max(a, b)) * 100
+            e = (abs(pa - pb) / float(max(pa, pb)) * 100
+                 if isinstance(pa, int) and isinstance(pb, int) and max(pa, pb) else None)
+            parts.append("%s %.1f&nbsp;%%%s" % (
+                {"tiny": "small", "synth100": "600", "synth300": "1 800",
+                 "ffi": "chain", "mono": "monolith"}[cp], d,
+                "" if e is None else " (memory %.2f&nbsp;%%)" % e))
+    if not parts:
+        return ""
+    return ("<p>One pair calibrates the noise better than the baseline repeat does. "
+            "The editor obligation pool changes only files under <code>lsp/</code>, so "
+            "the command-line preparation path across it cannot differ &mdash; whatever "
+            "the campaign measures there <em>is</em> the run-to-run spread, on a pair "
+            "whose true answer is known to be zero. It measures: %s. That is the floor "
+            "any ratio in &sect;6 has to clear, and it is why a commit is only credited "
+            "with an effect when it is a sustained step rather than a single large "
+            "ratio. Read it per corpus: the floor is widest where the run is shortest, "
+            "which is one reason the ratios in &sect;6 are quoted on the "
+            "1&nbsp;800-obligation corpus and the two private specifications rather "
+            "than on the small ones.</p>" % ", ".join(parts))
 
 
 def _completeness():
