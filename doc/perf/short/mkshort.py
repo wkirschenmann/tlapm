@@ -307,7 +307,7 @@ def sec_problem():
         c.append("<p>The same wall stands in the editor. Re-checking the refinement chain "
                  "after a single edit, with every fingerprint already in the cache, "
                  "%s on <code>main</code> and takes %s after this series.</p>"
-                 % ("exceeds the half-hour ceiling" if it_main in L.FAILED
+                 % ("does not finish inside the fifteen-minute ceiling" if it_main in L.FAILED
                     else "takes " + L.fmt_ms(it_main),
                     L.fmt_ms(it_tip) if it_tip is not None else "&mdash;"))
     if ks_main and ks_tip:
@@ -642,11 +642,38 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
         "the LSP protocol. Seconds; lower is better.",
         "Keystroke to diagnostics latency per commit on the private refinement chain.",
         keyser(), "s", lambda v: "%.1f s" % v,
-        "This is the only metric on which the last two pull requests are visible at all, "
-        "and it is why they are in the series. Everything else in &sect;7 was dropped "
-        "because it moved nothing here either.",
+        _keystroke_caption(),
         series=[("private refinement chain", "ffi", C.PRIV, "5 3")]))
     return "".join(c)
+
+
+def _keystroke_caption():
+    """The strongest available form of the claim about the last pull requests:
+    not a ratio of medians but whether the measured ranges overlap at all."""
+    rng = L.keystroke_ranges()
+    tail = [c[-1] for _, _, c in L.PRS][-4:]          # the deque's successors at the end
+    have = [pt for pt in tail if pt in rng]
+    base = ("After the deque, this is the only metric the last pull requests move at "
+            "all, and it is why they are in the series: none of them touches the "
+            "per-obligation preparation loop, so on every other chart they are flat.")
+    if len(have) < 2:
+        return base
+    chain, ok = [], True
+    for a, b in zip(have, have[1:]):
+        na, loa, hia = rng[a]
+        nb, lob, hib = rng[b]
+        ok = ok and hib < loa
+        chain.append("%.2f&ndash;%.2f&nbsp;s" % (lob, hib))
+    n = min(rng[pt][0] for pt in have)
+    first = rng[have[0]]
+    if ok:
+        return (base + " The separation is not a ratio of medians: at n&nbsp;=&nbsp;%d the "
+                "measured ranges are <strong>entirely disjoint</strong> &mdash; %s, then %s "
+                "&mdash; so each of these pull requests is below its predecessor on every "
+                "single repetition, not on average." %
+                (n, "%.2f&ndash;%.2f&nbsp;s" % (first[1], first[2]), ", then ".join(chain)))
+    return (base + " At n&nbsp;=&nbsp;%d the ranges are %s, then %s." %
+            (n, "%.2f&ndash;%.2f&nbsp;s" % (first[1], first[2]), ", then ".join(chain)))
 
 
 def sec_perpr():

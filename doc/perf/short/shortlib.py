@@ -101,8 +101,17 @@ def main_point(sweep, corpus, field):
     return DNC
 
 
+# The iteration-latency harness names the private refinement chain "chain"; every
+# other reader calls it "ffi", after the module.  One vocabulary, mapped on read,
+# so a lookup can never silently return nothing -- which it did, and the chart
+# drew without its main series.
+ITER_CORPUS = {"chain": "ffi"}
+
+
 def load_iteration_latency(path=None, boot=None):
-    """{(corpus, point): (median_ms, spread, runs, reported)} — warm cache, one edit."""
+    """{(corpus, point): (median_ms, spread, runs, reported)} — warm cache, one edit.
+
+    Corpus names are normalised to the sweep's vocabulary on read."""
     path = path or os.path.join(S, "short_iterlat.csv")
     if not os.path.exists(path):
         return {}, None
@@ -111,7 +120,8 @@ def load_iteration_latency(path=None, boot=None):
     with open(path) as f:
         for r in csv.DictReader(f):
             boots.add(r["boot"])
-            k = (r["boot"], r["corpus"], r["point"])
+            cp = ITER_CORPUS.get(r["corpus"], r["corpus"])
+            k = (r["boot"], cp, r["point"])
             rc = int(r["rc"])
             runs[k].append((int(r["ms"]), rc))
             rep[k] = int(r["proved"]) + int(r["failed"]) + int(r["trivial"])
@@ -164,6 +174,28 @@ def load_keystroke(path=None, boot=None):
         sp = (max(v) - min(v)) / float(max(v)) if max(v) else 0.0
         out[pt] = (med, sp, len(v))
     return out, boot
+
+
+def keystroke_ranges(path=None, boot=None):
+    """{point: (n, lo, hi)} at the largest repetition count measured per point."""
+    path = path or os.path.join(S, "short_keystroke.csv")
+    if not os.path.exists(path):
+        return {}
+    vals, boots = collections.defaultdict(list), set()
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            if r["kind"] != "edit":
+                continue
+            boots.add(r["boot"])
+            vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
+    if not boots:
+        return {}
+    boot = boot or max(boots, key=lambda b: sum(1 for k in vals if k[0] == b))
+    best = {}
+    for (b, pt, n), v in vals.items():
+        if b == boot and (pt not in best or n > best[pt][0]):
+            best[pt] = (n, min(v), max(v))
+    return best
 
 
 def fmt_ms(v, unit="s"):
