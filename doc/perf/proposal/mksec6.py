@@ -103,7 +103,11 @@ PRS = [
       happened to be running, and the outer region's remainder fell into <code>other</code>.
       <code>store_module</code> is clocked as <em>analysis</em> from inside the <em>simplification</em>
       region, so on <code>main</code> every large run mis-attributes its two biggest phases.
-      Keep a stack; on push, suspend the enclosing clock; on pop, resume it.""",
+      Keep a stack: the interval since the last event is always charged to the clock on top, so a
+      nested region is subtracted from its enclosing one and the enclosing one resumes when it ends.
+      One unbalanced start/stop pair had to be fixed for the stack to hold &mdash; the
+      <code>--check</code> test is hoisted into the enclosing condition, so the recheck clock is
+      stopped exactly when it was started.""",
       gate="Both suites green; the phase table's <em>total</em> row is unchanged and the sum of the rows now equals it.",
       model="Fable 5"),
     dict(pt="c02", sha="e71feaf", subject="util/timing: host the named pipeline clocks",
@@ -207,9 +211,15 @@ PRS = [
       bisect a prune-related failure.""",
       model="Fable 5"),
     dict(pt="c09", sha="be2cb6b", subject="backend/prep: prune unreferenced hidden facts from obligation contexts",
-      what="""Extends the same marking pass to hidden <em>facts</em> — the instantiated theorem
+      what="""Extends the same marking pass to hidden <em>facts</em> &mdash; the instantiated theorem
       statements, which are the bulk of the context on refinement-heavy specifications. Same slot
-      replacement, same self-check. Must land after the previous commit: same function, same pass.""",
+      replacement, same self-check, and it must land after the previous commit: same function, same
+      pass. The soundness argument is specific to what &ldquo;hidden&rdquo; means at this point in the
+      pipeline: a fact is hidden here only if the obligation does not cite it, since a
+      <code>BY</code>/<code>USE</code> citation marks it visible during proof generation, which
+      happens before this pass. The backend translations assert only visible facts, so an unreferenced
+      hidden fact is dead weight carried through every encoding pass &mdash; and dropping a premise
+      cannot turn an unprovable sequent provable.""",
       gate="""Same subset protocol. On the arm pair covering both commits: <strong>4 200 deleted
       lines, 0 added</strong> across 11 paired solver inputs, and 5 664 of 7 509 hypothesis slots
       (75.4 %) removed on the sampled range with identical verdicts.""",
@@ -247,7 +257,9 @@ PRS = [
       model="Opus 5"),
     dict(pt="c12", sha="991239f", subject="backend/prep: differential oracle for the normalize cache",
       what="""<code>TLAPM_CHECK_ELABCACHE=1</code> runs both the resumed and the whole-sequent
-      normalisation on every obligation and compares the results structurally, aborting on divergence.
+      normalisation on every obligation and compares the resulting terms structurally &mdash; not
+      their printed form, which would hide a difference the backends can see. A divergence is fatal
+      and names the obligation it happened on.
       Off by default and inert; it exists so that the previous commit's invariant is testable rather
       than asserted.""",
       gate="""Inert without the variable, so the obligation stream is trivially unchanged. With the

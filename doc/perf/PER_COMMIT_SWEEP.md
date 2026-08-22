@@ -28,8 +28,8 @@ specification content appears here or anywhere in the repository.
 > `—` have not been measured yet; nothing here is filled in from another
 > boot or from an earlier campaign.  Outstanding:
 >
-> * ffi: c01, c02, c03, c04, c05, c08, c10, c11
-> * mono: c01, c02, c03, c04, c05, c06, c08, c10, c11
+> * ffi: c01, c02, c03, c04, c08, c10, c11
+> * mono: c01, c02, c03, c04, c08, c10, c11
 
 
 ## public synthetic, 1 800 obligations
@@ -140,7 +140,7 @@ specification content appears here or anywhere in the repository.
 | c02 | `e71feaf` util/timing: host the named pipeline clocks | 32.9 s | — | — |
 | c03 | `023f200` timing: attribute generation, fingerprinting and fp saving to their clocks | 33.4 s | — | — |
 | c04 | `4901a02` backend/schedule: reap finished provers early; refresh deadline clock | 32.0 s | — | — |
-| c05 | `a0ed498` fix: kill timed-out provers with SIGTERM, not SIGHUP | 34.8 s | — | — |
+| c05 | `a0ed498` fix: kill timed-out provers with SIGTERM, not SIGHUP | 34.8 s | > 900 s | — |
 | c06 | `cb9ce43` util/Deque: cheaper nth, first_n and equal on rear-heavy deques | 3.91 s | > 900 s | — |
 | c07 | `0e47a7e` backend/prep: expand visible definitions in a single pass | 3.72 s | aborted | 11.19 GB |
 | c08 | `dc37462` backend/prep: prune hidden definitions unreachable from the goal | 3.71 s | — | — |
@@ -173,8 +173,8 @@ specification content appears here or anywhere in the repository.
 | c02 | `e71feaf` util/timing: host the named pipeline clocks | 62.2 s | — | — |
 | c03 | `023f200` timing: attribute generation, fingerprinting and fp saving to their clocks | 62.3 s | — | — |
 | c04 | `4901a02` backend/schedule: reap finished provers early; refresh deadline clock | 62.5 s | — | — |
-| c05 | `a0ed498` fix: kill timed-out provers with SIGTERM, not SIGHUP | 65.7 s | — | — |
-| c06 | `cb9ce43` util/Deque: cheaper nth, first_n and equal on rear-heavy deques | 9.93 s | — | — |
+| c05 | `a0ed498` fix: kill timed-out provers with SIGTERM, not SIGHUP | 65.7 s | aborted | 11.19 GB |
+| c06 | `cb9ce43` util/Deque: cheaper nth, first_n and equal on rear-heavy deques | 9.93 s | aborted | 11.19 GB |
 | c07 | `0e47a7e` backend/prep: expand visible definitions in a single pass | 9.96 s | aborted | 11.19 GB |
 | c08 | `dc37462` backend/prep: prune hidden definitions unreachable from the goal | 11.5 s | — | — |
 | c09 | `be2cb6b` backend/prep: prune unreferenced hidden facts from obligation contexts | 10.3 s | > 900 s | — |
