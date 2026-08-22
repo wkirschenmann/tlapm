@@ -252,7 +252,12 @@ PRS = [
       obligation of its own: the except pass runs only on non-temporal sequents, so temporal and
       non-temporal obligations resume from <em>separate</em> slots &mdash; their checkpoints are not
       interchangeable.""",
-      gate="Output-preserving; same <code>--debug noprepcache</code> A/B; both suites green.",
+      gate="""Output-preserving; same <code>--debug noprepcache</code> A/B; both suites green. One
+      warning for anyone reproducing this on a generated corpus: on the synthetic family this commit
+      reads 4 % <em>slower</em>, because those contexts share no physical prefix worth resuming, so the
+      cache pays its bookkeeping and gets nothing back. On a real INSTANCE-heavy specification it is
+      &times;1.36 &mdash; 226.4 s to 166.2 s. The generator under-states exactly this change, which is
+      why the proposal does not rest on it.""",
       guard="<code>--debug noprepcache</code>.",
       model="Opus 5"),
     dict(pt="c12", sha="991239f", subject="backend/prep: differential oracle for the normalize cache",

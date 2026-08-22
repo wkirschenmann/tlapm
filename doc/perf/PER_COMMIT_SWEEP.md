@@ -28,8 +28,8 @@ specification content appears here or anywhere in the repository.
 > `—` have not been measured yet; nothing here is filled in from another
 > boot or from an earlier campaign.  Outstanding:
 >
-> * ffi: c01, c02, c03, c04, c08, c10, c11
-> * mono: c01, c02, c03, c04, c08, c10, c11
+> * ffi: c01, c02, c03, c04, c08
+> * mono: c01, c02, c03, c04, c08
 
 
 ## public synthetic, 1 800 obligations
@@ -145,8 +145,8 @@ specification content appears here or anywhere in the repository.
 | c07 | `0e47a7e` backend/prep: expand visible definitions in a single pass | 3.72 s | aborted | 11.19 GB |
 | c08 | `dc37462` backend/prep: prune hidden definitions unreachable from the goal | 3.71 s | — | — |
 | c09 | `be2cb6b` backend/prep: prune unreferenced hidden facts from obligation contexts | 3.95 s | 764.5 s | 4.88 GB |
-| c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 3.80 s | — | — |
-| c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 3.81 s | — | — |
+| c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 3.80 s | 226.4 s | 4.50 GB |
+| c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 3.81 s | 166.2 s | 4.17 GB |
 | c12 | `991239f` backend/prep: differential oracle for the normalize cache | 3.93 s | 177.8 s | 4.17 GB |
 | c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 3.85 s | 179.9 s | 4.00 GB |
 | c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 2.46 s | 177.7 s | 3.94 GB |
@@ -178,8 +178,8 @@ specification content appears here or anywhere in the repository.
 | c07 | `0e47a7e` backend/prep: expand visible definitions in a single pass | 9.96 s | aborted | 11.19 GB |
 | c08 | `dc37462` backend/prep: prune hidden definitions unreachable from the goal | 11.5 s | — | — |
 | c09 | `be2cb6b` backend/prep: prune unreferenced hidden facts from obligation contexts | 10.3 s | > 900 s | — |
-| c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 10.6 s | — | — |
-| c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 10.5 s | — | — |
+| c10 | `0a00f77` backend/prep: reuse preparation work across obligations sharing a context prefix | 10.6 s | aborted | 11.19 GB |
+| c11 | `a5158d1` backend/prep: prefix-resume cache for Elab.normalize | 10.5 s | aborted | 11.19 GB |
 | c12 | `991239f` backend/prep: differential oracle for the normalize cache | 10.5 s | aborted | 11.19 GB |
 | c13 | `b70585f` backend/schedule: pull tasks from a stream instead of a materialized list | 10.3 s | 405.7 s | 11.10 GB |
 | c14 | `ba1df8c` module/Elab: make ENABLED-axioms detection linear in context size | 6.69 s | 389.9 s | 10.93 GB |

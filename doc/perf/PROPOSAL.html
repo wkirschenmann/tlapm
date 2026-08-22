@@ -1000,21 +1000,21 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">341 ms &rarr; 319 ms <span class="r">&times;1.07</span></td><td class="num">8.95 s &rarr; 6.38 s <span class="r">&times;1.40</span></td><td class="num">168 MB &rarr; 167 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 138 ms</td><td class="num">936 ms &rarr; 828 ms <span class="r">&times;1.13</span></td><td class="num">61 MB &rarr; 60 MB</td></tr>
-        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.95 s &rarr; 3.80 s <span class="r">&times;1.04</span></td><td class="num">not measured</td><td class="num">not measured</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.3 s &rarr; 10.6 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
+        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.95 s &rarr; 3.80 s <span class="r">&times;1.04</span></td><td class="num">764.5 s &rarr; 226.4 s <span class="r">&times;3.38</span></td><td class="num">4.88 GB &rarr; 4.50 GB <span class="r">&times;1.08</span></td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.3 s &rarr; 10.6 s</td><td class="num">&gt; 900 s &rarr; aborts on memory</td><td class="num">&gt; 0 s &rarr; aborts on memory</td></tr>
       </tbody></table></div>
     </div>
     <div class="cm">
       <p class="cm-h"><code>a5158d1</code> backend/prep: prefix-resume cache for Elab.normalize <span class="mdl">Opus 5</span></p>
       <p class="cm-files"><span class="fl-h">4 files, +107/&minus;13</span> <code>src/backend/prep.ml</code>&nbsp;<span class="pm">+72/&minus;5</span> <code>src/expr.mli</code>&nbsp;<span class="pm">+7/&minus;0</span> <code>src/expr/e_elab.ml</code>&nbsp;<span class="pm">+17/&minus;8</span> <code>src/expr/e_elab.mli</code>&nbsp;<span class="pm">+11/&minus;0</span></p>
       <p><span class="lbl">changes</span> The same prefix idea for <code>Expr.Elab.normalize</code>, the single most expensive per-obligation pass: normalise the divergent tail against the retained normalised prefix instead of the whole sequent. The two normalisation passes are interleaved per hypothesis so that one checkpoint serves both, which is the same computation because the let pass&rsquo;s input and scope at each position are unaffected by the interleaving. One subtlety carries a correctness obligation of its own: the except pass runs only on non-temporal sequents, so temporal and non-temporal obligations resume from <em>separate</em> slots &mdash; their checkpoints are not interchangeable.</p>
-      <p><span class="lbl">gate</span> Output-preserving; same <code>--debug noprepcache</code> A/B; both suites green.</p>
+      <p><span class="lbl">gate</span> Output-preserving; same <code>--debug noprepcache</code> A/B; both suites green. One warning for anyone reproducing this on a generated corpus: on the synthetic family this commit reads 4 % <em>slower</em>, because those contexts share no physical prefix worth resuming, so the cache pays its bookkeeping and gets nothing back. On a real INSTANCE-heavy specification it is &times;1.36 &mdash; 226.4 s to 166.2 s. The generator under-states exactly this change, which is why the proposal does not rest on it.</p>
       <p><span class="lbl">switch</span> <code>--debug noprepcache</code>.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">319 ms &rarr; 345 ms <span class="w">+8&thinsp;%</span></td><td class="num">6.38 s &rarr; 6.64 s <span class="w">+4&thinsp;%</span></td><td class="num">167 MB &rarr; 166 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">138 ms &rarr; 136 ms</td><td class="num">828 ms &rarr; 830 ms</td><td class="num">60 MB &rarr; 59 MB</td></tr>
-        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.80 s &rarr; 3.81 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.6 s &rarr; 10.5 s</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.80 s &rarr; 3.81 s</td><td class="num">226.4 s &rarr; 166.2 s <span class="r">&times;1.36</span></td><td class="num">4.50 GB &rarr; 4.17 GB <span class="r">&times;1.08</span></td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.6 s &rarr; 10.5 s</td><td class="num">aborts on memory &rarr; aborts on memory</td><td class="num">aborts on memory &rarr; aborts on memory</td></tr>
       </tbody></table></div>
     </div>
     <div class="cm">
@@ -1026,8 +1026,8 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">345 ms &rarr; 331 ms <span class="r">&times;1.04</span></td><td class="num">6.64 s &rarr; 6.39 s <span class="r">&times;1.04</span></td><td class="num">166 MB &rarr; 167 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">136 ms &rarr; 137 ms</td><td class="num">830 ms &rarr; 813 ms</td><td class="num">59 MB &rarr; 59 MB</td></tr>
-        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.81 s &rarr; 3.93 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
-        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.5 s &rarr; 10.5 s</td><td class="num">not measured</td><td class="num">not measured</td></tr>
+        <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.81 s &rarr; 3.93 s</td><td class="num">166.2 s &rarr; 177.8 s <span class="w">+7&thinsp;%</span></td><td class="num">4.17 GB &rarr; 4.17 GB</td></tr>
+        <tr><td>30k monolith — 29 965 obligations</td><td class="num">10.5 s &rarr; 10.5 s</td><td class="num">aborts on memory &rarr; aborts on memory</td><td class="num">aborts on memory &rarr; aborts on memory</td></tr>
       </tbody></table></div>
     </div>
   </div>
