@@ -316,12 +316,12 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   obligations to fail and gets 2 of 2, because Z3&nbsp;4.8.9 does not prove
   <code>\E y : y # x</code> here. It fails the same way on <code>main</code>, so it is a property of
   the prover versions in this environment, not of any change proposed here.</p>
-  <p class="note">An earlier version of this gate said &ldquo;40 of 48 pass without Isabelle&rdquo;.
-  That was measured in an environment where Isabelle was genuinely absent, and it under-states the
-  gate: with Isabelle present, seven of those eight failures disappear. The stack is worth installing
-  before reviewing this branch &mdash; the download is pinned by SHA-256 in
-  <code>deps/isabelle/dune.mk</code> and the TLA+ heap builds in about half a minute on four
-  cores.</p>
+  
+  <p class="note">The stack is worth installing before reviewing this branch: the download is pinned
+  by SHA-256 in <code>deps/isabelle/dune.mk</code>, and the TLA+ heap builds in about half a minute on
+  four cores. Without Isabelle the same suite reports 40 of 48, and the fail-set is still identical to
+  <code>main</code>&rsquo;s &mdash; the gate holds either way, but seven of the failures are the
+  missing backend rather than anything this branch does.</p>
   <p>For output-preserving changes, the obligation stream is compared before and after:</p>
   <pre>tlapm -N --toolbox 0 0 --printallobs --nofp MODULE.tla 2&gt;&amp;1 \
   | grep -vE '^@!!(time-used|id):' &gt; arm.txt
@@ -619,10 +619,9 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     3 561 and 3 578 of 3 774 obligations), the single-pass expansion takes it to 143.9 s, and the
     caches to 34.6 s &mdash; &times;4.1, the largest single step on this metric anywhere. The prunes
     are &times;1.01 there and &times;1.08 on the synthetic: they cut the work a prover sees, not the
-    work a warm re-check does. The earlier proxy, <code>tlapm -N</code> with no cache, is kept in the
-    raw table as the floor it is &mdash; it measures the part of the loop before any obligation is
-    looked up, and it ranked the deque fix first on a corpus where it does not break the
-    wall.</figcaption>
+    work a warm re-check does. <code>tlapm -N</code> with no cache is kept in the raw table as the floor it
+    is: it measures the part of the loop that runs before any obligation is looked up, which is why it
+    ranks the deque fix first on a corpus where the deque fix does not break the wall.</figcaption>
   </figure>
   <figure style="margin-top:20px">
     <h4 style="margin:0 0 2px">Peak resident memory</h4>
@@ -1108,7 +1107,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p class="cm-h"><code>393164e</code> backend/toolbox: single-pass definition expansion in the result printer <span class="mdl">unrecorded version</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +18/&minus;11</span> <code>src/backend/toolbox.ml</code>&nbsp;<span class="pm">+18/&minus;11</span></p>
       <p><span class="lbl">changes</span> Compose the substitutions once, as in pull request 2, in the printer&rsquo;s own expansion &mdash; restricted to this printer&rsquo;s historical filter, visible <code>Operator</code> definitions only, so the printed obligation is identical rather than merely equivalent.</p>
-      <p><span class="lbl">gate</span> Output-preserving: the printed obligations are byte-identical, which is directly observable since this code path <em>is</em> the output. Both suites green. <strong>The performance claim does not survive measurement.</strong> This change only runs on a fingerprint hit, so it needed the warm path to show anything &mdash; and iteration latency, which is exactly that path with 1 500 hits reported per run, gives 2.89 s to 2.77 s, inside the spread. An earlier figure of &times;4.3 came from a different corpus and campaign and is withdrawn: on the evidence here this pull request is argued on its mechanism, like the other five.</p>
+      <p><span class="lbl">gate</span> Output-preserving: the printed obligations are byte-identical, which is directly observable since this code path <em>is</em> the output. Both suites green. <strong>No measurement supports a performance claim.</strong> This change only runs on a fingerprint hit, so the warm path is where it would show: iteration latency, which is exactly that path, gives 2.89 s to 2.77 s on the synthetic corpus with 1 500 hits reported per run, and 32.6 s to 33.3 s on the refinement chain. Both are inside the spread, so it is argued on its mechanism.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.89 s &rarr; 2.77 s <span class="r">&times;1.04</span></td></tr>
         <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, 3 773 obl.</td><td class="num" colspan="3">32.6 s &rarr; 33.3 s</td></tr>

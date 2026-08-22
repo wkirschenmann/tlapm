@@ -246,10 +246,9 @@ A("""    <figcaption>On the public corpus three changes carry it &mdash; the deq
     3 561 and 3 578 of 3 774 obligations), the single-pass expansion takes it to 143.9 s, and the
     caches to 34.6 s &mdash; &times;4.1, the largest single step on this metric anywhere. The prunes
     are &times;1.01 there and &times;1.08 on the synthetic: they cut the work a prover sees, not the
-    work a warm re-check does. The earlier proxy, <code>tlapm -N</code> with no cache, is kept in the
-    raw table as the floor it is &mdash; it measures the part of the loop before any obligation is
-    looked up, and it ranked the deque fix first on a corpus where it does not break the
-    wall.</figcaption>""")
+    work a warm re-check does. <code>tlapm -N</code> with no cache is kept in the raw table as the floor it
+    is: it measures the part of the loop that runs before any obligation is looked up, which is why it
+    ranks the deque fix first on a corpus where the deque fix does not break the wall.</figcaption>""")
 A('  </figure>')
 
 A('  <figure style="margin-top:20px">')

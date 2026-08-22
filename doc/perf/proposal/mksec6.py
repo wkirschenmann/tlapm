@@ -335,12 +335,11 @@ PRS = [
       <code>Operator</code> definitions only, so the printed obligation is identical rather than
       merely equivalent.""",
       gate="""Output-preserving: the printed obligations are byte-identical, which is directly
-      observable since this code path <em>is</em> the output. Both suites green. <strong>The
-      performance claim does not survive measurement.</strong> This change only runs on a fingerprint
-      hit, so it needed the warm path to show anything &mdash; and iteration latency, which is exactly
-      that path with 1 500 hits reported per run, gives 2.89 s to 2.77 s, inside the spread. An earlier
-      figure of &times;4.3 came from a different corpus and campaign and is withdrawn: on the evidence
-      here this pull request is argued on its mechanism, like the other five.""",
+      observable since this code path <em>is</em> the output. Both suites green. <strong>No measurement
+      supports a performance claim.</strong> This change only runs on a fingerprint hit, so the warm
+      path is where it would show: iteration latency, which is exactly that path, gives 2.89 s to
+      2.77 s on the synthetic corpus with 1 500 hits reported per run, and 32.6 s to 33.3 s on the
+      refinement chain. Both are inside the spread, so it is argued on its mechanism.""",
       model="unrecorded version"),
    ]),
 
