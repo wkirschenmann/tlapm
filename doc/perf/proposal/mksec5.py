@@ -5,6 +5,7 @@ import os, math, sweeplib
 
 S = os.environ.get("SWEEP_DIR", os.path.dirname(os.path.abspath(__file__)))
 rows, BOOT = sweeplib.load()
+ITER, ITER_SPREAD = sweeplib.load_iteration_latency()
 SPREAD = rows.get("_spread", {})
 DNC   = "DNC"      # measured, run did not complete (generic)
 CEIL  = "CEIL"     # stopped at the timeout ceiling
@@ -58,6 +59,11 @@ def get(pt, cp, f):
 def thr(pt, cp):
     v = get(pt, cp, "m1_ms")
     return v if (v is None or v in FAILED) else OBL[cp]*1000.0/v
+
+def iterlat(pt, cp=None):
+    """median iteration latency at this point, ms; measured on the 1 800-obligation
+       corpus only, so it is a single series rather than one per corpus"""
+    return ITER.get(pt)
 
 def peak(pt, cp):
     r = rows.get((pt, cp))
@@ -206,19 +212,24 @@ A('    <figcaption>The three steps that carry throughput are the deque lookups, 
 A('  </figure>')
 
 A('  <figure style="margin-top:20px">')
-A('    <h4 style="margin:0 0 2px">Latency floor</h4>')
-A('    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">'
-  '<code>tlapm -N --nofp</code>: parse, elaborate, generate obligations, stop. What every editor '
-  'interaction pays before anything else happens, and the fixed per-worker cost of any parallel '
-  'scheme. Lower is better.</p>')
-A('    ' + chart("Latency floor",
-    "Parse, elaborate and generate, in milliseconds, one point per pull request, four corpora on a log axis; three commits carry the whole drop.",
-    {cp: [get(p, cp, "m0_ms") for p in PTS] for _, cp, _, _ in SERIES}, "ms",
-    lambda v: "%.1f s" % (v/1000.0) if v >= 1000 else "%g ms" % round(v)))
-A('    <figcaption>Three commits carry all of it &mdash; the deque lookups, the linear ENABLED scan '
-  'and the memoized grammar. The prunes and the caches are flat here by construction: none of them '
-  'runs before an obligation exists. This is the one metric where every corpus completes on '
-  '<code>main</code>, so it is also the one that can be read as a ratio.</figcaption>')
+A('    <h4 style="margin:0 0 2px">Iteration latency</h4>')
+A('    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">The wait after editing one proof '
+  'step in a file whose fingerprints are all present: parse, elaborate, generate, check every '
+  'obligation against the cache, report the hits, prove the one that changed. This is the loop a '
+  'user actually sits in, and it is the run in which a warm cache is exercised rather than bypassed. '
+  'Median of three runs on the 1 800-obligation corpus; worst spread across the campaign '
+  '%.0f&nbsp;%%. Lower is better.</p>' % (100*max(ITER_SPREAD.values()) if ITER_SPREAD else 0))
+A('    ' + chart("Iteration latency",
+    "Iteration latency after a single edit with a full fingerprint cache, one point per pull request: 8.8 seconds on main falling to 2.5 seconds, with the steps at the deque lookups, the single-pass expansion and the prefix caches.",
+    {"synth300": [iterlat(p) for p in PTS], "synth100": [None]*len(PTS),
+     "ffi": [None]*len(PTS), "mono": [None]*len(PTS)}, "ms",
+    lambda v: "%.2f s" % (v/1000.0)))
+A('    <figcaption>Three changes carry it: the deque lookups (&times;1.51), the single-pass expansion '
+  '(&times;1.46) and the prefix-resume caches (&times;1.30). The two prunes are &times;1.08 here &mdash; '
+  'they cut the work a prover sees, not the work a warm re-check does. Everything after the caches is '
+  'inside the spread individually and &times;1.18 jointly. The earlier proxy for this, '
+  '<code>tlapm -N</code> with no cache, is kept in the raw table as the floor it is: it measures the '
+  'part of the loop before any obligation is looked up.</figcaption>')
 A('  </figure>')
 
 A('  <figure style="margin-top:20px">')
@@ -238,14 +249,18 @@ A('  </figure>')
 A('  <div class="scroller" style="margin-top:22px">')
 A('    <table>')
 A('      <thead><tr><th>point</th><th>change</th>'
-  '<th class="num">gen, 1 800</th><th class="num">prep, 1 800</th><th class="num">peak, 1 800</th>'
-  '<th class="num">prep, chain</th><th class="num">prep, 30k</th><th class="num">peak, 30k</th></tr></thead>')
+  '<th class="num">iteration</th><th class="num">gen, 1 800</th><th class="num">prep, 1 800</th>'
+  '<th class="num">peak, 1 800</th><th class="num">prep, chain</th><th class="num">prep, 30k</th>'
+  '<th class="num">peak, 30k</th></tr></thead>')
 A('      <tbody>')
 for i, (lab, pt, name) in enumerate(PRS):
     tag = "main" if i == 0 else ("bugfixes" if i == 1 else "#%d" % (i-1))
+    it = iterlat(pt)
     A('        <tr><td class="num">%s</td><td>%s</td><td class="num">%s</td><td class="num">%s</td>'
-      '<td class="num">%s</td><td class="num">%s</td><td class="num">%s</td><td class="num">%s</td></tr>'
-      % (tag, name, fmt_ms(get(pt,"synth300","m0_ms")), fmt_ms(get(pt,"synth300","m1_ms")),
+      '<td class="num">%s</td><td class="num">%s</td><td class="num">%s</td><td class="num">%s</td>'
+      '<td class="num">%s</td></tr>'
+      % (tag, name, fmt_ms(it) if it else "&mdash;",
+         fmt_ms(get(pt,"synth300","m0_ms")), fmt_ms(get(pt,"synth300","m1_ms")),
          fmt_mb(peak(pt,"synth300")), fmt_ms(get(pt,"ffi","m1_ms")),
          fmt_ms(get(pt,"mono","m1_ms")), fmt_mb(peak(pt,"mono"))))
 A('      </tbody>')
@@ -262,11 +277,12 @@ NOISE = 0.03
 below = sum(1 for i in range(1, len(PTS))
             if num(PTS[i-1],"synth300","m1_ms") and num(PTS[i],"synth300","m1_ms")
             and abs(num(PTS[i-1],"synth300","m1_ms")/float(num(PTS[i],"synth300","m1_ms")) - 1) < NOISE)
-A("""  <p style="margin-top:14px"><strong>On the public medium case: &times;%.1f on the latency floor,
+ia, ib = iterlat("c00"), iterlat("c26")
+A("""  <p style="margin-top:14px"><strong>On the public medium case: &times;%.1f on iteration latency,
   &times;%.1f on throughput, &times;%.1f on peak memory.</strong> %d of the nineteen pull requests move
   throughput on that corpus by less than the noise floor on their own; they are in the set because of
   what they do on the two large specifications and because of the mechanism, both of which &sect;6
-  states per commit.</p>""" % (m0a/float(m0b), m1a/float(m1b), pa/float(pb), below))
+  states per commit.</p>""" % (ia/float(ib), m1a/float(m1b), pa/float(pb), below))
 A('</section>')
 
 sec = "\n".join(o) + "\n"

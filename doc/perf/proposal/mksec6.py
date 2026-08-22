@@ -37,6 +37,7 @@ def files_line(sha):
     head = "%d file%s, +%d/&minus;%d" % (len(rows), "" if len(rows) == 1 else "s", tot_a, tot_r)
     return '<span class="fl-h">%s</span> %s' % (head, " ".join(parts))
 DATA, BOOT = sweeplib.load()
+ITER, ITER_SPREAD = sweeplib.load_iteration_latency()
 def _get(pt, cp):
     return DATA.get((pt, cp))
 
@@ -333,7 +334,12 @@ PRS = [
       <code>Operator</code> definitions only, so the printed obligation is identical rather than
       merely equivalent.""",
       gate="""Output-preserving: the printed obligations are byte-identical, which is directly
-      observable since this code path <em>is</em> the output. Both suites green.""",
+      observable since this code path <em>is</em> the output. Both suites green. <strong>The
+      performance claim does not survive measurement.</strong> This change only runs on a fingerprint
+      hit, so it needed the warm path to show anything &mdash; and iteration latency, which is exactly
+      that path with 1 500 hits reported per run, gives 2.89 s to 2.77 s, inside the spread. An earlier
+      figure of &times;4.3 came from a different corpus and campaign and is withdrawn: on the evidence
+      here this pull request is argued on its mechanism, like the other five.""",
       model="unrecorded version"),
    ]),
 
@@ -524,8 +530,6 @@ PR_POINTS = [("1","c05","c06"),("2","c06","c07"),("3","c07","c09"),
              ("12","c19","c20"),("13","c20","c21"),("14","c21","c22"),("15","c22","c23"),
              ("16","c23","c24"),("17","c24","c25"),("18","c25","c26")]
 ELSEWHERE = {
- "8":  ("the warm path", "the result printer only runs on a fingerprint hit, and every "
-        "measurement in &sect;5 uses <code>--nofp</code>"),
  "11": ("the editor", "a language-server change; no CLI run exercises it"),
  "13": ("a real prover run", "the escaping regexes only run while solver input is written, "
         "and <code>--noproving</code> writes none"),
@@ -540,6 +544,12 @@ def classify(a, b):
     best = (1.0, None, None)
     per_metric = {}
     transition = None
+    ia, ib = ITER.get(a), ITER.get(b)
+    if ia and ib:
+        r = ia / float(ib)
+        per_metric.setdefault("iter", []).append(r)
+        if r > best[0]:
+            best = (r, "iter", "iteration latency")
     for f in METRICS:
         for cp in CORPORA_K:
             ra, rb = DATA.get((a, cp)), DATA.get((b, cp))
@@ -567,7 +577,7 @@ def classify(a, b):
 
 A("""  <h4>Which of these are carried by a measurement, and which are not</h4>
   <p>Computed from the campaign, not asserted. For each pull request: the largest improvement it
-  produces on any corpus and any of the three metrics in &sect;5, and whether it is the commit at
+  produces on any corpus and any of the four metrics in &sect;5, and whether it is the commit at
   which a run that did not finish starts finishing. One noisy metric on one corpus is not allowed to
   promote a change &mdash; an effect counts either because it is large on its own
   (&times;1.35 or more) or because it repeats on a second corpus. Everything else is listed as
@@ -641,6 +651,14 @@ for pr in PRS:
         b = prev_point(c["pt"])
         A('      <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th>'
           '<th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>')
+        ia, ib = ITER.get(b), ITER.get(c["pt"])
+        if ia and ib:
+            r = ia / float(ib)
+            tail = (' <span class="r">&times;%.2f</span>' % r) if r >= 1.03 else (
+                   ' <span class="w">+%d&thinsp;%%</span>' % round((1/r - 1)*100) if r <= 0.97 else "")
+            A('        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, '
+              '1 800 obl.</td><td class="num" colspan="3">%.2f s &rarr; %.2f s%s</td></tr>'
+              % (ia/1000.0, ib/1000.0, tail))
         for key, label in CORPORA:
             A('        <tr><td>%s</td><td class="num">%s</td><td class="num">%s</td><td class="num">%s</td></tr>' %
               (label, cell(b, c["pt"], key, "m0_ms"), cell(b, c["pt"], key, "m1_ms"),

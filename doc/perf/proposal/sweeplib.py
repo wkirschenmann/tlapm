@@ -54,3 +54,31 @@ def load(path=None, boot=None):
                 a[f] = int(round((a[f] + b[f]) / 2.0))
     out["_spread"] = spread
     return out, boot
+
+
+def load_iteration_latency(path=None, boot=None):
+    """median iteration latency per point, in ms, from the warm-cache one-edit runs.
+
+    Iteration latency is what a user waits after editing one proof step in a file
+    whose fingerprints are all present: parse, elaborate, generate, check every
+    obligation's fingerprint, report the hits, and prove the one that changed.
+    Three runs per point; the median is used and the spread is available."""
+    import statistics
+    path = path or os.path.join(S, "iteration_latency.csv")
+    if not os.path.exists(path):
+        return {}, {}
+    runs = collections.defaultdict(list)
+    boots = set()
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            boots.add(r["boot"])
+            runs[(r["boot"], r["point"])].append(int(r["ms"]))
+    boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
+    med, spread = {}, {}
+    for (b, pt), v in runs.items():
+        if b != boot:
+            continue
+        m = statistics.median(v)
+        med[pt] = int(m)
+        spread[pt] = (max(v) - min(v)) / m if m else 0.0
+    return med, spread

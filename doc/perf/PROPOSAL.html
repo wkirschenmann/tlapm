@@ -504,121 +504,41 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <figcaption>The three steps that carry throughput are the deque lookups, the single-pass expansion and the prune of hidden facts. On the two private specifications the branch is what makes the run exist at all: <code>main</code> has no throughput there, not a low one.</figcaption>
   </figure>
   <figure style="margin-top:20px">
-    <h4 style="margin:0 0 2px">Latency floor</h4>
-    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px"><code>tlapm -N --nofp</code>: parse, elaborate, generate obligations, stop. What every editor interaction pays before anything else happens, and the fixed per-worker cost of any parallel scheme. Lower is better.</p>
-    <svg viewBox="0 0 900 320" role="img" aria-label="Parse, elaborate and generate, in milliseconds, one point per pull request, four corpora on a log axis; three commits carry the whole drop.">
+    <h4 style="margin:0 0 2px">Iteration latency</h4>
+    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">The wait after editing one proof step in a file whose fingerprints are all present: parse, elaborate, generate, check every obligation against the cache, report the hits, prove the one that changed. This is the loop a user actually sits in, and it is the run in which a warm cache is exercised rather than bypassed. Median of three runs on the 1 800-obligation corpus; worst spread across the campaign 10&nbsp;%. Lower is better.</p>
+    <svg viewBox="0 0 900 320" role="img" aria-label="Iteration latency after a single edit with a full fingerprint cache, one point per pull request: 8.8 seconds on main falling to 2.5 seconds, with the steps at the deque lookups, the single-pass expansion and the prefix caches.">
       <line x1="66" y1="254" x2="880" y2="254" stroke="currentColor" stroke-width="1" opacity=".35"/>
       <line x1="66" y1="236" x2="880" y2="236" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2 3" opacity=".3"/>
-      <line x1="66" y1="236.0" x2="880" y2="236.0" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="239.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">100</text>
-      <line x1="66" y1="214.9" x2="880" y2="214.9" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="218.4" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">200</text>
-      <line x1="66" y1="187.1" x2="880" y2="187.1" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="190.6" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">500</text>
-      <line x1="66" y1="166.0" x2="880" y2="166.0" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="169.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">1k</text>
-      <line x1="66" y1="144.9" x2="880" y2="144.9" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="148.4" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">2k</text>
-      <line x1="66" y1="117.1" x2="880" y2="117.1" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="120.6" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">5k</text>
-      <line x1="66" y1="96.0" x2="880" y2="96.0" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="99.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">10k</text>
-      <line x1="66" y1="74.9" x2="880" y2="74.9" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="78.4" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">20k</text>
-      <line x1="66" y1="47.1" x2="880" y2="47.1" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="50.6" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">50k</text>
+      <line x1="66" y1="172.8" x2="880" y2="172.8" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
+      <text x="58" y="176.3" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">2k</text>
+      <line x1="66" y1="89.2" x2="880" y2="89.2" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
+      <text x="58" y="92.7" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">5k</text>
       <line x1="66" y1="26.0" x2="880" y2="26.0" stroke="currentColor" stroke-width="0.6" opacity=".13"/>
-      <text x="58" y="29.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">100k</text>
+      <text x="58" y="29.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">10k</text>
       <text x="58" y="17" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".55">ms</text>
       <text x="58" y="248.0" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" fill="currentColor" opacity=".55">none</text>
-      <polyline points="66.0,139.8 108.8,143.1 151.7,199.8 194.5,199.2 237.4,198.7 280.2,199.6 323.1,200.6 365.9,207.0 408.7,208.3 451.6,208.3 494.4,209.8 537.3,211.1 580.1,208.5 622.9,210.3 665.8,210.2 708.6,208.8 751.5,207.5 794.3,210.7 837.2,211.6 880.0,209.4" fill="none" stroke="var(--s-pub)" stroke-width="2"/>
-      <circle cx="66.0" cy="139.8" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="108.8" cy="143.1" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="151.7" cy="199.8" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="194.5" cy="199.2" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="237.4" cy="198.7" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="280.2" cy="199.6" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="323.1" cy="200.6" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="365.9" cy="207.0" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="408.7" cy="208.3" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="451.6" cy="208.3" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="494.4" cy="209.8" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="537.3" cy="211.1" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="580.1" cy="208.5" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="622.9" cy="210.3" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="665.8" cy="210.2" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="708.6" cy="208.8" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="751.5" cy="207.5" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="794.3" cy="210.7" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="837.2" cy="211.6" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="880.0" cy="209.4" r="2.6" fill="var(--s-pub)"/>
-      <text x="875.0" y="202.4" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">240 ms</text>
-      <polyline points="66.0,200.5 108.8,212.3 151.7,227.6 194.5,227.3 237.4,227.1 280.2,226.4 323.1,225.8 365.9,227.1 408.7,227.1 451.6,228.7 494.4,228.7 537.3,229.7 580.1,229.2 622.9,227.1 665.8,229.7 708.6,230.0 751.5,230.2 794.3,228.3 837.2,230.2 880.0,229.5" fill="none" stroke="var(--s-pub)" stroke-width="2" stroke-dasharray="5 3"/>
-      <circle cx="66.0" cy="200.5" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="108.8" cy="212.3" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="151.7" cy="227.6" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="194.5" cy="227.3" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="237.4" cy="227.1" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="280.2" cy="226.4" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="323.1" cy="225.8" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="365.9" cy="227.1" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="408.7" cy="227.1" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="451.6" cy="228.7" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="494.4" cy="228.7" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="537.3" cy="229.7" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="580.1" cy="229.2" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="622.9" cy="227.1" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="665.8" cy="229.7" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="708.6" cy="230.0" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="751.5" cy="230.2" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="794.3" cy="228.3" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="837.2" cy="230.2" r="2.6" fill="var(--s-pub)"/>
-      <circle cx="880.0" cy="229.5" r="2.6" fill="var(--s-pub)"/>
-      <text x="875.0" y="222.5" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">124 ms</text>
-      <polyline points="66.0,39.5 108.8,38.8 151.7,96.2 194.5,96.1 237.4,95.2 280.2,94.6 323.1,95.1 365.9,108.2 408.7,105.3 451.6,110.7 494.4,121.6 537.3,119.0 580.1,121.2 622.9,121.9 665.8,121.1 708.6,122.3 751.5,122.4 794.3,122.0 837.2,122.3 880.0,121.3" fill="none" stroke="var(--s-priv)" stroke-width="2"/>
-      <circle cx="66.0" cy="39.5" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="108.8" cy="38.8" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="151.7" cy="96.2" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="194.5" cy="96.1" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="237.4" cy="95.2" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="280.2" cy="94.6" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="323.1" cy="95.1" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="365.9" cy="108.2" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="408.7" cy="105.3" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="451.6" cy="110.7" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="494.4" cy="121.6" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="537.3" cy="119.0" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="580.1" cy="121.2" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="622.9" cy="121.9" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="665.8" cy="121.1" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="708.6" cy="122.3" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="751.5" cy="122.4" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="794.3" cy="122.0" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="837.2" cy="122.3" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="880.0" cy="121.3" r="2.6" fill="var(--s-priv)"/>
-      <text x="875.0" y="114.3" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-priv)">4.4 s</text>
-      <polyline points="66.0,58.9 108.8,58.1 151.7,124.6 194.5,126.1 237.4,124.2 280.2,124.4 323.1,125.0 365.9,138.6 408.7,140.0 451.6,140.7 494.4,148.3 537.3,149.5 580.1,149.3 622.9,148.7 665.8,149.9 708.6,150.9 751.5,148.7 794.3,150.6 837.2,148.8 880.0,150.1" fill="none" stroke="var(--s-priv)" stroke-width="2" stroke-dasharray="5 3"/>
-      <circle cx="66.0" cy="58.9" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="108.8" cy="58.1" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="151.7" cy="124.6" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="194.5" cy="126.1" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="237.4" cy="124.2" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="280.2" cy="124.4" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="323.1" cy="125.0" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="365.9" cy="138.6" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="408.7" cy="140.0" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="451.6" cy="140.7" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="494.4" cy="148.3" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="537.3" cy="149.5" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="580.1" cy="149.3" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="622.9" cy="148.7" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="665.8" cy="149.9" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="708.6" cy="150.9" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="751.5" cy="148.7" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="794.3" cy="150.6" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="837.2" cy="148.8" r="2.6" fill="var(--s-priv)"/>
-      <circle cx="880.0" cy="150.1" r="2.6" fill="var(--s-priv)"/>
-      <text x="875.0" y="143.1" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-priv)">1.7 s</text>
+      <polyline points="66.0,37.3 108.8,36.2 151.7,73.6 194.5,107.9 237.4,114.6 280.2,138.7 323.1,138.7 365.9,137.3 408.7,139.3 451.6,143.0 494.4,141.9 537.3,148.6 580.1,149.9 622.9,151.0 665.8,146.9 708.6,147.2 751.5,146.3 794.3,147.0 837.2,150.8 880.0,153.8" fill="none" stroke="var(--s-pub)" stroke-width="2"/>
+      <circle cx="66.0" cy="37.3" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="108.8" cy="36.2" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="151.7" cy="73.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="194.5" cy="107.9" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="237.4" cy="114.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="280.2" cy="138.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="323.1" cy="138.7" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="365.9" cy="137.3" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="408.7" cy="139.3" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="451.6" cy="143.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="494.4" cy="141.9" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="537.3" cy="148.6" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="580.1" cy="149.9" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="622.9" cy="151.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="665.8" cy="146.9" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="708.6" cy="147.2" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="751.5" cy="146.3" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="794.3" cy="147.0" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="837.2" cy="150.8" r="2.6" fill="var(--s-pub)"/>
+      <circle cx="880.0" cy="153.8" r="2.6" fill="var(--s-pub)"/>
+      <text x="875.0" y="146.8" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" fill="var(--s-pub)">2.46 s</text>
       <text x="66.0" y="269" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".7" transform="rotate(-45 66.0 269)">main</text>
       <text x="108.8" y="269" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".7" transform="rotate(-45 108.8 269)">fixes</text>
       <text x="151.7" y="269" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".7" transform="rotate(-45 151.7 269)">deque</text>
@@ -651,7 +571,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       </g>
       <text x="880" y="16" text-anchor="end" font-family="IBM Plex Sans, sans-serif" font-size="10.5" fill="currentColor" opacity=".7">&times; = did not complete</text>
     </svg>
-    <figcaption>Three commits carry all of it &mdash; the deque lookups, the linear ENABLED scan and the memoized grammar. The prunes and the caches are flat here by construction: none of them runs before an obligation exists. This is the one metric where every corpus completes on <code>main</code>, so it is also the one that can be read as a ratio.</figcaption>
+    <figcaption>Three changes carry it: the deque lookups (&times;1.51), the single-pass expansion (&times;1.46) and the prefix-resume caches (&times;1.30). The two prunes are &times;1.08 here &mdash; they cut the work a prover sees, not the work a warm re-check does. Everything after the caches is inside the spread individually and &times;1.18 jointly. The earlier proxy for this, <code>tlapm -N</code> with no cache, is kept in the raw table as the floor it is: it measures the part of the loop before any obligation is looked up.</figcaption>
   </figure>
   <figure style="margin-top:20px">
     <h4 style="margin:0 0 2px">Peak resident memory</h4>
@@ -801,32 +721,32 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
   </figure>
   <div class="scroller" style="margin-top:22px">
     <table>
-      <thead><tr><th>point</th><th>change</th><th class="num">gen, 1 800</th><th class="num">prep, 1 800</th><th class="num">peak, 1 800</th><th class="num">prep, chain</th><th class="num">prep, 30k</th><th class="num">peak, 30k</th></tr></thead>
+      <thead><tr><th>point</th><th>change</th><th class="num">iteration</th><th class="num">gen, 1 800</th><th class="num">prep, 1 800</th><th class="num">peak, 1 800</th><th class="num">prep, chain</th><th class="num">prep, 30k</th><th class="num">peak, 30k</th></tr></thead>
       <tbody>
-        <tr><td class="num">main</td><td>the base of the branch</td><td class="num">2.37 s</td><td class="num">51.0 s</td><td class="num">1.72 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
-        <tr><td class="num">bugfixes</td><td>the five bugfixes</td><td class="num">2.12 s</td><td class="num">50.9 s</td><td class="num">1.72 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
-        <tr><td class="num">#1</td><td>deque lookups</td><td class="num">329 ms</td><td class="num">45.0 s</td><td class="num">1.74 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
-        <tr><td class="num">#2</td><td>single-pass expansion</td><td class="num">335 ms</td><td class="num">30.4 s</td><td class="num">1.42 GB</td><td class="num">aborts on memory</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
-        <tr><td class="num">#3</td><td>the two context prunes</td><td class="num">341 ms</td><td class="num">8.95 s</td><td class="num">168 MB</td><td class="num">764.5 s</td><td class="num">&gt; 900 s</td><td class="num">&mdash;</td></tr>
-        <tr><td class="num">#4</td><td>prefix-resume caches</td><td class="num">331 ms</td><td class="num">6.39 s</td><td class="num">167 MB</td><td class="num">177.8 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
-        <tr><td class="num">#5</td><td>streamed task list</td><td class="num">320 ms</td><td class="num">7.14 s</td><td class="num">154 MB</td><td class="num">179.9 s</td><td class="num">405.7 s</td><td class="num">11.10 GB</td></tr>
-        <tr><td class="num">#6</td><td>linear ENABLED scan</td><td class="num">260 ms</td><td class="num">6.42 s</td><td class="num">156 MB</td><td class="num">177.7 s</td><td class="num">389.9 s</td><td class="num">10.93 GB</td></tr>
-        <tr><td class="num">#7</td><td>levels without slicing</td><td class="num">249 ms</td><td class="num">6.67 s</td><td class="num">156 MB</td><td class="num">175.4 s</td><td class="num">397.6 s</td><td class="num">10.94 GB</td></tr>
-        <tr><td class="num">#8</td><td>single-pass result printer</td><td class="num">249 ms</td><td class="num">6.37 s</td><td class="num">156 MB</td><td class="num">176.9 s</td><td class="num">395.2 s</td><td class="num">10.94 GB</td></tr>
-        <tr><td class="num">#9</td><td>memoized grammar</td><td class="num">237 ms</td><td class="num">6.55 s</td><td class="num">154 MB</td><td class="num">179.4 s</td><td class="num">395.7 s</td><td class="num">10.94 GB</td></tr>
-        <tr><td class="num">#10</td><td>property lookups</td><td class="num">227 ms</td><td class="num">6.29 s</td><td class="num">156 MB</td><td class="num">170.0 s</td><td class="num">366.7 s</td><td class="num">10.79 GB</td></tr>
-        <tr><td class="num">#11</td><td>editor obligation pool</td><td class="num">247 ms</td><td class="num">6.23 s</td><td class="num">155 MB</td><td class="num">172.3 s</td><td class="num">377.6 s</td><td class="num">10.79 GB</td></tr>
-        <tr><td class="num">#12</td><td>Ctx index</td><td class="num">233 ms</td><td class="num">5.96 s</td><td class="num">155 MB</td><td class="num">178.5 s</td><td class="num">379.3 s</td><td class="num">10.80 GB</td></tr>
-        <tr><td class="num">#13</td><td>SMT escaping regexes</td><td class="num">234 ms</td><td class="num">6.38 s</td><td class="num">155 MB</td><td class="num">168.7 s</td><td class="num">362.5 s</td><td class="num">10.81 GB</td></tr>
-        <tr><td class="num">#14</td><td>allocation-free spine walk</td><td class="num">245 ms</td><td class="num">6.44 s</td><td class="num">155 MB</td><td class="num">173.9 s</td><td class="num">364.9 s</td><td class="num">10.86 GB</td></tr>
-        <tr><td class="num">#15</td><td>skip identity rebuilds</td><td class="num">255 ms</td><td class="num">5.89 s</td><td class="num">155 MB</td><td class="num">174.4 s</td><td class="num">365.2 s</td><td class="num">10.86 GB</td></tr>
-        <tr><td class="num">#16</td><td>obligation comment only when kept</td><td class="num">230 ms</td><td class="num">5.88 s</td><td class="num">155 MB</td><td class="num">173.2 s</td><td class="num">377.4 s</td><td class="num">10.86 GB</td></tr>
-        <tr><td class="num">#17</td><td>level-cache lifetime</td><td class="num">223 ms</td><td class="num">5.97 s</td><td class="num">76 MB</td><td class="num">144.8 s</td><td class="num">288.0 s</td><td class="num">1.08 GB</td></tr>
-        <tr><td class="num">#18</td><td>constant-time constness index</td><td class="num">240 ms</td><td class="num">5.57 s</td><td class="num">76 MB</td><td class="num">146.4 s</td><td class="num">283.1 s</td><td class="num">1.09 GB</td></tr>
+        <tr><td class="num">main</td><td>the base of the branch</td><td class="num">8.83 s</td><td class="num">2.37 s</td><td class="num">51.0 s</td><td class="num">1.72 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
+        <tr><td class="num">bugfixes</td><td>the five bugfixes</td><td class="num">8.94 s</td><td class="num">2.12 s</td><td class="num">50.9 s</td><td class="num">1.72 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
+        <tr><td class="num">#1</td><td>deque lookups</td><td class="num">5.94 s</td><td class="num">329 ms</td><td class="num">45.0 s</td><td class="num">1.74 GB</td><td class="num">&gt; 900 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
+        <tr><td class="num">#2</td><td>single-pass expansion</td><td class="num">4.07 s</td><td class="num">335 ms</td><td class="num">30.4 s</td><td class="num">1.42 GB</td><td class="num">aborts on memory</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
+        <tr><td class="num">#3</td><td>the two context prunes</td><td class="num">3.78 s</td><td class="num">341 ms</td><td class="num">8.95 s</td><td class="num">168 MB</td><td class="num">764.5 s</td><td class="num">&gt; 900 s</td><td class="num">&mdash;</td></tr>
+        <tr><td class="num">#4</td><td>prefix-resume caches</td><td class="num">2.91 s</td><td class="num">331 ms</td><td class="num">6.39 s</td><td class="num">167 MB</td><td class="num">177.8 s</td><td class="num">aborts on memory</td><td class="num">at the cap</td></tr>
+        <tr><td class="num">#5</td><td>streamed task list</td><td class="num">2.91 s</td><td class="num">320 ms</td><td class="num">7.14 s</td><td class="num">154 MB</td><td class="num">179.9 s</td><td class="num">405.7 s</td><td class="num">11.10 GB</td></tr>
+        <tr><td class="num">#6</td><td>linear ENABLED scan</td><td class="num">2.95 s</td><td class="num">260 ms</td><td class="num">6.42 s</td><td class="num">156 MB</td><td class="num">177.7 s</td><td class="num">389.9 s</td><td class="num">10.93 GB</td></tr>
+        <tr><td class="num">#7</td><td>levels without slicing</td><td class="num">2.89 s</td><td class="num">249 ms</td><td class="num">6.67 s</td><td class="num">156 MB</td><td class="num">175.4 s</td><td class="num">397.6 s</td><td class="num">10.94 GB</td></tr>
+        <tr><td class="num">#8</td><td>single-pass result printer</td><td class="num">2.77 s</td><td class="num">249 ms</td><td class="num">6.37 s</td><td class="num">156 MB</td><td class="num">176.9 s</td><td class="num">395.2 s</td><td class="num">10.94 GB</td></tr>
+        <tr><td class="num">#9</td><td>memoized grammar</td><td class="num">2.81 s</td><td class="num">237 ms</td><td class="num">6.55 s</td><td class="num">154 MB</td><td class="num">179.4 s</td><td class="num">395.7 s</td><td class="num">10.94 GB</td></tr>
+        <tr><td class="num">#10</td><td>property lookups</td><td class="num">2.61 s</td><td class="num">227 ms</td><td class="num">6.29 s</td><td class="num">156 MB</td><td class="num">170.0 s</td><td class="num">366.7 s</td><td class="num">10.79 GB</td></tr>
+        <tr><td class="num">#11</td><td>editor obligation pool</td><td class="num">2.57 s</td><td class="num">247 ms</td><td class="num">6.23 s</td><td class="num">155 MB</td><td class="num">172.3 s</td><td class="num">377.6 s</td><td class="num">10.79 GB</td></tr>
+        <tr><td class="num">#12</td><td>Ctx index</td><td class="num">2.54 s</td><td class="num">233 ms</td><td class="num">5.96 s</td><td class="num">155 MB</td><td class="num">178.5 s</td><td class="num">379.3 s</td><td class="num">10.80 GB</td></tr>
+        <tr><td class="num">#13</td><td>SMT escaping regexes</td><td class="num">2.65 s</td><td class="num">234 ms</td><td class="num">6.38 s</td><td class="num">155 MB</td><td class="num">168.7 s</td><td class="num">362.5 s</td><td class="num">10.81 GB</td></tr>
+        <tr><td class="num">#14</td><td>allocation-free spine walk</td><td class="num">2.65 s</td><td class="num">245 ms</td><td class="num">6.44 s</td><td class="num">155 MB</td><td class="num">173.9 s</td><td class="num">364.9 s</td><td class="num">10.86 GB</td></tr>
+        <tr><td class="num">#15</td><td>skip identity rebuilds</td><td class="num">2.67 s</td><td class="num">255 ms</td><td class="num">5.89 s</td><td class="num">155 MB</td><td class="num">174.4 s</td><td class="num">365.2 s</td><td class="num">10.86 GB</td></tr>
+        <tr><td class="num">#16</td><td>obligation comment only when kept</td><td class="num">2.65 s</td><td class="num">230 ms</td><td class="num">5.88 s</td><td class="num">155 MB</td><td class="num">173.2 s</td><td class="num">377.4 s</td><td class="num">10.86 GB</td></tr>
+        <tr><td class="num">#17</td><td>level-cache lifetime</td><td class="num">2.54 s</td><td class="num">223 ms</td><td class="num">5.97 s</td><td class="num">76 MB</td><td class="num">144.8 s</td><td class="num">288.0 s</td><td class="num">1.08 GB</td></tr>
+        <tr><td class="num">#18</td><td>constant-time constness index</td><td class="num">2.46 s</td><td class="num">240 ms</td><td class="num">5.57 s</td><td class="num">76 MB</td><td class="num">146.4 s</td><td class="num">283.1 s</td><td class="num">1.09 GB</td></tr>
       </tbody>
     </table>
   </div>
-  <p style="margin-top:14px"><strong>On the public medium case: &times;9.9 on the latency floor,
+  <p style="margin-top:14px"><strong>On the public medium case: &times;3.6 on iteration latency,
   &times;9.2 on throughput, &times;23.2 on peak memory.</strong> 6 of the nineteen pull requests move
   throughput on that corpus by less than the noise floor on their own; they are in the set because of
   what they do on the two large specifications and because of the mechanism, both of which &sect;6
@@ -850,7 +770,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
   run stopped at the fifteen-minute ceiling.</div>
   <h4>Which of these are carried by a measurement, and which are not</h4>
   <p>Computed from the campaign, not asserted. For each pull request: the largest improvement it
-  produces on any corpus and any of the three metrics in &sect;5, and whether it is the commit at
+  produces on any corpus and any of the four metrics in &sect;5, and whether it is the commit at
   which a run that did not finish starts finishing. One noisy metric on one corpus is not allowed to
   promote a change &mdash; an effect counts either because it is large on its own
   (&times;1.35 or more) or because it repeats on a second corpus. Everything else is listed as
@@ -867,7 +787,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <tr><td class="num">#5</td><td>Pull tasks from a stream</td><td class="num">starts completing</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#6</td><td>Linear ENABLED-axioms detection</td><td class="num">&times;1.57</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#7</td><td>Reference levels without slicing the context</td><td class="num">&times;1.05 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
-    <tr><td class="num">#8</td><td>Single-pass expansion in the result printer</td><td class="num">not visible in &sect;5</td><td>the warm path &mdash; the result printer only runs on a fingerprint hit, and every measurement in &sect;5 uses <code>--nofp</code></td></tr>
+    <tr><td class="num">#8</td><td>Single-pass expansion in the result printer</td><td class="num">&times;1.19 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#9</td><td>Memoize the grammar</td><td class="num">&times;1.43</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
     <tr><td class="num">#10</td><td>Monomorphic property lookups</td><td class="num">&times;1.08 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
     <tr><td class="num">#11</td><td>A sorted obligation pool in the editor</td><td class="num">not visible in &sect;5</td><td>the editor &mdash; a language-server change; no CLI run exercises it</td></tr>
@@ -880,9 +800,9 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
     <tr><td class="num">#18</td><td>Constant-time De Bruijn resolution in add_constness</td><td class="num">&times;1.07 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
   </tbody></table></div>
   <p style="margin-top:12px"><strong>Read that table as a recommendation, not a description.</strong>
-  8 of the eighteen optimizations have a measured effect on a corpus in &sect;5; 4 have their effect
+  8 of the eighteen optimizations have a measured effect on a corpus in &sect;5; 3 have their effect
   somewhere this campaign structurally cannot look, and their own blocks give the number and the run
-  that produces it; 6 have no number at all and are argued on their mechanism. A maintainer who wants
+  that produces it; 7 have no number at all and are argued on their mechanism. A maintainer who wants
   only what the numbers justify can take the first two groups and leave the third: nothing in them
   depends on it.</p>
   <h4>Which model wrote which commit</h4>
@@ -969,6 +889,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> <code>nth</code> indexes the two underlying lists directly, with the same <code>None</code>/<code>Failure</code> behaviour; <code>first_n</code> shares structure with its input instead of re-consing the prefix; <code>equal</code> short-circuits on physical equality, which its main caller (the expression-level cache) hits by comparing a deque with itself.</p>
       <p><span class="lbl">gate</span> Output-preserving: obligation stream identical, both suites green, known-failing set unchanged.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">8.94 s &rarr; 5.94 s <span class="r">&times;1.51</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.12 s &rarr; 329 ms <span class="r">&times;6.46</span></td><td class="num">50.9 s &rarr; 45.0 s <span class="r">&times;1.13</span></td><td class="num">1.72 GB &rarr; 1.74 GB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">218 ms &rarr; 132 ms <span class="r">&times;1.65</span></td><td class="num">3.33 s &rarr; 2.87 s <span class="r">&times;1.16</span></td><td class="num">232 MB &rarr; 224 MB <span class="r">&times;1.04</span></td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">34.8 s &rarr; 3.91 s <span class="r">&times;8.91</span></td><td class="num">&gt; 900 s &rarr; &gt; 900 s</td><td class="num">&gt; 0 s &rarr; &gt; 0 s</td></tr>
@@ -987,6 +908,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">gate</span> Output-preserving and verified as such, but it is a rewrite of a substitution composition: the obligation stream is compared on the synthetic family and on both private specifications, not only on the test suite.</p>
       <p><span class="lbl">switch</span> None on the branch, and this is the one output-preserving change where we would argue for one anyway: the iterated formulation is gone from the file, so a future &ldquo;the prover sees something different&rdquo; report has no bisection tool. <code>--debug oldexpand</code>, kept for one release, would also make this pull request's own A/B observable inside a single binary.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">5.94 s &rarr; 4.07 s <span class="r">&times;1.46</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">329 ms &rarr; 335 ms</td><td class="num">45.0 s &rarr; 30.4 s <span class="r">&times;1.48</span></td><td class="num">1.74 GB &rarr; 1.42 GB <span class="r">&times;1.22</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">132 ms &rarr; 133 ms</td><td class="num">2.87 s &rarr; 2.75 s <span class="r">&times;1.04</span></td><td class="num">224 MB &rarr; 215 MB <span class="r">&times;1.04</span></td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.91 s &rarr; 3.72 s <span class="r">&times;1.05</span></td><td class="num">&gt; 900 s &rarr; aborts on memory</td><td class="num">&gt; 0 s &rarr; aborts on memory</td></tr>
@@ -1078,6 +1000,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> <code>Schedule.run_stream</code> takes a producer it pulls from as slots free up, with at most one fresh task materialised ahead of the provers, so per-obligation data is live only while in flight and consumed cells become garbage as the run progresses. The list-taking <code>run</code> stays as a wrapper over the stream, so no existing caller changes. The sequential pull order is preserved, which is what keeps the prefix caches of pull request 4 effective.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream and identical result-message order. Both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.91 s &rarr; 2.91 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">331 ms &rarr; 320 ms <span class="r">&times;1.03</span></td><td class="num">6.39 s &rarr; 7.14 s <span class="w">+12&thinsp;%</span></td><td class="num">167 MB &rarr; 154 MB <span class="r">&times;1.08</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">137 ms &rarr; 140 ms</td><td class="num">813 ms &rarr; 809 ms</td><td class="num">59 MB &rarr; 57 MB <span class="r">&times;1.05</span></td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.93 s &rarr; 3.85 s</td><td class="num">177.8 s &rarr; 179.9 s</td><td class="num">4.17 GB &rarr; 4.00 GB <span class="r">&times;1.04</span></td></tr>
@@ -1095,6 +1018,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Two linear passes instead of one nested scan: mark the front-indices carrying the <code>ENABLEDaxioms</code> pragma into an array, then resolve each fact against it using the identity that a fact at front-index <em>fi</em> whose body is <code>Ix k</code> refers to the hypothesis at <em>fi&nbsp;&minus;&nbsp;k</em> &mdash; which is what the old code recomputed a whole <code>cx_front</code> slice to discover, for every fact of every <code>BY</code>/<code>OBVIOUS</code>. Same set, same order.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.91 s &rarr; 2.95 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">320 ms &rarr; 260 ms <span class="r">&times;1.23</span></td><td class="num">7.14 s &rarr; 6.42 s <span class="r">&times;1.11</span></td><td class="num">154 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">140 ms &rarr; 134 ms <span class="r">&times;1.04</span></td><td class="num">809 ms &rarr; 788 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">3.85 s &rarr; 2.46 s <span class="r">&times;1.57</span></td><td class="num">179.9 s &rarr; 177.7 s</td><td class="num">4.00 GB &rarr; 3.94 GB</td></tr>
@@ -1112,6 +1036,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Read the level off the hypothesis directly, with a fallback to the old path when the annotation is absent, so the result is identical in both cases.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.95 s &rarr; 2.89 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">260 ms &rarr; 249 ms <span class="r">&times;1.04</span></td><td class="num">6.42 s &rarr; 6.67 s <span class="w">+4&thinsp;%</span></td><td class="num">156 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 134 ms</td><td class="num">788 ms &rarr; 780 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">2.46 s &rarr; 2.35 s <span class="r">&times;1.05</span></td><td class="num">177.7 s &rarr; 175.4 s</td><td class="num">3.94 GB &rarr; 3.94 GB</td></tr>
@@ -1127,8 +1052,9 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p class="cm-h"><code>393164e</code> backend/toolbox: single-pass definition expansion in the result printer <span class="mdl">unrecorded version</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +18/&minus;11</span> <code>src/backend/toolbox.ml</code>&nbsp;<span class="pm">+18/&minus;11</span></p>
       <p><span class="lbl">changes</span> Compose the substitutions once, as in pull request 2, in the printer&rsquo;s own expansion &mdash; restricted to this printer&rsquo;s historical filter, visible <code>Operator</code> definitions only, so the printed obligation is identical rather than merely equivalent.</p>
-      <p><span class="lbl">gate</span> Output-preserving: the printed obligations are byte-identical, which is directly observable since this code path <em>is</em> the output. Both suites green.</p>
+      <p><span class="lbl">gate</span> Output-preserving: the printed obligations are byte-identical, which is directly observable since this code path <em>is</em> the output. Both suites green. <strong>The performance claim does not survive measurement.</strong> This change only runs on a fingerprint hit, so it needed the warm path to show anything &mdash; and iteration latency, which is exactly that path with 1 500 hits reported per run, gives 2.89 s to 2.77 s, inside the spread. An earlier figure of &times;4.3 came from a different corpus and campaign and is withdrawn: on the evidence here this pull request is argued on its mechanism, like the other five.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.89 s &rarr; 2.77 s <span class="r">&times;1.04</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">249 ms &rarr; 249 ms</td><td class="num">6.67 s &rarr; 6.37 s <span class="r">&times;1.05</span></td><td class="num">156 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 127 ms <span class="r">&times;1.06</span></td><td class="num">780 ms &rarr; 779 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">2.35 s &rarr; 2.30 s</td><td class="num">175.4 s &rarr; 176.9 s</td><td class="num">3.94 GB &rarr; 3.94 GB</td></tr>
@@ -1146,6 +1072,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> The rules build position-independent parser values, so each rule has exactly two useful instances; memoize those two per rule instead of re-allocating the whole combinator family &mdash; choice lists, thunks and all &mdash; at every token position. The rule bodies themselves are unchanged.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream and identical parse errors, including their positions, on the test suite and on both private specifications.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.77 s &rarr; 2.81 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">249 ms &rarr; 237 ms <span class="r">&times;1.05</span></td><td class="num">6.37 s &rarr; 6.55 s</td><td class="num">156 MB &rarr; 154 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">127 ms &rarr; 127 ms</td><td class="num">779 ms &rarr; 800 ms</td><td class="num">57 MB &rarr; 57 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">2.30 s &rarr; 1.79 s <span class="r">&times;1.28</span></td><td class="num">176.9 s &rarr; 179.4 s</td><td class="num">3.94 GB &rarr; 3.93 GB</td></tr>
@@ -1163,6 +1090,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Integer equality on the property id instead of generic structural equality, which costs a C call per list element, and direct loops instead of the higher-order searches: no closure per call, and no <code>Not_found</code> round-trip on a miss &mdash; and misses are the common case.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.81 s &rarr; 2.61 s <span class="r">&times;1.08</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">237 ms &rarr; 227 ms <span class="r">&times;1.04</span></td><td class="num">6.55 s &rarr; 6.29 s <span class="r">&times;1.04</span></td><td class="num">154 MB &rarr; 156 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">127 ms &rarr; 123 ms <span class="r">&times;1.03</span></td><td class="num">800 ms &rarr; 738 ms <span class="r">&times;1.08</span></td><td class="num">57 MB &rarr; 57 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.79 s &rarr; 1.72 s <span class="r">&times;1.04</span></td><td class="num">179.4 s &rarr; 170.0 s <span class="r">&times;1.05</span></td><td class="num">3.93 GB &rarr; 3.91 GB</td></tr>
@@ -1180,6 +1108,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Replace the map with a pool: entries sorted by range, a binary search to the window start, a forward scan over the window, and a backward scan bounded by the longest obligation span &mdash; an entry starting further back cannot reach the window. O(log n + matches) per step instead of O(obligations). The claiming semantics are preserved exactly: first claimer wins, a claim is a range intersection, and duplicate ranges collapse the way <code>RangeMap.of_list</code> collapsed them.</p>
       <p><span class="lbl">gate</span> The notification stream the server emits is byte-identical before and after over a recorded editing session, and <code>dune runtest lsp</code> is green. Editor-side, on the 30&nbsp;000-line module: the partition was 45&nbsp;s of a 59.7&nbsp;s keystroke over 13&nbsp;563 steps and 30&nbsp;872 obligations; after, the keystroke is 11.5&nbsp;s.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.61 s &rarr; 2.57 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">227 ms &rarr; 247 ms <span class="w">+9&thinsp;%</span></td><td class="num">6.29 s &rarr; 6.23 s</td><td class="num">156 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">123 ms &rarr; 125 ms</td><td class="num">738 ms &rarr; 723 ms</td><td class="num">57 MB &rarr; 58 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.72 s &rarr; 1.73 s</td><td class="num">170.0 s &rarr; 172.3 s</td><td class="num">3.91 GB &rarr; 3.91 GB</td></tr>
@@ -1197,6 +1126,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> A map beside the list, keyed by position from the bottom, so <code>index</code> is a logarithmic lookup instead of a <code>List.nth</code> walk. The list stays authoritative for ordering and the two are kept in step at every insertion and every map operation.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.57 s &rarr; 2.54 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">247 ms &rarr; 233 ms <span class="r">&times;1.06</span></td><td class="num">6.23 s &rarr; 5.96 s <span class="r">&times;1.04</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">125 ms &rarr; 134 ms <span class="w">+7&thinsp;%</span></td><td class="num">723 ms &rarr; 704 ms</td><td class="num">58 MB &rarr; 57 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.73 s &rarr; 1.77 s</td><td class="num">172.3 s &rarr; 178.5 s <span class="w">+4&thinsp;%</span></td><td class="num">3.91 GB &rarr; 3.91 GB</td></tr>
@@ -1214,6 +1144,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Compile the twenty-two escaping regexes once, at module level. The previous partial-application form rebuilt all of them on every call &mdash; once per identifier printed. Same list, same order, same replacements, so the output is byte-identical.</p>
       <p><span class="lbl">gate</span> Output-preserving, and observable directly: the solver input files are byte-identical across the change under <code>--debug tempfiles</code>.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.54 s &rarr; 2.65 s <span class="w">+5&thinsp;%</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">233 ms &rarr; 234 ms</td><td class="num">5.96 s &rarr; 6.38 s <span class="w">+7&thinsp;%</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">134 ms &rarr; 123 ms <span class="r">&times;1.09</span></td><td class="num">704 ms &rarr; 704 ms</td><td class="num">57 MB &rarr; 58 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.77 s &rarr; 1.70 s <span class="r">&times;1.04</span></td><td class="num">178.5 s &rarr; 168.7 s <span class="r">&times;1.06</span></td><td class="num">3.91 GB &rarr; 3.92 GB</td></tr>
@@ -1231,6 +1162,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Walk the spine with a plain integer counter instead of re-wrapping the index at each step. The equivalence is worth stating because it is not purely syntactic: every intermediate wrapper carried the original index&rsquo;s properties, and every terminal case built its result from the current wrapper, so constructing only the terminal value from the original is the same result.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.65 s &rarr; 2.65 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">234 ms &rarr; 245 ms <span class="w">+5&thinsp;%</span></td><td class="num">6.38 s &rarr; 6.44 s</td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">123 ms &rarr; 122 ms</td><td class="num">704 ms &rarr; 723 ms</td><td class="num">58 MB &rarr; 58 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.70 s &rarr; 1.65 s <span class="r">&times;1.03</span></td><td class="num">168.7 s &rarr; 173.9 s</td><td class="num">3.92 GB &rarr; 4.00 GB</td></tr>
@@ -1248,6 +1180,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Two sites rebuilt the whole sequent under a shift of zero &mdash; the common nothing-extracted case in <code>prep</code>, and an empty blueprint-hypothesis set in <code>n_flatten</code>. Guard both: return the input unchanged, which also preserves the physical sharing pull request 4&rsquo;s prefix walk depends on.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.65 s &rarr; 2.67 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">245 ms &rarr; 255 ms <span class="w">+4&thinsp;%</span></td><td class="num">6.44 s &rarr; 5.89 s <span class="r">&times;1.09</span></td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">122 ms &rarr; 121 ms</td><td class="num">723 ms &rarr; 691 ms <span class="r">&times;1.05</span></td><td class="num">58 MB &rarr; 58 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.65 s &rarr; 1.77 s <span class="w">+7&thinsp;%</span></td><td class="num">173.9 s &rarr; 174.4 s</td><td class="num">4.00 GB &rarr; 4.00 GB</td></tr>
@@ -1265,6 +1198,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Emit the comment under the same condition that keeps the file.</p>
       <p><span class="lbl">gate</span> Output-preserving for the provers &mdash; and this is the one change that alters a byte of solver input, so it is stated precisely. The emission is guarded by exactly the flag that keeps the file: with <code>--debug tempfiles</code> the files are byte-identical before and after; without it, the comment is absent from files that are deleted unread. The problem term sent to the solver is unchanged in both cases.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.67 s &rarr; 2.65 s</td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">255 ms &rarr; 230 ms <span class="r">&times;1.11</span></td><td class="num">5.89 s &rarr; 5.88 s</td><td class="num">155 MB &rarr; 155 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">121 ms &rarr; 129 ms <span class="w">+7&thinsp;%</span></td><td class="num">691 ms &rarr; 701 ms</td><td class="num">58 MB &rarr; 58 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.77 s &rarr; 1.66 s <span class="r">&times;1.06</span></td><td class="num">174.4 s &rarr; 173.2 s</td><td class="num">4.00 GB &rarr; 4.00 GB</td></tr>
@@ -1282,6 +1216,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Scope the cache to the obligation being prepared and drop it with the obligation.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green. The memory claim is checked on the <em>shape</em> of the RSS curve sampled with <code>ps</code> during a run, not on the peak alone.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.65 s &rarr; 2.54 s <span class="r">&times;1.04</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">230 ms &rarr; 223 ms <span class="r">&times;1.03</span></td><td class="num">5.88 s &rarr; 5.97 s</td><td class="num">155 MB &rarr; 76 MB <span class="r">&times;2.03</span></td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">129 ms &rarr; 121 ms <span class="r">&times;1.07</span></td><td class="num">701 ms &rarr; 711 ms</td><td class="num">58 MB &rarr; 36 MB <span class="r">&times;1.59</span></td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.66 s &rarr; 1.76 s <span class="w">+6&thinsp;%</span></td><td class="num">173.2 s &rarr; 144.8 s <span class="r">&times;1.20</span></td><td class="num">4.00 GB &rarr; 400 MB <span class="r">&times;10.2</span></td></tr>
@@ -1299,6 +1234,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p><span class="lbl">changes</span> Maintain a mirror array of the deque's entries alongside the fold, indexed directly, so resolution is O(1). Kept consistent with the deque at every push, and reset with the fold.</p>
       <p><span class="lbl">gate</span> Output-preserving: identical obligation stream, both suites green. The mirror is exact only while its length matches the context: it truncates first if an inner scope left it longer, and the lookup falls back to <code>Deque.nth</code> whenever the sizes disagree, so a bookkeeping mistake degrades to the old path instead of returning a wrong index. Measured with an instrumented build: 49 million lookups walking 5.5 billion cells on a 30&nbsp;000-obligation run. The wall-clock share is a few per cent, so the local proof is the complexity argument, not the point in the curve.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
+        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">2.54 s &rarr; 2.46 s <span class="r">&times;1.03</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">223 ms &rarr; 240 ms <span class="w">+8&thinsp;%</span></td><td class="num">5.97 s &rarr; 5.57 s <span class="r">&times;1.07</span></td><td class="num">76 MB &rarr; 76 MB</td></tr>
         <tr><td>small synthetic — 600 obligations</td><td class="num">121 ms &rarr; 124 ms</td><td class="num">711 ms &rarr; 692 ms</td><td class="num">36 MB &rarr; 36 MB</td></tr>
         <tr><td>refinement chain — 9 967 obligations</td><td class="num">1.76 s &rarr; 1.69 s <span class="r">&times;1.04</span></td><td class="num">144.8 s &rarr; 146.4 s</td><td class="num">400 MB &rarr; 407 MB</td></tr>
