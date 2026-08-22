@@ -431,15 +431,21 @@ def sec_method():
     c.append("</tbody></table></div>")
 
     c.append("""<h4>The correctness gate every commit passes</h4>
-<p>Not a benchmark gate &mdash; a soundness one. For each of the seventeen commits, in
-sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green, and
-the <code>test/fast</code> fail-set identical to <code>main</code>'s with the full
-prover stack &mdash; Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap
-built from this repository's <code>isabelle/</code> sources. That is 47 of 48; the one
-failure, <code>fast/fingerprint/FingerprintVariablesParameters_test.tla</code>, fails
-identically on <code>main</code> because Z3&nbsp;4.8.9 does not prove
-<code>\\E y : y # x</code> there. The gate is fail-set identity, not a pass count, so
-a newly failing test is a regression even if the count is unchanged.</p>
+<p>Not a benchmark gate &mdash; a soundness one. For each of the seventeen commits,
+in sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green,
+and every one of the 48 <code>test/fast</code> tests passing with the full prover
+stack &mdash; Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built
+from this repository's <code>isabelle/</code> sources. <code>main</code> is 48 of 48
+under the same conditions, so the fail-set is empty on both sides. The gate is
+fail-set <em>identity</em>, not a pass count: a newly failing test is a regression
+even where the count would still look healthy.</p>
+<p>Two conditions matter and are easy to get wrong. Putting <code>isabelle</code> on
+<code>PATH</code> is not enough &mdash; tlapm invokes it with a session root under its
+own backends directory, and without that link seven tests fail in a way that reads
+like a proof failure rather than a missing backend. And the tree must be clean of
+<code>.tlacache</code>: a fingerprint recorded by an earlier run with a different
+prover set replays as a failure, which is exactly how an earlier pass here reported
+47 of 48 and blamed Z3.</p>
 <p>Two invariants hold across the whole series. <strong>The provers receive a subset
 of what they receive today</strong>, never more, and no obligation is created that
 does not exist today. <strong>Fingerprints do not move</strong>: the digest is
@@ -448,8 +454,6 @@ removes context runs after that point, on the backend path only &mdash; so
 <code>--printallobs</code> output and cache hits are unchanged by construction rather
 than by testing.</p>""")
 
-    c.append(_noise_sentence())
-    c.append(_completeness())
     c.append("""<h4>Measurement machine</h4>
 <div class="scroller"><table><tbody>
 <tr><td>CPU</td><td class="num">Intel Xeon @ 2.10 GHz, 4 cores</td></tr>
