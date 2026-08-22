@@ -360,6 +360,21 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
   <p>On the pre/post-prune pair that check yields 4 200 deleted lines and 0 added. It needs a real
   prover run: <code>--noproving</code> writes no solver files.</p>
 
+  <h4>What is missing from the campaign, and what that costs</h4>
+  <p>The campaign is one boot of one container, which is the only way its absolute values are
+  comparable. Five metrics &times; twenty-seven points &times; five corpora is complete <strong>except
+  for eight cells</strong>: preparation on the two private specifications at the three
+  clock-accounting commits and the reaper. The container restarted before they were reached, and they
+  cannot be added now &mdash; a later boot's numbers do not belong in these tables, so the readers
+  filter every row by boot and drop anything from another one.</p>
+  <p>Nothing in the argument rests on them. All four are bugfixes that do not touch preparation, and
+  the two points that bracket them are measured: <code>main</code> and the bugfix group both fail
+  identically &mdash; the refinement chain stops at the ceiling, the 30k monolith aborts against the
+  cap. The eight cells would sit inside that bracket.</p>
+  <p>One accident is worth keeping as evidence. A repair pass re-measured the definitions prune on the
+  refinement chain on a <em>different</em> boot, and got 340.5 s against the campaign&rsquo;s 341.3 s,
+  both aborting on memory at 11.73 GB &mdash; agreement to 0.2 %. That is not a figure this document
+  uses, since it is from another boot, but it is a check on the one it does use.</p>
   <h4>Measurement machine</h4>
   <div class="scroller" style="margin-top:12px">
     <table>
