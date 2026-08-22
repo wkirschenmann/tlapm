@@ -133,7 +133,12 @@ def load_iteration_latency(path=None, boot=None):
 
 
 def load_keystroke(path=None, boot=None):
-    """{point: (median_s, spread, n)} — didChange to publishDiagnostics."""
+    """{point: (median_s, spread, n)} -- didChange to publishDiagnostics.
+
+    A point measured at several repetition counts keeps the largest: the small
+    effects were re-run at n = 10 precisely because n = 3 could not separate them,
+    and pooling the two would put the weaker evidence back in.
+    """
     path = path or os.path.join(S, "short_keystroke.csv")
     if not os.path.exists(path):
         return {}, None
@@ -143,14 +148,18 @@ def load_keystroke(path=None, boot=None):
             if r["kind"] != "edit":
                 continue
             boots.add(r["boot"])
-            vals[(r["boot"], r["point"])].append(float(r["seconds"]))
+            vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
     if not boots:
         return {}, None
     boot = boot or max(boots, key=lambda b: sum(1 for k in vals if k[0] == b))
-    out = {}
-    for (b, pt), v in vals.items():
+    best = {}
+    for (b, pt, n), v in vals.items():
         if b != boot:
             continue
+        if pt not in best or n > best[pt][0]:
+            best[pt] = (n, v)
+    out = {}
+    for pt, (n, v) in best.items():
         med = statistics.median(v)
         sp = (max(v) - min(v)) / float(max(v)) if max(v) else 0.0
         out[pt] = (med, sp, len(v))
