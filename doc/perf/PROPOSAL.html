@@ -848,6 +848,43 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
   ratios under about 1.1 are noise and are labelled as such in the commit's own text; the tables are
   there so that no commit can hide behind a group total. A cell reading <code>&gt; 900 s</code> is a
   run stopped at the fifteen-minute ceiling.</div>
+  <h4>Which of these are carried by a measurement, and which are not</h4>
+  <p>Computed from the campaign, not asserted. For each pull request: the largest improvement it
+  produces on any corpus and any of the three metrics in &sect;5, and whether it is the commit at
+  which a run that did not finish starts finishing. One noisy metric on one corpus is not allowed to
+  promote a change &mdash; an effect counts either because it is large on its own
+  (&times;1.35 or more) or because it repeats on a second corpus. Everything else is listed as
+  argued on its mechanism, because that is what it is: this campaign cannot separate it from
+  zero.</p>
+  <p>The five bugfixes are not in this table. Two of them do speed things up, but none is an
+  optimization and the decision to take them is of a different kind &mdash; that is why they are
+  item #0.</p>
+  <div class="scroller" style="margin-top:6px"><table><thead><tr><th>#</th><th>change</th><th class="num">best measured effect</th><th>what carries it</th></tr></thead><tbody>
+    <tr><td class="num">#1</td><td>Deque lookups on rear-heavy deques</td><td class="num">&times;8.91</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#2</td><td>Expand visible definitions in a single pass</td><td class="num">&times;1.48</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#3</td><td>Prune the hidden context</td><td class="num">starts completing</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#4</td><td>Prefix-resume caches</td><td class="num">&times;4.30</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#5</td><td>Pull tasks from a stream</td><td class="num">starts completing</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#6</td><td>Linear ENABLED-axioms detection</td><td class="num">&times;1.57</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#7</td><td>Reference levels without slicing the context</td><td class="num">&times;1.05 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#8</td><td>Single-pass expansion in the result printer</td><td class="num">not visible in &sect;5</td><td>the warm path &mdash; the result printer only runs on a fingerprint hit, and every measurement in &sect;5 uses <code>--nofp</code></td></tr>
+    <tr><td class="num">#9</td><td>Memoize the grammar</td><td class="num">&times;1.43</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#10</td><td>Monomorphic property lookups</td><td class="num">&times;1.08 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#11</td><td>A sorted obligation pool in the editor</td><td class="num">not visible in &sect;5</td><td>the editor &mdash; a language-server change; no CLI run exercises it</td></tr>
+    <tr><td class="num">#12</td><td>Logarithmic context index</td><td class="num">&times;1.06 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#13</td><td>Compile the SMT escaping regexes once</td><td class="num">not visible in &sect;5</td><td>a real prover run &mdash; the escaping regexes only run while solver input is written, and <code>--noproving</code> writes none</td></tr>
+    <tr><td class="num">#14</td><td>Allocation-free spine walk in app_ix</td><td class="num">&times;1.04 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#15</td><td>Skip identity rebuilds when flattening extracts nothing</td><td class="num">&times;1.09 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+    <tr><td class="num">#16</td><td>Write the obligation comment only into files that are kept</td><td class="num">not visible in &sect;5</td><td>a real prover run &mdash; the comment is only written into a solver file, and <code>--noproving</code> writes none</td></tr>
+    <tr><td class="num">#17</td><td>Stop the level cache pinning one context per obligation</td><td class="num">&times;10.25</td><td>&sect;5, on the corpus and metric where it is largest</td></tr>
+    <tr><td class="num">#18</td><td>Constant-time De Bruijn resolution in add_constness</td><td class="num">&times;1.07 &mdash; noise</td><td>the mechanism only; nothing in this campaign separates it from zero</td></tr>
+  </tbody></table></div>
+  <p style="margin-top:12px"><strong>Read that table as a recommendation, not a description.</strong>
+  8 of the eighteen optimizations have a measured effect on a corpus in &sect;5; 4 have their effect
+  somewhere this campaign structurally cannot look, and their own blocks give the number and the run
+  that produces it; 6 have no number at all and are argued on their mechanism. A maintainer who wants
+  only what the numbers justify can take the first two groups and leave the third: nothing in them
+  depends on it.</p>
   <h4>Which model wrote which commit</h4>
   <p>The work was done with Claude Code. Per commit, the <code>Co-Authored-By</code> trailer records
   the model: <strong>Claude Fable 5</strong> on sixteen commits, <strong>Claude Opus 5</strong> on six,

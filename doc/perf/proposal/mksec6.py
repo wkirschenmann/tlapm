@@ -515,6 +515,94 @@ A("""  <div class="claim"><strong>Reading the measurement tables.</strong> <code
   ratios under about 1.1 are noise and are labelled as such in the commit's own text; the tables are
   there so that no commit can hide behind a group total. A cell reading <code>&gt; 900 s</code> is a
   run stopped at the fifteen-minute ceiling.</div>""")
+# ---- classification: what carries each pull request, computed from the campaign
+METRICS = ["m0_ms", "m1_ms", "rss_kb"]
+CORPORA_K = ["synth300", "synth100", "ffi", "mono"]
+PR_POINTS = [("1","c05","c06"),("2","c06","c07"),("3","c07","c09"),
+             ("4","c09","c12"),("5","c12","c13"),("6","c13","c14"),("7","c14","c15"),
+             ("8","c15","c16"),("9","c16","c17"),("10","c17","c18"),("11","c18","c19"),
+             ("12","c19","c20"),("13","c20","c21"),("14","c21","c22"),("15","c22","c23"),
+             ("16","c23","c24"),("17","c24","c25"),("18","c25","c26")]
+ELSEWHERE = {
+ "8":  ("the warm path", "the result printer only runs on a fingerprint hit, and every "
+        "measurement in &sect;5 uses <code>--nofp</code>"),
+ "11": ("the editor", "a language-server change; no CLI run exercises it"),
+ "13": ("a real prover run", "the escaping regexes only run while solver input is written, "
+        "and <code>--noproving</code> writes none"),
+ "16": ("a real prover run", "the comment is only written into a solver file, and "
+        "<code>--noproving</code> writes none"),
+}
+SOLO, PAIR, SECOND = 1.35, 1.15, 1.10   # thresholds: alone, or corroborated on a second corpus
+
+def classify(a, b):
+    """(verdict, effect string). A single noisy metric on one corpus cannot promote a
+       change: either the effect is large on its own, or it repeats on another corpus."""
+    best = (1.0, None, None)
+    per_metric = {}
+    transition = None
+    for f in METRICS:
+        for cp in CORPORA_K:
+            ra, rb = DATA.get((a, cp)), DATA.get((b, cp))
+            if not ra or not rb or f not in ra or f not in rb:
+                continue
+            rk = "m0_rc" if f == "m0_ms" else "m1_rc"
+            if ra.get(rk) and not rb.get(rk):
+                transition = True
+                continue
+            if ra.get(rk) or rb.get(rk):
+                continue
+            r = ra[f] / float(rb[f])
+            per_metric.setdefault(f, []).append(r)
+            if r > best[0]:
+                best = (r, f, cp)
+    if transition:
+        return "strong", "starts completing"
+    r, f, cp = best
+    if r >= SOLO:
+        return "strong", "&times;%.2f" % r
+    others = [x for x in per_metric.get(f, []) if x is not r]
+    if r >= PAIR and any(x >= SECOND for x in others):
+        return "strong", "&times;%.2f" % r
+    return "weak", "&times;%.2f" % r
+
+A("""  <h4>Which of these are carried by a measurement, and which are not</h4>
+  <p>Computed from the campaign, not asserted. For each pull request: the largest improvement it
+  produces on any corpus and any of the three metrics in &sect;5, and whether it is the commit at
+  which a run that did not finish starts finishing. One noisy metric on one corpus is not allowed to
+  promote a change &mdash; an effect counts either because it is large on its own
+  (&times;1.35 or more) or because it repeats on a second corpus. Everything else is listed as
+  argued on its mechanism, because that is what it is: this campaign cannot separate it from
+  zero.</p>
+  <p>The five bugfixes are not in this table. Two of them do speed things up, but none is an
+  optimization and the decision to take them is of a different kind &mdash; that is why they are
+  item #0.</p>""")
+A('  <div class="scroller" style="margin-top:6px"><table><thead><tr><th>#</th><th>change</th>'
+  '<th class="num">best measured effect</th><th>what carries it</th></tr></thead><tbody>')
+_strong, _weak, _elsewhere = [], [], []
+for num, a, b in PR_POINTS:
+    pr = [x for x in PRS if x["n"] == num][0]
+    verdict, eff = classify(a, b)
+    if verdict == "strong":
+        car = "&sect;5, on the corpus and metric where it is largest"
+        _strong.append(num)
+    elif num in ELSEWHERE:
+        where, why = ELSEWHERE[num]
+        eff, car = "not visible in &sect;5", "%s &mdash; %s" % (where, why)
+        _elsewhere.append(num)
+    else:
+        eff = "%s &mdash; noise" % eff
+        car = "the mechanism only; nothing in this campaign separates it from zero"
+        _weak.append(num)
+    A('    <tr><td class="num">#%s</td><td>%s</td><td class="num">%s</td><td>%s</td></tr>'
+      % (num, pr["title"], eff, car))
+A('  </tbody></table></div>')
+A("""  <p style="margin-top:12px"><strong>Read that table as a recommendation, not a description.</strong>
+  %d of the eighteen optimizations have a measured effect on a corpus in &sect;5; %d have their effect
+  somewhere this campaign structurally cannot look, and their own blocks give the number and the run
+  that produces it; %d have no number at all and are argued on their mechanism. A maintainer who wants
+  only what the numbers justify can take the first two groups and leave the third: nothing in them
+  depends on it.</p>""" % (len(_strong), len(_elsewhere), len(_weak)))
+
 A("""  <h4>Which model wrote which commit</h4>
   <p>The work was done with Claude Code. Per commit, the <code>Co-Authored-By</code> trailer records
   the model: <strong>Claude Fable 5</strong> on sixteen commits, <strong>Claude Opus 5</strong> on six,
