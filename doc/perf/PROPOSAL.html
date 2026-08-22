@@ -229,7 +229,12 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
     <figcaption>Parsing, elaboration and generation are 1.7 % of the run. Per-obligation preparation
     is 96 %, single-threaded, and one stage — expanding definitions — is 57 % on its own. The provers
     are subprocesses that already overlap the loop, so their scheduling is not the constraint: over
-    259 blocking <code>select</code> calls the loop waited 0.1 s in total.</figcaption>
+    259 blocking <code>select</code> calls the loop waited 0.1 s in total.
+    <br><br><strong>Provenance.</strong> This attribution is a separate run from &sect;5&rsquo;s
+    campaign, and it has to be: splitting preparation into stages needs per-stage instrumentation,
+    which the proposed branch deliberately does not carry. Read its numbers as proportions of one run
+    &mdash; that is what says where to look &mdash; not as values comparable with the tables below,
+    which come from one boot of stock builds.</figcaption>
   </figure>
 </section>
 

@@ -135,7 +135,7 @@ specification content appears here or anywhere in the repository.
 
 | point | commit | gen | prep | peak |
 |---|---|---:|---:|---:|
-| c00 | `main` base of the branch (tlaplus/tlapm master) | 33.9 s | — | — |
+| c00 | `main` base of the branch (tlaplus/tlapm master) | 33.9 s | > 900 s | — |
 | c01 | `445c619` util/timing: make clock accounting nestable | 32.5 s | — | — |
 | c02 | `e71feaf` util/timing: host the named pipeline clocks | 32.9 s | — | — |
 | c03 | `023f200` timing: attribute generation, fingerprinting and fp saving to their clocks | 33.4 s | — | — |
@@ -168,7 +168,7 @@ specification content appears here or anywhere in the repository.
 
 | point | commit | gen | prep | peak |
 |---|---|---:|---:|---:|
-| c00 | `main` base of the branch (tlaplus/tlapm master) | 63.4 s | — | — |
+| c00 | `main` base of the branch (tlaplus/tlapm master) | 63.4 s | aborted | 11.19 GB |
 | c01 | `445c619` util/timing: make clock accounting nestable | 62.9 s | — | — |
 | c02 | `e71feaf` util/timing: host the named pipeline clocks | 62.2 s | — | — |
 | c03 | `023f200` timing: attribute generation, fingerprinting and fp saving to their clocks | 62.3 s | — | — |
