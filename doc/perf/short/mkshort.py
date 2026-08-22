@@ -79,6 +79,14 @@ def peak(cp):
     return d
 
 
+def gen(cp):
+    d = {}
+    for pt in L.POINTS:
+        v = L.main_point(sweep, cp, "gen") if pt == "p00" else sweep.get((pt, cp), {}).get("gen")
+        d[pt] = None if v is None else (v if v in L.FAILED else v / 1000.0)
+    return d
+
+
 def prep(cp):
     d = {}
     for pt in L.POINTS:
@@ -562,60 +570,74 @@ pull request would land on.</p>
 specifications <code>main</code> has no value to form a ratio against.</p>"""]
 
     c.append(fig(
-        "Preparation throughput",
-        "Obligations prepared per second &mdash; <code>tlapm --noproving --nofp</code>, the "
-        "whole per-obligation pipeline with no prover. Higher is better. Obligations differ "
-        "in size between corpora, so compare the shape of a curve, not its height against "
-        "another's.",
-        "Preparation throughput in obligations per second, one point per commit, five corpora "
-        "on a logarithmic axis; the two private specifications do not complete on main.",
-        {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
-        lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
-        "The two private specifications have no <code>main</code> point at all: one exceeds "
-        "the ceiling, the other exhausts the memory cap. They appear on the chart only once "
-        "a commit makes them runnable, which is the result rather than a gap in it."))
+    "Preparation throughput",
+    "Obligations prepared per second &mdash; <code>tlapm --noproving --nofp</code>, the "
+    "whole per-obligation pipeline with no prover. Higher is better. Obligations differ "
+    "in size between corpora, so compare the shape of a curve, not its height against "
+    "another's.",
+    "Preparation throughput in obligations per second, one point per commit, five corpora "
+    "on a logarithmic axis; the two private specifications do not complete on main.",
+    {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
+    lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
+    "The two private specifications have no <code>main</code> point at all: one exceeds "
+    "the ceiling, the other exhausts the memory cap. They appear on the chart only once "
+    "a commit makes them runnable, which is the result rather than a gap in it."))
 
     c.append(fig(
-        "Peak memory of a preparation pass",
-        "Maximum resident set of the same run, in gigabytes, under a 12&nbsp;GB address-space "
-        "cap. Lower is better.",
-        "Peak resident set per commit, five corpora, logarithmic axis.",
-        {cp: peak(cp) for cp in L.CORPORA}, "GB",
-        lambda v: "%.0f MB" % (v * 1024) if v < 1 else "%.2f GB" % v,
-        "The step is the fourth pull request, and it is a step rather than a slope: peak "
-        "memory stops being a function of the file and becomes a function of one obligation. "
-        "Everything to the right of it is flat, which is the point &mdash; no later commit "
-        "has to defend a memory budget."))
+    "Peak memory of a preparation pass",
+    "Maximum resident set of the same run, in gigabytes, under a 12&nbsp;GB address-space "
+    "cap. Lower is better.",
+    "Peak resident set per commit, five corpora, logarithmic axis.",
+    {cp: peak(cp) for cp in L.CORPORA}, "GB",
+    lambda v: "%.0f MB" % (v * 1024) if v < 1 else "%.2f GB" % v,
+    "The step is the fourth pull request, and it is a step rather than a slope: peak "
+    "memory stops being a function of the file and becomes a function of one obligation. "
+    "Everything to the right of it is flat, which is the point &mdash; no later commit "
+    "has to defend a memory budget."))
 
     c.append(fig(
-        "Iteration latency &mdash; the wait after one edit",
-        "Warm prover, every fingerprint already in the cache, one proof step changed. "
-        "Seconds; lower is better. This is the loop a user sits in, not a batch run.",
-        "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
-        "private refinement chain, logarithmic axis.",
-        {"synth300": iters("synth300"), "ffi": iters("ffi")}, "s",
-        lambda v: "%.1f s" % v if v < 100 else "%.0f s" % v,
-        "Only two changes move this metric across a threshold, and both are about doing less "
-        "work per obligation rather than less work overall. The memory pull request is the one "
-        "place in the series where this metric moves the wrong way, by about two per cent "
-        "&mdash; inside the run-to-run spread, and small enough that the mechanism is not "
-        "worth asserting. It stays at that position because what it buys is that nothing "
-        "after it can run out of memory.",
-        series=[("public synthetic, 1 800", "synth300", C.PUB, None),
-                ("private refinement chain", "ffi", C.PRIV, "5 3")]))
+    "Generation time",
+    "<code>tlapm -N --nofp</code>: parse, elaborate, generate the obligations, stop. "
+    "Seconds; lower is better. This is the floor under every editor interaction and "
+    "the fixed cost each worker of any parallel scheme pays before it proves "
+    "anything.",
+    "Generation time in seconds per commit, five corpora, logarithmic axis.",
+    {cp: gen(cp) for cp in L.CORPORA}, "s",
+    lambda v: "%d ms" % (v * 1000) if v < 1 else "%.1f s" % v,
+    "Unlike preparation, <code>main</code> completes this on every corpus, so every "
+    "curve here starts from a real number and the whole series is one continuous "
+    "line. Two of the nine pull requests are visible only on this chart and on the "
+    "keystroke: the linear <code>ENABLED</code> scan and the memoized grammar do "
+    "nothing to per-obligation preparation, because neither runs in that loop."))
 
-    if keys:
-        c.append(fig(
-            "Keystroke to diagnostics, in the editor",
-            "Time from the <code>didChange</code> notification to the "
-            "<code>publishDiagnostics</code> that answers it, measured by a client speaking "
-            "the LSP protocol. Seconds; lower is better.",
-            "Keystroke to diagnostics latency per commit on the private refinement chain.",
-            keyser(), "s", lambda v: "%.1f s" % v,
-            "This is the only metric on which the last two pull requests are visible at all, "
-            "and it is why they are in the series. Everything else in &sect;7 was dropped "
-            "because it moved nothing here either.",
-            series=[("private refinement chain", "ffi", C.PRIV, "5 3")]))
+    c.append(fig(
+    "Iteration latency &mdash; the wait after one edit",
+    "Warm prover, every fingerprint already in the cache, one proof step changed. "
+    "Seconds; lower is better. This is the loop a user sits in, not a batch run.",
+    "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
+    "private refinement chain, logarithmic axis.",
+    {"synth300": iters("synth300"), "ffi": iters("ffi")}, "s",
+    lambda v: "%.1f s" % v if v < 100 else "%.0f s" % v,
+    "Only two changes move this metric across a threshold, and both are about doing less "
+    "work per obligation rather than less work overall. The memory pull request is the one "
+    "place in the series where this metric moves the wrong way, by about two per cent "
+    "&mdash; inside the run-to-run spread, and small enough that the mechanism is not "
+    "worth asserting. It stays at that position because what it buys is that nothing "
+    "after it can run out of memory.",
+    series=[("public synthetic, 1 800", "synth300", C.PUB, None),
+            ("private refinement chain", "ffi", C.PRIV, "5 3")]))
+
+    c.append(fig(
+        "Keystroke to diagnostics, in the editor",
+        "Time from the <code>didChange</code> notification to the "
+        "<code>publishDiagnostics</code> that answers it, measured by a client speaking "
+        "the LSP protocol. Seconds; lower is better.",
+        "Keystroke to diagnostics latency per commit on the private refinement chain.",
+        keyser(), "s", lambda v: "%.1f s" % v,
+        "This is the only metric on which the last two pull requests are visible at all, "
+        "and it is why they are in the series. Everything else in &sect;7 was dropped "
+        "because it moved nothing here either.",
+        series=[("private refinement chain", "ffi", C.PRIV, "5 3")]))
     return "".join(c)
 
 
