@@ -75,7 +75,7 @@ CM = {
        "module, so nothing outside the driver could reach them.",
   how="Mechanical move; <code>--timing</code> output is unchanged by this commit "
       "alone. The next commit is what makes it non-zero.",
-  off="No switch."),
+  off="No switch &mdash; a move with no behavioural surface at all."),
 "p03": dict(
   what="Those three clocks were never started. <code>--timing</code> therefore "
        "reported <code>0.00</code> for generation, fingerprinting and fingerprint "
@@ -101,7 +101,7 @@ CM = {
       "<code>--threads 4</code> must report the same verdicts it reports "
       "single-threaded. The second shows in <code>--timing</code>: reported prover "
       "time stops undershooting the wall clock.",
-  off="No switch."),
+  off="No switch. A wrong verdict is not a feature to make optional."),
 "p05": dict(
   what="A timed-out prover was killed with <code>SIGHUP</code>. Under "
        "<code>nohup</code>, and in most editor and CI parents, <code>SIGHUP</code> "
@@ -110,7 +110,7 @@ CM = {
   how="Run a module with a deliberately unprovable obligation under "
       "<code>nohup</code> with a short <code>--stretch</code>: no prover process "
       "remains after tlapm exits.",
-  off="No switch."),
+  off="No switch. Sending the signal that works is not a mode."),
 "p06": dict(
   what="<code>Deque.nth</code> rebuilt intermediate lists, <code>first_n</code> "
        "copied rather than shared, and <code>equal</code> compared element by "
@@ -139,7 +139,7 @@ CM = {
       "the one-pass result identical rather than merely equivalent. Byte-identical "
       "obligation dumps, and the same fingerprints: the digest is computed on the "
       "const-annotated pre-expansion obligation, so this commit cannot move it.",
-  off="No switch."),
+  off="No switch. Output-identical, so the old path would be dead code kept alive only to be untested."),
 "p08": dict(
   what="The driver built the whole task list before the scheduler started, so every "
        "obligation of the run -- context, expansion, normalised form -- was live "
@@ -151,7 +151,7 @@ CM = {
       "and count unchanged. One behavioural improvement is deliberate: a malformed "
       "<code>USE</code> used to abort the whole batch before anything ran, and now "
       "the obligations already dispatched keep their results.",
-  off="No switch."),
+  off="No switch. The streamed and materialised orders are the same order, so there is nothing to choose between."),
 "p09": dict(
   what="The level memoization is not a table but a mutable cell on each syntax node, "
        "and those nodes belong to the module tree &mdash; they are shared by every "
@@ -165,7 +165,7 @@ CM = {
       "preparation rebuilds anyway. Levels are a pure function of the expression, so "
       "emptying the cells cannot change a result: byte-identical dumps. The visible "
       "effect is peak resident set.",
-  off="No switch."),
+  off="No switch. Emptying the cells cannot change a result, only the resident set."),
 "p10": dict(
   what="After expansion has inlined every visible use, an obligation's context still "
        "carries the hidden operator and pragma definitions imported by "
@@ -204,7 +204,7 @@ CM = {
       "every expansion has introduced its references and after the triviality check "
       "&mdash; which is also what puts it after the fingerprint. Gate: fail-set "
       "identical to <code>main</code>'s on the full stack.",
-  off="No switch."),
+  off="No switch. The pruned form is what the prover receives, as for the commit before it."),
 "p12": dict(
   what="Consecutive obligations share a context prefix: on a 30k-obligation module "
        "the median context is 743 hypotheses of which 699 are the physically same "
@@ -219,19 +219,37 @@ CM = {
       "just fixed: it is not, because the snapshots share substructure with the "
       "context they came from, so the footprint is one array of pairs per module "
       "rather than a copy. Byte-identical dumps with and without the cache.",
-  off="<code>--debug noprepcache</code> restores the uncached path for both passes."),
+  off="<code>--debug noprepcache</code> restores the uncached path &mdash; not a "
+      "disabled cache but the original code, reached at three call sites: the "
+      "full <code>expand_defs</code>, the full normalisation, and "
+      "<code>add_constness_nocache</code>. That is what makes the flag usable as "
+      "a differential reference rather than merely as an off switch."),
 "p13": dict(
   what="The same treatment for <code>Elab.normalize</code>, the third and most "
        "expensive per-obligation pass.",
   how="Byte-identical dumps against <code>--debug noprepcache</code>.",
-  off="<code>--debug noprepcache</code>."),
+  off="<code>--debug noprepcache</code>, the same flag as the commit before: one "
+      "switch restores the original path for all three cached passes at once, so "
+      "a bisection never lands on a half-cached build."),
 "p14": dict(
-  what="A differential oracle for the two caches: with it on, every obligation is "
-       "prepared both ways and the results compared, so a divergence is reported at "
-       "the obligation that caused it rather than as a proof failure later.",
-  how="This commit <em>is</em> the validation tool for the two before it. Running "
-      "the whole corpus under it is how the cache was gated.",
-  off="Off unless <code>TLAPM_CHECK_ELABCACHE</code> is set; inert otherwise."),
+  what="A differential oracle for the two caches above. When it is on, every "
+       "obligation is normalised <em>twice</em> &mdash; once through the "
+       "prefix-resume fold and once through the original whole-sequent path "
+       "&mdash; and the two results are compared structurally, not by their "
+       "printed form. A divergence is fatal and names the obligation that caused "
+       "it, so a cache bug is reported where it happens rather than surfacing "
+       "later as a proof that stopped working.",
+  how="This commit <em>is</em> the validation tool for the two before it: running "
+      "the whole corpus under it is how the caches were gated. It cannot validate "
+      "itself, which is the point &mdash; it has no fast path to be wrong about.",
+  off="<strong>Opt-in, and it must stay that way: it doubles the normalisation "
+      "cost by construction, because duplicating the work is what lets it "
+      "compare.</strong> The duplicate path is entered only when "
+      "<code>TLAPM_CHECK_ELABCACHE</code> is set in the environment; unset, the "
+      "branch is not taken and preparation runs exactly as it did before the "
+      "commit &mdash; the whole residual cost is one <code>getenv</code> per "
+      "obligation. The campaign confirms it: on the refinement chain this commit "
+      "measures inside the noise of its neighbours."),
 "p15": dict(
   what="Elaborating a <code>BY</code> or <code>OBVIOUS</code> asks one question of "
        "the context: does any fact in it cite the <code>ENABLEDaxioms</code> pragma? "
@@ -248,7 +266,7 @@ CM = {
       "<code>enabled_cdot</code> test family is the behavioural gate &mdash; a wrong "
       "answer here changes which axioms are available to a proof, so it would show "
       "as a proof that stops working rather than as a wrong result.",
-  off="No switch."),
+  off="No switch. Two linear passes compute the same set as the quadratic scan."),
 "p16": dict(
   what="Building the proof-step tree ran <code>RangeMap.partition</code> over the "
        "whole remaining obligation map for every step -- steps &times; obligations. "
@@ -260,7 +278,7 @@ CM = {
   how="The gate is the client-visible notification stream: byte-identical between "
       "the old and the new server on the corpora, proof-step marker payloads "
       "included. <code>dune runtest lsp</code> green.",
-  off="No switch."),
+  off="No switch. The pool preserves the claiming semantics exactly, so the old traversal has nothing left to be right about."),
 "p17": dict(
   what="The expression grammar is a family of mutually recursive rules "
        "<code>name b = lazy &hellip;</code> whose one parameter is a boolean &mdash; "
@@ -275,5 +293,5 @@ CM = {
       "<code>-N --toolbox 0 0 --printallobs --nofp</code> is unchanged, and the "
       "parser test corpus is the behavioural gate. A grammar change would show as a "
       "parse error, not as a slow parse.",
-  off="No switch."),
+  off="No switch. The memoized rules describe the same grammar; a difference would be a parse error, not a slower parse."),
 }

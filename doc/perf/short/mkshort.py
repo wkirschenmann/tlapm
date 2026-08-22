@@ -483,6 +483,9 @@ removes context runs after that point, on the backend path only &mdash; so
 <code>--printallobs</code> output and cache hits are unchanged by construction rather
 than by testing.</p>""")
 
+    c.append(_switches())
+    c.append(_noise_sentence())
+    c.append(_completeness())
     c.append("""<h4>Measurement machine</h4>
 <div class="scroller"><table><tbody>
 <tr><td>CPU</td><td class="num">Intel Xeon @ 2.10 GHz, 4 cores</td></tr>
@@ -500,6 +503,47 @@ missing cell rather than as a step averaged into a curve. <code>main</code> is
 measured once per curve, at the point each curve starts from; %s</p>""" % (
         boot or "&mdash;", _drift_sentence()))
     return "".join(c)
+
+
+def _switches():
+    """What can be turned on or off, gathered from the per-commit blocks."""
+    rows = []
+    for pid, title, tag, cms, _ in CT.PRS:
+        for cm in cms:
+            off = CT.CM[cm]["off"]
+            if off.lower().startswith("no switch"):
+                continue
+            rows.append((pid, BY_LABEL[cm][1], BY_LABEL[cm][2], off))
+    n_none = sum(1 for c in CT.CM.values() if c["off"].lower().startswith("no switch"))
+    out = ["<h4>What can be switched, and what cannot</h4>",
+           "<p>Three of the seventeen commits carry a switch; the other %d do not, and "
+           "deliberately so &mdash; they are output-preserving changes to a single code "
+           "path, so a flag would mean carrying two implementations of the same "
+           "function and testing neither of them properly. Where a switch does exist it "
+           "restores the <em>original</em> code rather than disabling a feature, which "
+           "is what makes it usable as a differential reference.</p>" % n_none]
+    out.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>commit</th>'
+               '<th>switch</th></tr></thead><tbody>')
+    for pid, sha, subj, off in rows:
+        out.append('<tr><td class="num">%s</td><td class="num"><code>%s</code><br>'
+                   '<span style="color:var(--ink-3);font-size:12.5px">%s</span></td>'
+                   '<td style="font-size:14px">%s</td></tr>' % (pid, sha, subj, off))
+    out.append("</tbody></table></div>")
+    out.append("<p style=\"margin-top:12px\">Every measurement in this document is "
+               "taken with the features <em>on</em> and the oracle <em>off</em>, which "
+               "is the default state on both counts: the campaign invokes "
+               "<code>tlapm --noproving --nofp --cache-dir &hellip;</code> with no "
+               "<code>--debug</code> argument and with no <code>TLAPM_*</code> variable "
+               "in the environment. Checked against the running processes, not assumed "
+               "&mdash; the point of a switch that restores the original code is that "
+               "forgetting to unset it would silently measure the wrong build.</p>")
+    out.append("<p>The oracle is the one that must never "
+               "become a default. It works by doing the job twice and comparing, so "
+               "turning it on doubles the cost of the pass it checks; that is not a "
+               "defect to optimise away but the mechanism itself. It is opt-in through "
+               "the environment, and with the variable unset the added code is a single "
+               "branch that is not taken.</p>")
+    return "".join(out)
 
 
 def _noise_sentence():
