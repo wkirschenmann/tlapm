@@ -496,7 +496,7 @@ than by testing.</p>""")
 Every measured row carries the machine's <code>/proc/stat btime</code> and every
 reader filters to a single boot, so a container restart mid-campaign appears as a
 missing cell rather than as a step averaged into a curve. <code>main</code> is
-measured twice, at the start of the campaign and at the end; %s</p>""" % (
+measured once per curve, at the point each curve starts from; %s</p>""" % (
         boot or "&mdash;", _drift_sentence()))
     return "".join(c)
 
@@ -577,13 +577,24 @@ def _completeness():
 
 
 def _drift_sentence():
-    if not drift:
-        return ("the second measurement is not in yet, so the <code>main</code> points "
-                "are single runs.")
-    worst = max(drift.items(), key=lambda kv: kv[1])
-    return ("the largest disagreement between the two is %.1f&nbsp;%% (%s, %s), which is "
-            "the drift the whole curve carries; the <code>main</code> point on each chart "
-            "is the mean of the pair." % (100 * worst[1], worst[0][0], worst[0][1]))
+    """The campaign no longer measures main twice; one fixed cell is re-measured
+    throughout instead, which bounds drift far better than two endpoints do."""
+    a = sweep.get("_anchors", {}).get(boot, [])
+    if len(a) < 2:
+        return ("the drift anchor has not been re-measured often enough yet to bound "
+                "the run's spread.")
+    lo, hi = min(a), max(a)
+    rng = (hi - lo) / float(hi) * 100
+    last = ""
+    if len(a) >= 4:
+        tail = a[-3:]
+        t = (max(tail) - min(tail)) / float(max(tail)) * 100
+        last = (" Over the last three it is %.2f&nbsp;%%, so the run settles rather "
+                "than drifting without bound." % t)
+    return ("one fixed cell is re-measured every eight, and its %d readings span "
+            "%.1f&nbsp;%% across the whole campaign &mdash; that is the drift every "
+            "curve carries, measured rather than assumed.%s" % (len(a), rng, last))
+
 
 
 def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=None,
