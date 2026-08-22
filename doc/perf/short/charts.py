@@ -121,26 +121,39 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                      % (W - PADR, ry - 4, FAIL, rl))
     for lab, cp, col, dash in series:
         vs = [values.get(cp, {}).get(p) for p in points]
-        seg, segs = [], []
-        for i, v in enumerate(vs):
-            if v is None or isinstance(v, dict) or v in L.FAILED:
-                if seg:
-                    segs.append(seg); seg = []
-            else:
-                seg.append((i, v))
-        if seg:
-            segs.append(seg)
         da = ' stroke-dasharray="%s"' % dash if dash else ""
-        for sg in segs:
-            if len(sg) > 1:
-                o.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="2"%s/>'
-                         % (" ".join("%.1f,%.1f" % (xs(i), y(v)) for i, v in sg), col, da))
+        # Every point that exists gets a y: a measured value at its value, a failure
+        # at the coordinate its failure mode gives it, and a failure with no such
+        # coordinate in the band.  The curve is then continuous, and the segments
+        # that touch a failure are drawn faint so continuity is not read as
+        # measured continuity.
+        pts = []
+        for i, v in enumerate(vs):
+            if v is None:
+                pts.append(None)
+            elif isinstance(v, dict):
+                at = v.get("at")
+                pts.append((y(at) if at else bot + ZONE / 2, False))
+            elif v in L.FAILED:
+                pts.append((bot + ZONE / 2, False))
+            else:
+                pts.append((y(v), True))
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            if a is None or b is None:
+                continue
+            solid = a[1] and b[1]
+            o.append('<polyline points="%.1f,%.1f %.1f,%.1f" fill="none" stroke="%s" '
+                     'stroke-width="%s"%s opacity="%s"/>'
+                     % (xs(i), a[0], xs(i + 1), b[0], col,
+                        "2" if solid else "1.2",
+                        da if solid else ' stroke-dasharray="2 3"',
+                        "1" if solid else ".4"))
         for i, v in enumerate(vs):
             if v is None:
                 continue
             if isinstance(v, dict) or v in L.FAILED:
-                at = v.get("at") if isinstance(v, dict) else None
-                cy = y(at) if at else bot + ZONE / 2
+                cy = pts[i][0]
                 r = 4.0
                 o.append('<g stroke="%s" stroke-width="2" stroke-linecap="round">'
                          '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
@@ -148,8 +161,9 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                          % (FAIL, xs(i) - r, cy - r, xs(i) + r, cy + r,
                             xs(i) - r, cy + r, xs(i) + r, cy - r))
             else:
-                r = 3.2 if points[i] in PR_END else 2.2
-                o.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (xs(i), y(v), r, col))
+                rr = 3.2 if points[i] in PR_END else 2.2
+                o.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>'
+                         % (xs(i), y(v), rr, col))
         done = [(i, v) for i, v in enumerate(vs)
                 if not (v is None or isinstance(v, dict) or v in L.FAILED)]
         if done:
