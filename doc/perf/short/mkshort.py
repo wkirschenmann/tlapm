@@ -73,8 +73,8 @@ def thr(cp):
     d = {}
     for pt in L.POINTS:
         v = L.main_point(sweep, cp, "prep") if pt == "p00" else _cell(cp, pt).get("prep")
-        if v is None:
-            d[pt] = None
+        if v is None or v == L.DNC:
+            d[pt] = None                       # not measured: absent, not failed
         elif v in L.FAILED:
             d[pt] = {"kind": v, "at": None}
         else:
@@ -89,8 +89,8 @@ def peak(cp):
     d = {}
     for pt in L.POINTS:
         v = L.main_point(sweep, cp, "peak") if pt == "p00" else _cell(cp, pt).get("peak")
-        if v is None:
-            d[pt] = None
+        if v is None or v == L.DNC:
+            d[pt] = None                       # not measured: absent, not failed
         elif v in L.FAILED:
             raw = _cell(cp, pt).get("peak_raw")
             d[pt] = {"kind": v, "at": (raw / 1048576.0) if raw else None}
@@ -103,8 +103,8 @@ def gen(cp):
     d = {}
     for pt in L.POINTS:
         v = L.main_point(sweep, cp, "gen") if pt == "p00" else _cell(cp, pt).get("gen")
-        if v is None:
-            d[pt] = None
+        if v is None or v == L.DNC:
+            d[pt] = None                       # not measured: absent, not failed
         elif v in L.FAILED:
             raw = _cell(cp, pt).get("gen_raw")
             d[pt] = {"kind": v, "at": (raw / 1000.0) if raw else None}

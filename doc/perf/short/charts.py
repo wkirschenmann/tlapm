@@ -49,14 +49,21 @@ PR_END = set(L.ENDPOINTS)
 
 
 def _decades(lo, hi):
-    a, b = math.floor(math.log10(lo)), math.ceil(math.log10(hi))
+    """Axis bounds hugging the data rather than snapping to whole decades.
+
+    Snapping wasted most of the plot on empty space: a series running from 93 ms
+    to 73 s was drawn on an axis from 10 ms to 100 s.  The bounds now sit a
+    quarter-decade outside the data, and the 1/2/5 ticks are whatever falls
+    inside."""
+    lo_ax, hi_ax = lo / 1.25, hi * 1.25
     ticks = []
-    for e in range(a, b + 1):
+    for e in range(int(math.floor(math.log10(lo_ax))),
+                   int(math.ceil(math.log10(hi_ax))) + 1):
         for m in (1, 2, 5):
-            v = m * 10 ** e
-            if lo / 1.6 <= v <= hi * 1.6:
+            v = m * 10.0 ** e
+            if lo_ax <= v <= hi_ax:
                 ticks.append(v)
-    return 10.0 ** a, 10.0 ** b, ticks
+    return lo_ax, hi_ax, ticks
 
 
 def _tick(v):
@@ -85,13 +92,21 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                 'fill="currentColor" opacity=".6">measurement pass still running'
                 '</text></svg>' % (W, aria, PADL))
     lo, hi, ticks = _decades(min(flat), max(flat))
-    top, bot = PADT, H - PADB - ZONE
+    # a band under the axis is only needed when some failure has no coordinate on
+    # this metric; when every point can be placed, the band is dead space
+    needs_band = any(
+        (isinstance(v, dict) and not v.get("at")) or (not isinstance(v, dict) and v in L.FAILED)
+        for cp in values for v in values[cp].values() if v is not None)
+    zone = ZONE if needs_band else 0
+    top, bot = PADT, H - PADB - zone
     y = lambda v: bot - (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo)) * (bot - top)
     o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W, H, aria)]
     o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="currentColor" stroke-width="1" '
              'opacity=".35"/>' % (PADL, H - PADB, W - PADR, H - PADB))
-    o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" stroke-width="0.8" '
-             'stroke-dasharray="2 3" opacity=".3"/>' % (PADL, bot, W - PADR, bot))
+    if needs_band:
+        o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
+                 'stroke-width="0.8" stroke-dasharray="2 3" opacity=".3"/>'
+                 % (PADL, bot, W - PADR, bot))
     for v in ticks:
         yy = y(v)
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
@@ -101,8 +116,10 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                  % (PADL - 8, yy + 3.5, _tick(v)))
     o.append('<text x="%d" y="%d" text-anchor="end" font-family="IBM Plex Mono, monospace" '
              'font-size="9.5" fill="currentColor" opacity=".55">%s</text>' % (PADL - 8, PADT - 10, unit))
-    o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, monospace" '
-             'font-size="9" fill="currentColor" opacity=".55">none</text>' % (PADL - 8, bot + ZONE / 2 + 3))
+    if needs_band:
+        o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, '
+                 'monospace" font-size="9" fill="currentColor" opacity=".55">none</text>'
+                 % (PADL - 8, bot + zone / 2 + 3))
     # a faint rule at each pull-request boundary, so the eye can group the commits
     for i, pt in enumerate(points):
         if pt in PR_END and pt != points[-1]:
@@ -133,9 +150,9 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                 pts.append(None)
             elif isinstance(v, dict):
                 at = v.get("at")
-                pts.append((y(at) if at else bot + ZONE / 2, False))
+                pts.append((y(at) if at else bot + zone / 2, False))
             elif v in L.FAILED:
-                pts.append((bot + ZONE / 2, False))
+                pts.append((bot + zone / 2, False))
             else:
                 pts.append((y(v), True))
         for i in range(len(pts) - 1):
