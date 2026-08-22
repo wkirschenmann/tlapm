@@ -51,6 +51,11 @@ PRS = [
      "Building the proof-step tree the editor displays scanned the whole obligation "
      "map once per step. On a large module this, and not proving, was most of the "
      "wait after a keystroke."),
+
+    ("PR9", "Memoized grammar rules", "t-lat", ["p17"],
+     "Two instances of every grammar rule were rebuilt on every token consumed. "
+     "Parsing is a small share of a keystroke on a mid-sized file and a visible one "
+     "on a large module, which is why this is last and why it is here at all."),
 ]
 
 # per commit: what changes / how to validate / how to switch off
@@ -192,6 +197,16 @@ CM = {
        "select -- produce the same set.",
   how="Same axiom set, so byte-identical dumps; the <code>enabled_cdot</code> test "
       "family is the behavioural gate.",
+  off="No switch."),
+"p17": dict(
+  what="The parser combinators built two instances of each grammar rule &mdash; one "
+       "for each of the two operator-precedence variants &mdash; and rebuilt both on "
+       "every token consumed rather than once per rule. The two instances are "
+       "memoized; the grammar they describe is unchanged.",
+  how="Byte-identical parse: the obligation dump under "
+      "<code>-N --toolbox 0 0 --printallobs --nofp</code> is unchanged, and the "
+      "parser test family is the behavioural gate. A grammar change would show as a "
+      "parse error, not as a slow parse.",
   off="No switch."),
 "p16": dict(
   what="Building the proof-step tree ran <code>RangeMap.partition</code> over the "

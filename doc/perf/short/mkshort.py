@@ -117,7 +117,7 @@ def fmt_x(a, b):
 
 # ---------------------------------------------------------------- prose blocks
 def head():
-    return """<title>Eight Pull Requests</title>
+    return """<title>Nine Pull Requests</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -355,7 +355,7 @@ without them the measurements that justify the rest are not available.</p>
 
 
 def sec_proposal():
-    c = ["<p>Eight pull requests, sixteen commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
+    c = ["<p>Nine pull requests, seventeen commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
          "Each commit is one subject, states its own invariant, and passes the gate in "
          "&sect;4 on its own.</p>" % (TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
     c.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>pull request</th>'
@@ -412,7 +412,7 @@ def sec_method():
     c.append("</tbody></table></div>")
 
     c.append("""<h4>The correctness gate every commit passes</h4>
-<p>Not a benchmark gate &mdash; a soundness one. For each of the sixteen commits, in
+<p>Not a benchmark gate &mdash; a soundness one. For each of the seventeen commits, in
 sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green, and
 the <code>test/fast</code> fail-set identical to <code>main</code>'s with the full
 prover stack &mdash; Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap
@@ -615,27 +615,31 @@ def _cm_table(cm):
 
 DROPPED = [
     ("expr/Levels", "resolve de Bruijn reference levels without slicing the context",
-     "&times;1.02 on preparation", "subsumed by the deque commit, which removes the same walk lower down"),
+     "0.96&ndash;1.05", "the ratios straddle 1 on every corpus; the deque commit already "
+     "removed most of what this walk cost"),
     ("backend/toolbox", "single-pass expansion in the result printer",
-     "refuted twice", "measured slower on both corpora it was tried on, once by 4&nbsp;%"),
-    ("expr/parser", "memoize the two instances of each grammar rule",
-     "&times;1.05, overlapping", "the before and after intervals overlap at n&nbsp;=&nbsp;10"),
+     "0.99&ndash;1.20", "the one large ratio is a single generation run on the monolith "
+     "that the next nine points do not sustain"),
     ("util/property", "monomorphic pid equality, loop-based lookups",
-     "3.1&nbsp;% mean, one negative pair", "not separable from noise in a paired test"),
-    ("Ctx", "logarithmic index lookup", "&times;1.00", "the lookup is not on a hot path at these sizes"),
-    ("backend/Smtlib", "compile identifier-escaping regexes once", "&times;1.00",
+     "0.92&ndash;1.08", "a paired test over the corpora gives a 3.1&nbsp;% mean with one "
+     "negative pair &mdash; not separable"),
+    ("Ctx", "logarithmic index lookup", "0.97&ndash;1.06",
+     "the lookup is not on a hot path at these context sizes"),
+    ("backend/Smtlib", "compile identifier-escaping regexes once", "0.94&ndash;1.06",
      "the encoder is a rounding error next to preparation"),
-    ("expr/Subst", "walk substitution spines in app_ix without allocating", "&times;1.00", "same"),
-    ("backend+encode", "skip identity rebuilds when flattening extracts nothing", "&times;1.00", "same"),
-    ("backend/prep", "emit obligation comments into solver files only when kept", "&times;1.00",
-     "real work removed, but not enough of it to see"),
-    ("expr/Constness", "constant-time De Bruijn resolution in add_constness", "&times;1.01",
-     "the prefix-resume cache already skips the walk it optimises"),
+    ("expr/Subst", "walk substitution spines in app_ix without allocating",
+     "0.96&ndash;1.04", "same"),
+    ("backend+encode", "skip identity rebuilds when flattening extracts nothing",
+     "0.93&ndash;1.09", "same"),
+    ("backend/prep", "emit obligation comments into solver files only when kept",
+     "0.97&ndash;1.11", "real work removed, but not enough of it to see"),
+    ("expr/Constness", "constant-time De Bruijn resolution in add_constness",
+     "0.93&ndash;1.07", "the prefix-resume cache already skips the walk it optimises"),
 ]
 
 
 def sec_not():
-    c = ["""<p>Ten further commits were written, measured, and are <strong>not</strong>
+    c = ["""<p>Nine further commits were written, measured, and are <strong>not</strong>
 proposed. Each is correct and each removes real work; none of them moves a metric a
 user can observe. They are listed because the reason they are absent is a result, and
 because a reviewer asking &ldquo;why not also&hellip;&rdquo; deserves the answer
@@ -647,13 +651,18 @@ rather than silence.</p>"""]
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
                  % (area, what, meas, why))
     c.append("</tbody></table></div>")
-    c.append("""<p style="margin-top:14px">Those ten ratios come from a separate,
-larger campaign on a different machine, so their absolute timings are not comparable
-with the numbers above &mdash; but the decision rests on the ratios, and a ratio of
-1.00 does not become interesting on faster hardware. Two of the ten were measured
-against a direct editor-latency harness at ten repetitions specifically because a
-first attempt had extrapolated their effect from generation time and got it wrong;
-the direct measurement is what removed them.</p>
+    c.append("""<p style="margin-top:14px">The ranges are the ratios over every corpus and both
+of generation and preparation, from a separate larger campaign on a different
+machine. Their absolute timings do not transfer; the ratios do, and every one of these
+nine straddles 1 &mdash; a ratio that changes sign between two corpora of the same
+tool is measuring the run, not the change.</p>
+<p>The bar is a <em>sustained</em> step, not a large single ratio, and applying it
+changed a decision. A tenth commit &mdash; memoizing the two instances of each grammar
+rule &mdash; was on this list because the editor-latency harness could not resolve it
+at ten repetitions. Re-reading the same campaign by corpus showed a step on generation
+of the two private specifications that the following nine commits all sustain. It is
+now PR9. The lesson is in the method rather than in the commit: one metric failing to
+see a change is not the same as the change not being there.</p>
 <p>What is still open after this series is a different kind of change rather than a
 smaller one, which is why none of it is here: the editor re-elaborates the whole
 document on every interaction and then a child process repeats the work; there is no
@@ -665,7 +674,7 @@ those is an architectural change with a design discussion in front of it, not a 
 
 def sec_286():
     n286 = sum(1 for v in C.LABELS.values() if v[1])
-    return """<p>Six of these sixteen commits credit <a
+    return """<p>Six of these seventeen commits credit <a
 href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>, and the
 issue itself describes four families of optimisation. The counts differ for a
 reason worth stating plainly, because it looks like inflation and is not.</p>
@@ -676,17 +685,17 @@ exercise &mdash; each becomes reviewable on its own, and each becomes
 the seven move nothing, so they are in &sect;7 rather than here. Two survive: the
 deque lookups and the scheduler reaper. Add the single-pass expansion, the two
 prunes, and the linear <code>ENABLED</code> scan, and that is the six.</p>
-<p>The other ten commits are new. Three are the timing defects, two more are
+<p>The other eleven commits are new. Three are the timing defects, two more are
 scheduler fixes, two are the memory pull request, three are the prefix-resume caches,
-and one is the editor's obligation pool &mdash; and the last of those is in a
-component the issue does not touch at all.</p>""".replace("Six of these sixteen", "%s of these sixteen" % ("Six" if n286 == 6 else str(n286)))
+one is the editor's obligation pool and one memoizes the grammar &mdash; and the pool
+is in a component the issue does not touch at all.</p>""".replace("Six of these seventeen", "%s of these seventeen" % ("Six" if n286 == 6 else str(n286)))
 
 
 def build():
     parts = ['<div class="wrap"><header>',
              '<p class="eyebrow">tlapm &middot; performance</p>',
-             '<h1>Eight pull requests to make large proofs tractable</h1>',
-             '<p class="lede">Sixteen commits, one subject each, measured commit by commit '
+             '<h1>Nine pull requests to make large proofs tractable</h1>',
+             '<p class="lede">Seventeen commits, one subject each, measured commit by commit '
              'on five specifications with five metrics a user can time from outside the '
              'tool. Two of those specifications cannot be prepared at all today.</p>',
              '<div class="meta"><span>branch <code>%s</code></span>'

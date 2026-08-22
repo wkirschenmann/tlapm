@@ -18,7 +18,7 @@ DNC, CEIL, ABORT = "DNC", "CEIL", "ABORT"
 FAILED = (DNC, CEIL, ABORT)
 
 # the 17 measured points, and the pull request each commit belongs to
-POINTS = ["p%02d" % i for i in range(17)]
+POINTS = ["p%02d" % i for i in range(18)]
 PRS = [
     ("PR1", "correctness fixes",      ["p01", "p02", "p03", "p04", "p05"]),
     ("PR2", "deque lookups",          ["p06"]),
@@ -28,6 +28,7 @@ PRS = [
     ("PR6", "prefix-resume caches",   ["p12", "p13", "p14"]),
     ("PR7", "linear ENABLED scan",    ["p15"]),
     ("PR8", "editor obligation pool", ["p16"]),
+    ("PR9", "memoized grammar rules",  ["p17"]),
 ]
 ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS]
 

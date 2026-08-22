@@ -42,6 +42,7 @@ LABELS = {
     "p14": ("oracle",      False),
     "p15": ("enabled",     True),
     "p16": ("pool",        False),
+    "p17": ("grammar",     False),
 }
 PR_END = set(L.ENDPOINTS)
 
