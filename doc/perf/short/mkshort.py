@@ -516,11 +516,11 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
         {"synth300": iters("synth300"), "ffi": iters("ffi")}, "s",
         lambda v: "%.1f s" % v if v < 100 else "%.0f s" % v,
         "Only two changes move this metric across a threshold, and both are about doing less "
-        "work per obligation rather than less work overall. Note the crossing: the memory "
-        "pull request costs a little here, because resetting the level table between "
-        "obligations discards memoization a warm re-check would otherwise reuse. It is kept "
-        "at that position anyway &mdash; the cost is inside the run-to-run spread, and what "
-        "it buys is that nothing after it can run out of memory.",
+        "work per obligation rather than less work overall. The memory pull request is the one "
+        "place in the series where this metric moves the wrong way, by about two per cent "
+        "&mdash; inside the run-to-run spread, and small enough that the mechanism is not "
+        "worth asserting. It stays at that position because what it buys is that nothing "
+        "after it can run out of memory.",
         series=[("public synthetic, 1 800", "synth300", C.PUB, None),
                 ("private refinement chain", "ffi", C.PRIV, "5 3")]))
 

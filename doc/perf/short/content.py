@@ -8,11 +8,11 @@ Numbers never appear here -- they come from the campaign."""
 # (id, title, motivation (<= 3 lines), tag, commits)
 PRS = [
     ("PR1", "Correctness fixes", "t-fix", ["p01", "p02", "p03", "p04", "p05"],
-     "Four defects that mislead anyone trying to make tlapm faster, and one that "
-     "leaks prover processes. Three of them make <code>--timing</code> report zero "
-     "for the phases that dominate a large run; the other two are in the scheduler. "
-     "They come first because the rest of the series is justified by measurement, "
-     "and these are the measurements."),
+     "Five defects. Three make <code>--timing</code> report zero for the phases that "
+     "dominate a large run; one turns a finished prover into a spurious timeout; one "
+     "leaves killed provers alive. They come first because the rest of the series is "
+     "justified by measurement, and these are what make the measurements available "
+     "and the verdicts trustworthy."),
 
     ("PR2", "Deque lookups", "t-lat", ["p06"],
      "A context is a deque, and every hypothesis lookup walked it. The walk is the "
@@ -53,9 +53,9 @@ PRS = [
      "wait after a keystroke."),
 
     ("PR9", "Memoized grammar rules", "t-lat", ["p17"],
-     "Two instances of every grammar rule were rebuilt on every token consumed. "
-     "Parsing is a small share of a keystroke on a mid-sized file and a visible one "
-     "on a large module, which is why this is last and why it is here at all."),
+     "Every reference to a grammar rule rebuilt the rule at every token position. "
+     "Parsing is a small share of the wait on a mid-sized file and a visible one on a "
+     "30k-line module, which is why this is last and why it is here at all."),
 ]
 
 # per commit: what changes / how to validate / how to switch off
@@ -85,13 +85,19 @@ CM = {
   off="No switch. This is the commit that makes the tool tell the truth about "
       "itself."),
 "p04": dict(
-  what="Two defects in one loop. Finished provers were reaped only after the next "
-       "launch, so a slot stayed occupied by a dead process; and the deadline was "
-       "computed before <code>select</code> and reused after it, so a prover could "
-       "outlive its timeout by the length of the wait.",
-  how="A module with a mix of fast and slow obligations under "
-      "<code>--threads 4</code>: no prover survives past its own timeout, and the "
-      "number of live children never exceeds the thread count.",
+  what="Two defects in one loop. Finished provers were read only after the next task "
+       "had been constructed, and constructing a task means encoding an obligation for "
+       "its prover, which can take seconds &mdash; so a prover that had already exited "
+       "sat unread past its deadline and was then reported as a timeout it did not "
+       "have. A zero-timeout <code>select</code> before each launch reaps it first. "
+       "And the wall clock was read <em>before</em> <code>select</code> and reused "
+       "after it, so run times were under-reported and kills postponed by however "
+       "long the wait had been.",
+  how="The first defect is a wrong verdict, not a slow one, so the gate is the test "
+      "suite: a module with a mix of fast and slow obligations under "
+      "<code>--threads 4</code> must report the same verdicts it reports "
+      "single-threaded. The second shows in <code>--timing</code>: reported prover "
+      "time stops undershooting the wall clock.",
   off="No switch."),
 "p05": dict(
   what="A timed-out prover was killed with <code>SIGHUP</code>. Under "
@@ -127,20 +133,27 @@ CM = {
   what="The driver built the whole task list before the scheduler started, so every "
        "obligation of the run -- context, expansion, normalised form -- was live "
        "before the first prover was launched. The scheduler now pulls tasks from a "
-       "stream and only the obligations in flight are live.",
+       "stream and only the obligations in flight are live. The stream is pulled in "
+       "document order deliberately: the prefix-resume caches of PR6 assume that "
+       "sequence, so streaming and caching compose rather than conflict.",
   how="Obligation stream identical under <code>--printallobs</code>; verdict order "
       "and count unchanged. One behavioural improvement is deliberate: a malformed "
       "<code>USE</code> used to abort the whole batch before anything ran, and now "
       "the obligations already dispatched keep their results.",
   off="No switch."),
 "p09": dict(
-  what="The level-computation memo table is keyed on expressions and lives for the "
-       "process. Each obligation's context is a fresh set of expressions, so the "
-       "table kept one whole context alive per obligation prepared -- a leak in "
-       "everything but name. Its lifetime is now the obligation.",
-  how="Levels are a pure function of the expression, so clearing the table between "
-      "obligations cannot change a result: byte-identical dumps. The visible effect "
-      "is peak resident set.",
+  what="The level memoization is not a table but a mutable cell on each syntax node, "
+       "and those nodes belong to the module tree &mdash; they are shared by every "
+       "obligation. A filled cell pins the <em>context</em> of the query that filled "
+       "it, and during preparation those are per-obligation contexts, so the shared "
+       "tree collectively pinned one context per obligation ever prepared. The commit "
+       "registers the cells it fills and empties them between obligations.",
+  how="The memoization exists to tame a recomputation that is exponential in "
+      "expression depth, and it only needs to survive one burst of queries; a hit "
+      "across obligations would have required physically equal contexts, which "
+      "preparation rebuilds anyway. Levels are a pure function of the expression, so "
+      "emptying the cells cannot change a result: byte-identical dumps. The visible "
+      "effect is peak resident set.",
   off="No switch."),
 "p10": dict(
   what="After expansion and normalisation, an obligation's context still carries "
@@ -199,10 +212,15 @@ CM = {
       "family is the behavioural gate.",
   off="No switch."),
 "p17": dict(
-  what="The parser combinators built two instances of each grammar rule &mdash; one "
-       "for each of the two operator-precedence variants &mdash; and rebuilt both on "
-       "every token consumed rather than once per rule. The two instances are "
-       "memoized; the grammar they describe is unchanged.",
+  what="The expression grammar is a family of mutually recursive rules "
+       "<code>name b = lazy &hellip;</code> whose one parameter is a boolean &mdash; "
+       "whether a bulleted conjunction or disjunction list is allowed at that "
+       "position &mdash; so each rule has exactly two useful instances. Every "
+       "<em>reference</em> to a rule rebuilt its whole combinator family, choice "
+       "lists and thunks included, at every token position. The rules that take no "
+       "parameter were already shared top-level thunks, which is what confirms the "
+       "sharing is safe. The 21 parameterized bodies move unchanged into "
+       "<code>mk_*</code> functions behind a two-slot cache.",
   how="Byte-identical parse: the obligation dump under "
       "<code>-N --toolbox 0 0 --printallobs --nofp</code> is unchanged, and the "
       "parser test family is the behavioural gate. A grammar change would show as a "
@@ -212,7 +230,8 @@ CM = {
   what="Building the proof-step tree ran <code>RangeMap.partition</code> over the "
        "whole remaining obligation map for every step -- steps &times; obligations. "
        "The pool keeps the exact claiming semantics (first claimer wins, a claim is "
-       "a range intersection, duplicate ranges collapse) in logarithmic time: "
+       "a range intersection, duplicate ranges collapse with the last one winning) "
+       "in logarithmic time: "
        "entries sorted by range, a binary search to the window, a forward scan, and "
        "a backward scan bounded by the longest obligation span.",
   how="The gate is the client-visible notification stream: byte-identical between "
