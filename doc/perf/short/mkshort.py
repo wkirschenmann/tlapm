@@ -639,11 +639,17 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "The step is the fourth pull request, and it is a step rather than a slope: peak "
     "memory stops being a function of the file and becomes a function of one obligation. "
     "Everything to the right of it is flat, which is the point &mdash; no later commit "
-    "has to defend a memory budget. A red cross on the cap line is a run the cap "
-    "stopped: that reading is real, it is the resident set reached before the "
-    "allocation that would have crossed 12&nbsp;GB. A cross in the band below the axis "
-    "is a run stopped by the clock instead, which leaves no memory reading at all "
-    "&mdash; <code>/usr/bin/time</code> is killed along with the process.",
+    "Every failure carries a memory reading, including the ones the clock stopped: "
+    "the kernel propagates the peak resident set up through <code>wait()</code>, so "
+    "measuring from outside the timeout rather than inside it keeps the figure. The "
+    "two failures mean different things and the chart distinguishes them by where the "
+    "cross sits rather than by a legend. A cross <strong>on the cap line</strong> is a "
+    "run the cap stopped: that is the resident set reached just before the allocation "
+    "that would have crossed 12&nbsp;GB, so it is the run's peak. A cross "
+    "<strong>below the cap</strong> is a run the clock stopped while it was still "
+    "growing: that is the resident set at the moment of the kill, and therefore a "
+    "<em>lower bound</em> &mdash; the run would have gone higher, and on these corpora "
+    "the ones that were later given more time did.",
     rule=(12.0, "12 GB address-space cap")))
 
     c.append(fig(

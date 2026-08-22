@@ -61,9 +61,10 @@ def load_sweep(path=None, boot=None):
     boots = {r["boot"] for r in raw}
     boot = boot or max(boots, key=lambda b: sum(1 for r in raw if r["boot"] == b))
     out = collections.defaultdict(dict)
+    anchors = [r for r in raw if r["phase"].startswith("K")]
     for r in raw:
-        if r["boot"] != boot:
-            continue
+        if r["boot"] != boot or r["phase"].startswith("K"):
+            continue                      # phase K is the drift anchor, not a data point
         k = (r["point"], r["corpus"])
         out[k]["sha"] = r["sha"]
         g, grc = int(r["gen_ms"]), int(r["gen_rc"])
@@ -91,6 +92,19 @@ def load_sweep(path=None, boot=None):
             if isinstance(a.get(f), int) and isinstance(b.get(f), int):
                 lo, hi = min(a[f], b[f]), max(a[f], b[f])
                 drift[(cp, f)] = (hi - lo) / float(hi) if hi else 0.0
+    # the anchor is one fixed cell re-measured through the campaign: its spread is
+    # the drift the run carries, and if a restart split the campaign the anchors on
+    # either side say by how much the halves differ instead of leaving them
+    # incomparable.
+    by_boot = collections.defaultdict(list)
+    for r in anchors:
+        v = int(r["prep_ms"])
+        if v > 0 and int(r["prep_rc"]) == 0:
+            by_boot[r["boot"]].append(v)
+    out["_anchors"] = dict(by_boot)
+    if len(by_boot.get(boot, [])) > 1:
+        a = by_boot[boot]
+        drift[("anchor", "prep")] = (max(a) - min(a)) / float(max(a))
     return out, boot, drift
 
 
