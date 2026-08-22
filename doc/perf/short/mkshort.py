@@ -374,7 +374,15 @@ def sec_proposal():
              '<th>what it is for</th></tr></thead><tbody>')
     for pid, title, tag, cms, motive in CT.PRS:
         files = len({f for cm in cms for f, _, _ in BY_LABEL[cm][3]})
-        short = motive.split(".")[0] + "."
+        # the summary is the opening sentences up to a readable length, and at
+        # least enough of them to say something -- some motivations open with a
+        # three-word count ("Five defects.") that is useless on its own
+        parts = [x.strip().rstrip(".") for x in motive.split(". ") if x.strip()]
+        short = ""
+        for x in parts:
+            short += ("" if not short else " ") + x + "."
+            if len(short) >= 60:
+                break
         c.append('<tr><td class="num"><span class="tag %s">%s</span></td>'
                  '<td><strong>%s</strong></td><td class="num">%d</td><td class="num">%d</td>'
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
