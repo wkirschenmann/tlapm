@@ -119,3 +119,42 @@ def load_iteration_latency_chain(path=None, boot=None):
         rep = max(int(r["proved"]) + int(r["trivial"]) for r in rs)
         out[pt] = (int(m), (max(ms)-min(ms))/m if m else 0.0, rep, done)
     return out
+
+
+def load_keystroke(path=None, path_n10=None, boot=None):
+    """median keystroke -> diagnostics latency per point, in seconds.
+
+    Measured at the language-server protocol boundary: spawn the server on stdio,
+    initialize, didOpen, then send a whitespace-only didChange and time until the
+    publishDiagnostics carrying that document version.  No prover and no
+    fingerprint invalidation -- this is what a user waits for while typing.
+
+    Where a ten-sample run exists it supersedes the three-sample one, because at
+    n=3 the spread (8-21 %) cannot resolve anything below about x1.3.
+    Returns {point: (median_s, spread, n)}."""
+    import statistics
+    path = path or os.path.join(S, "keystroke_latency.csv")
+    path_n10 = path_n10 or os.path.join(S, "keystroke_latency_n10.csv")
+    out = {}
+    for f, only_edits in ((path, True), (path_n10, False)):
+        if not os.path.exists(f):
+            continue
+        runs = collections.defaultdict(list)
+        boots = set()
+        with open(f) as fh:
+            for r in csv.DictReader(fh):
+                if only_edits and r.get("kind") != "edit":
+                    continue
+                boots.add(r["boot"])
+                runs[(r["boot"], r["point"])].append(float(r["seconds"]))
+        if not runs:
+            continue
+        b = boot or max(boots, key=lambda x: sum(1 for k in runs if k[0] == x))
+        for (bb, pt), v in runs.items():
+            if bb != b:
+                continue
+            m = statistics.median(v)
+            # a later file with more samples wins
+            if pt not in out or len(v) > out[pt][2]:
+                out[pt] = (m, (max(v)-min(v))/m if m else 0.0, len(v))
+    return out

@@ -7,6 +7,7 @@ S = os.environ.get("SWEEP_DIR", os.path.dirname(os.path.abspath(__file__)))
 rows, BOOT = sweeplib.load()
 ITER, ITER_SPREAD = sweeplib.load_iteration_latency()
 ICHAIN = sweeplib.load_iteration_latency_chain()
+KEYS = sweeplib.load_keystroke()
 SPREAD = rows.get("_spread", {})
 DNC   = "DNC"      # measured, run did not complete (generic)
 CEIL  = "CEIL"     # stopped at the timeout ceiling
@@ -36,6 +37,13 @@ PRS = [("main","c00","the base of the branch"),
        ("levcache","c25","level-cache lifetime"),
        ("const","c26","constant-time constness index")]
 LABELS = [p[0] for p in PRS]
+
+# Which pull requests carry content from tlaplus/tlapm#286 (the commit messages name the
+# reference implementation), and which the short proposal keeps.  Both are properties of
+# the branch, so they are listed once here and drive the label colours.
+FROM_286 = {"c05", "c06", "c07", "c09", "c14", "c15", "c20", "c21", "c22", "c23", "c24"}
+SELECTED = {"c05", "c06", "c07", "c09", "c12", "c13", "c14", "c19", "c25"}
+VIOLET, GREEN = "var(--lbl-286)", "var(--lbl-keep)"
 PTS = [p[1] for p in PRS]
 
 # hue = corpus family, dash = size inside the family
@@ -151,9 +159,14 @@ def chart(sub, aria, values, unit, fmt_end):
                      'font-size="10.5" font-weight="600" fill="%s">%s</text>'
                      % (xs(i)-5, y(v)-7, col, fmt_end(v)))
     for i, lab in enumerate(LABELS):
+        pt = PRS[i][1]
+        keep = pt in SELECTED
+        col = GREEN if keep else ("%s" % VIOLET if pt in FROM_286 else "currentColor")
+        op = "1" if (keep or pt in FROM_286) else ".45"
+        deco = ' text-decoration="underline"' if (keep and pt in FROM_286) else ""
         o.append('<text x="%.1f" y="%d" text-anchor="end" font-family="IBM Plex Mono, monospace" '
-                 'font-size="9.5" fill="currentColor" opacity=".7" transform="rotate(-45 %.1f %d)">%s</text>'
-                 % (xs(i), H-B+15, xs(i), H-B+15, lab))
+                 'font-size="9.5" fill="%s" opacity="%s"%s transform="rotate(-45 %.1f %d)">%s</text>'
+                 % (xs(i), H-B+15, col, op, deco, xs(i), H-B+15, lab))
     lx, ly, row = L, T-13, 0
     o.append('<g font-family="IBM Plex Sans, sans-serif" font-size="11">')
     for lab, cp, col, dash in SERIES:
@@ -196,6 +209,19 @@ A("""  <p>The x axis is the branch, in order: <code>main</code>, then the five b
   because that is the only way the two ends of the range are legible together &mdash; and the range
   <em>is</em> the subject. Colour is the corpus family, public or private; the dashed line is the
   smaller of the two inside each family.</p>""")
+A("""  <p><strong>The commit labels are colour-coded.</strong>
+  <span style="color:var(--lbl-keep);font-weight:600">Green</span> is content the short proposal keeps;
+  <span style="color:var(--lbl-286);font-weight:600">violet</span> is content that came from
+  <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a> and that the short
+  proposal drops; <span style="color:var(--lbl-keep);font-weight:600;text-decoration:underline">green
+  underlined</span> is both &mdash; from #286 and kept. Grey is new here and dropped. Provenance is
+  read from the commit messages, which name the reference implementation each one came from.</p>
+  <p>The pattern is worth reading off the axis: <strong>the short proposal keeps #286&rsquo;s
+  structural work and drops its micro-fix batch.</strong> Everything violet &mdash; the level
+  slicing, the <code>Ctx</code> index, the SMT regexes, <code>app_ix</code>, the flatten guard, the
+  obligation comment &mdash; comes from one commit of that issue, and none of it moves any metric here
+  beyond its own spread. What survives from #286 is the deque lookups, the single-pass expansion, the
+  two prunes and the linear ENABLED scan.</p>""")
 A("""  <p>A cross in the strip below the axis means the run <strong>did not complete</strong>. The table
   says which of the two ways: <code>&gt; 900 s</code> is a run stopped at the fifteen-minute ceiling,
   <code>aborts on memory</code> is one that hit the 12&nbsp;GB address-space cap it was run under
@@ -256,6 +282,31 @@ A("""    <figcaption>On the public corpus three changes carry it &mdash; the deq
     ranks the deque fix first on a corpus where the deque fix does not break the wall.</figcaption>""")
 A('  </figure>')
 
+def keystroke(pt):
+    r = KEYS.get(pt)
+    return r[0]*1000 if r else None
+
+A('  <figure style="margin-top:20px">')
+A('    <h4 style="margin:0 0 2px">Keystroke to diagnostics</h4>')
+A("""    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">Measured at the
+    language-server protocol boundary on the refinement chain: spawn the server on stdio,
+    <code>initialize</code>, <code>didOpen</code>, then one whitespace-only <code>didChange</code>,
+    timed until the <code>publishDiagnostics</code> carrying that document version. No prover, no
+    fingerprint invalidation &mdash; this is the wait while typing. Where three samples could not
+    separate two neighbours, the pair was re-run at ten; the table gives n per point. Lower is
+    better.</p>""")
+A('    ' + chart("Keystroke to diagnostics",
+    "Keystroke to diagnostics on the refinement chain, one point per pull request: 39.6 seconds on main falling to 5.1 seconds, almost all of it at the deque lookups.",
+    {"synth300": [None]*len(PTS), "synth100": [None]*len(PTS), "tiny": [None]*len(PTS),
+     "ffi": [keystroke(p) for p in PTS], "mono": [None]*len(PTS)}, "ms",
+    lambda v: "%.1f s" % (v/1000.0)))
+A("""    <figcaption>One change carries it: the deque lookups, 40.8 s to 10.1 s. After that the
+    only step that clears its own spread is the editor obligation pool (6.54 s to 4.51 s, ranges
+    disjoint at n=10), with the linear ENABLED scan just behind it (8.59 s to 7.14 s, also disjoint).
+    Everything else on this metric is inside the noise, the grammar memo included &mdash; parsing is
+    0.85 s of a 40 s keystroke here, so a parser change cannot show on this corpus.</figcaption>""")
+A('  </figure>')
+
 A('  <figure style="margin-top:20px">')
 A('    <h4 style="margin:0 0 2px">Peak resident memory</h4>')
 A('    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">Maximum resident set of the '
@@ -273,17 +324,20 @@ A('  </figure>')
 A('  <div class="scroller" style="margin-top:22px">')
 A('    <table>')
 A('      <thead><tr><th>point</th><th>change</th>'
-  '<th class="num">iteration</th><th class="num">gen, 1 800</th><th class="num">prep, 1 800</th>'
+  '<th class="num">keystroke</th><th class="num">iteration</th><th class="num">gen, 1 800</th><th class="num">prep, 1 800</th>'
   '<th class="num">peak, 1 800</th><th class="num">prep, chain</th><th class="num">prep, 30k</th>'
   '<th class="num">peak, 30k</th></tr></thead>')
 A('      <tbody>')
 for i, (lab, pt, name) in enumerate(PRS):
     tag = "main" if i == 0 else ("bugfixes" if i == 1 else "#%d" % (i-1))
     it = iterlat(pt)
+    ks = KEYS.get(pt)
     A('        <tr><td class="num">%s</td><td>%s</td><td class="num">%s</td><td class="num">%s</td>'
       '<td class="num">%s</td><td class="num">%s</td><td class="num">%s</td><td class="num">%s</td>'
-      '<td class="num">%s</td></tr>'
-      % (tag, name, fmt_ms(it) if it else "&mdash;",
+      '<td class="num">%s</td><td class="num">%s</td></tr>'
+      % (tag, name,
+         ("%.2f s <span style=\'opacity:.55\'>n=%d</span>" % (ks[0], ks[2])) if ks else "&mdash;",
+         fmt_ms(it) if it else "&mdash;",
          fmt_ms(get(pt,"synth300","m0_ms")), fmt_ms(get(pt,"synth300","m1_ms")),
          fmt_mb(peak(pt,"synth300")), fmt_ms(get(pt,"ffi","m1_ms")),
          fmt_ms(get(pt,"mono","m1_ms")), fmt_mb(peak(pt,"mono"))))
@@ -302,11 +356,12 @@ below = sum(1 for i in range(1, len(PTS))
             if num(PTS[i-1],"synth300","m1_ms") and num(PTS[i],"synth300","m1_ms")
             and abs(num(PTS[i-1],"synth300","m1_ms")/float(num(PTS[i],"synth300","m1_ms")) - 1) < NOISE)
 ia, ib = iterlat("c00"), iterlat("c26")
-A("""  <p style="margin-top:14px"><strong>On the public medium case: &times;%.1f on iteration latency,
-  &times;%.1f on throughput, &times;%.1f on peak memory.</strong> %d of the nineteen pull requests move
+ka, kb = KEYS.get("c00"), KEYS.get("c26")
+A("""  <p style="margin-top:14px"><strong>&times;%.1f on the keystroke, and on the public medium case
+  &times;%.1f on iteration latency, &times;%.1f on throughput, &times;%.1f on peak memory.</strong> %d of the nineteen pull requests move
   throughput on that corpus by less than the noise floor on their own; they are in the set because of
   what they do on the two large specifications and because of the mechanism, both of which &sect;6
-  states per commit.</p>""" % (ia/float(ib), m1a/float(m1b), pa/float(pb), below))
+  states per commit.</p>""" % (ka[0]/kb[0] if ka and kb else 0, ia/float(ib), m1a/float(m1b), pa/float(pb), below))
 A('</section>')
 
 sec = "\n".join(o) + "\n"

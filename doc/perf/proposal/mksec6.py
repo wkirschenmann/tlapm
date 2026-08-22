@@ -40,6 +40,7 @@ def files_line(sha):
 DATA, BOOT = sweeplib.load()
 ITER, ITER_SPREAD = sweeplib.load_iteration_latency()
 ICHAIN = sweeplib.load_iteration_latency_chain()
+KEYS = sweeplib.load_keystroke()
 def _get(pt, cp):
     return DATA.get((pt, cp))
 
@@ -551,6 +552,12 @@ def classify(a, b):
         per_metric.setdefault("iter", []).append(r)
         if r > best[0]:
             best = (r, "iter", "iteration latency")
+    ka, kb = KEYS.get(a), KEYS.get(b)
+    if ka and kb:
+        r = ka[0] / kb[0]
+        per_metric.setdefault("keys", []).append(r)
+        if r > best[0]:
+            best = (r, "keys", "keystroke")
     ca, cb = ICHAIN.get(a), ICHAIN.get(b)
     if ca and cb:
         if cb[3] and not ca[3]:
@@ -587,7 +594,7 @@ def classify(a, b):
 
 A("""  <h4>Which of these are carried by a measurement, and which are not</h4>
   <p>Computed from the campaign, not asserted. For each pull request: the largest improvement it
-  produces on any corpus and any of the four metrics in &sect;5, and whether it is the commit at
+  produces on any corpus and any of the five metrics in &sect;5, and whether it is the commit at
   which a run that did not finish starts finishing. One noisy metric on one corpus is not allowed to
   promote a change &mdash; an effect counts either because it is large on its own
   (&times;1.35 or more) or because it repeats on a second corpus. Everything else is listed as
@@ -669,6 +676,14 @@ for pr in PRS:
             A('        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, '
               '1 800 obl.</td><td class="num" colspan="3">%.2f s &rarr; %.2f s%s</td></tr>'
               % (ia/1000.0, ib/1000.0, tail))
+        ka, kb = KEYS.get(b), KEYS.get(c["pt"])
+        if ka and kb:
+            r = ka[0] / kb[0]
+            tail = (' <span class="r">&times;%.2f</span>' % r) if r >= 1.03 else (
+                   ' <span class="w">+%d&thinsp;%%</span>' % round((1/r - 1)*100) if r <= 0.97 else "")
+            A('        <tr><td><strong>keystroke &rarr; diagnostics</strong> &mdash; refinement '
+              'chain, n=%d</td><td class="num" colspan="3">%.2f s &rarr; %.2f s%s</td></tr>'
+              % (min(ka[2], kb[2]), ka[0], kb[0], tail))
         ca, cb = ICHAIN.get(b), ICHAIN.get(c["pt"])
         if ca and cb:
             def _f(x):
