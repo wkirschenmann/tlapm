@@ -68,14 +68,53 @@ for that corpus — and they remain the largest single throughput item anywhere
 (`v3` is 19.8 s on the synthetic where the branch's #4, which has them, is
 6.39 s).
 
+## Iteration latency, measured after Isabelle was installed
+
+The same three branches on the metric a user actually feels — one edit, full
+fingerprint cache — measured on the private refinement chain with the proving
+range restricted to its widest failure-free span:
+
+| configuration | chain, 3 773 obl. | synthetic, 1 800 obl. |
+|---|---:|---:|
+| `main` | > 1800 s (3 501 of 3 774 reported) | 8.83 s |
+| bugfixes | > 1800 s (3 561) | 8.94 s |
+| #1 deque | > 1800 s (3 578) | 5.94 s |
+| #2 expansion | **143.9 s** | 4.07 s |
+| #3 prunes | 143.1 s | 3.78 s |
+| #4 caches | **34.6 s** | 2.91 s |
+| tip | 30.4 s | 2.46 s |
+| **v1** = fixes+#1+(#5+#17) | > 1800 s (3 420) | 6.07 s |
+| **v2** = v1+#2 | 146.0 s | 4.04 s |
+| **v3** = v2+#4 | 34.8 s | 3.10 s |
+
+This does not support moving the memory pair first, and it is worth being blunt
+about that: on iteration latency the pair costs a little.  `v1` reports **fewer**
+obligations in half an hour than `main` does — 3 420 against 3 501 — because
+resetting the level cache between obligations throws away memoization that a warm
+re-check, which walks every obligation, would otherwise reuse.  The same sign
+shows on the synthetic: 6.07 s for `v1` against 5.94 s for #1 alone.
+
+So the two axes disagree, and the disagreement is the useful part:
+
+  * **memory and feasibility** say the pair belongs at position 2 — it delivers the
+    whole memory result and removes every abort;
+  * **iteration latency** says it belongs after #2 and #4, which are the only two
+    commits that move this metric at all (`> 1800 s` → 143.9 s → 34.6 s).
+
+Both are satisfied by one order: **#1 deque, #2 expansion, #3 the memory pair, #4
+prunes, #5 caches**.  The pair still lands before the prunes, which is what
+removes the aborts from the second half; the two commits that carry iteration
+latency come first; and nothing regresses, because the pair's cost on this metric
+(2 % on the synthetic) is inside the spread once the expansion is already in.
+
 ## Recommended order
 
 1. **#0** the five bugfixes
-2. **#1** deque lookups — latency, one file, output-identical
-3. **#2** *(new)* the memory pair: streamed task list, then level-cache lifetime — two commits, one pull request
-4. **#3** single-pass expansion
+2. **#1** deque lookups — latency floor, one file, output-identical
+3. **#2** single-pass expansion — the commit that makes a warm re-check finish at all
+4. **#3** *(new)* the memory pair: streamed task list, then level-cache lifetime — two commits, one pull request
 5. **#4** the two context prunes
-6. **#5** the three prefix-resume caches
+6. **#5** the three prefix-resume caches — ×4.1 on iteration latency, the largest single step on that metric
 7. then the latency items that measure: linear ENABLED scan, memoized grammar
 8. then the editor obligation pool, whose measurement is editor-side
 9. then, optionally, the micro-fixes that no measurement separates from zero

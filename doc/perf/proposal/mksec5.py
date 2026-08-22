@@ -6,6 +6,7 @@ import os, math, sweeplib
 S = os.environ.get("SWEEP_DIR", os.path.dirname(os.path.abspath(__file__)))
 rows, BOOT = sweeplib.load()
 ITER, ITER_SPREAD = sweeplib.load_iteration_latency()
+ICHAIN = sweeplib.load_iteration_latency_chain()
 SPREAD = rows.get("_spread", {})
 DNC   = "DNC"      # measured, run did not complete (generic)
 CEIL  = "CEIL"     # stopped at the timeout ceiling
@@ -59,6 +60,15 @@ def get(pt, cp, f):
 def thr(pt, cp):
     v = get(pt, cp, "m1_ms")
     return v if (v is None or v in FAILED) else OBL[cp]*1000.0/v
+
+def iterchain(pt):
+    """median warm iteration latency on the large specification; CEIL when the run
+       was stopped at the ceiling rather than finishing"""
+    r = ICHAIN.get(pt)
+    if not r:
+        return None
+    ms, _, _, done = r
+    return ms if done else CEIL
 
 def iterlat(pt, cp=None):
     """median iteration latency at this point, ms; measured on the 1 800-obligation
@@ -217,19 +227,29 @@ A('    <p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">The wait a
   'step in a file whose fingerprints are all present: parse, elaborate, generate, check every '
   'obligation against the cache, report the hits, prove the one that changed. This is the loop a '
   'user actually sits in, and it is the run in which a warm cache is exercised rather than bypassed. '
-  'Median of three runs on the 1 800-obligation corpus; worst spread across the campaign '
-  '%.0f&nbsp;%%. Lower is better.</p>' % (100*max(ITER_SPREAD.values()) if ITER_SPREAD else 0))
+  'Median of three runs on the public 1 800-obligation corpus and of two on the private '
+  'refinement chain, whose proving range is restricted to its widest failure-free span (3 773 '
+  'obligations) so the number measures tlapm rather than the re-attempt of obligations this '
+  'environment cannot prove &mdash; parsing, elaboration and generation still cover the whole '
+  '14 522-line module. Worst spread %.0f&nbsp;%% and %.0f&nbsp;%%. Lower is better.</p>'
+  % (100*max(ITER_SPREAD.values()) if ITER_SPREAD else 0,
+     100*max((v[1] for v in ICHAIN.values()), default=0)))
 A('    ' + chart("Iteration latency",
     "Iteration latency after a single edit with a full fingerprint cache, one point per pull request: 8.8 seconds on main falling to 2.5 seconds, with the steps at the deque lookups, the single-pass expansion and the prefix caches.",
     {"synth300": [iterlat(p) for p in PTS], "synth100": [None]*len(PTS),
-     "ffi": [None]*len(PTS), "mono": [None]*len(PTS)}, "ms",
+     "ffi": [iterchain(p) for p in PTS], "mono": [None]*len(PTS)}, "ms",
     lambda v: "%.2f s" % (v/1000.0)))
-A('    <figcaption>Three changes carry it: the deque lookups (&times;1.51), the single-pass expansion '
-  '(&times;1.46) and the prefix-resume caches (&times;1.30). The two prunes are &times;1.08 here &mdash; '
-  'they cut the work a prover sees, not the work a warm re-check does. Everything after the caches is '
-  'inside the spread individually and &times;1.18 jointly. The earlier proxy for this, '
-  '<code>tlapm -N</code> with no cache, is kept in the raw table as the floor it is: it measures the '
-  'part of the loop before any obligation is looked up.</figcaption>')
+A("""    <figcaption>On the public corpus three changes carry it &mdash; the deque lookups
+    (&times;1.51), the single-pass expansion (&times;1.46) and the prefix-resume caches (&times;1.30).
+    On the real specification only <em>two</em> do, and the shape is different: <code>main</code>, the
+    bugfixes and the deque fix never finish a warm re-check inside half an hour (they report 3 501,
+    3 561 and 3 578 of 3 774 obligations), the single-pass expansion takes it to 143.9 s, and the
+    caches to 34.6 s &mdash; &times;4.1, the largest single step on this metric anywhere. The prunes
+    are &times;1.01 there and &times;1.08 on the synthetic: they cut the work a prover sees, not the
+    work a warm re-check does. The earlier proxy, <code>tlapm -N</code> with no cache, is kept in the
+    raw table as the floor it is &mdash; it measures the part of the loop before any obligation is
+    looked up, and it ranked the deque fix first on a corpus where it does not break the
+    wall.</figcaption>""")
 A('  </figure>')
 
 A('  <figure style="margin-top:20px">')

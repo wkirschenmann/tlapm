@@ -38,6 +38,7 @@ def files_line(sha):
     return '<span class="fl-h">%s</span> %s' % (head, " ".join(parts))
 DATA, BOOT = sweeplib.load()
 ITER, ITER_SPREAD = sweeplib.load_iteration_latency()
+ICHAIN = sweeplib.load_iteration_latency_chain()
 def _get(pt, cp):
     return DATA.get((pt, cp))
 
@@ -550,6 +551,15 @@ def classify(a, b):
         per_metric.setdefault("iter", []).append(r)
         if r > best[0]:
             best = (r, "iter", "iteration latency")
+    ca, cb = ICHAIN.get(a), ICHAIN.get(b)
+    if ca and cb:
+        if cb[3] and not ca[3]:
+            transition = True
+        elif ca[3] and cb[3]:
+            r = ca[0] / float(cb[0])
+            per_metric.setdefault("iter", []).append(r)
+            if r > best[0]:
+                best = (r, "iter", "iteration latency, chain")
     for f in METRICS:
         for cp in CORPORA_K:
             ra, rb = DATA.get((a, cp)), DATA.get((b, cp))
@@ -659,6 +669,21 @@ for pr in PRS:
             A('        <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, '
               '1 800 obl.</td><td class="num" colspan="3">%.2f s &rarr; %.2f s%s</td></tr>'
               % (ia/1000.0, ib/1000.0, tail))
+        ca, cb = ICHAIN.get(b), ICHAIN.get(c["pt"])
+        if ca and cb:
+            def _f(x):
+                ms, _, rep, done = x
+                return "%.1f s" % (ms/1000.0) if done else "&gt; 1800 s (%d/3774)" % rep
+            extra = ""
+            if ca[3] and cb[3]:
+                r = ca[0] / float(cb[0])
+                extra = (' <span class="r">&times;%.2f</span>' % r) if r >= 1.03 else (
+                        ' <span class="w">+%d&thinsp;%%</span>' % round((1/r - 1)*100) if r <= 0.97 else "")
+            elif cb[3] and not ca[3]:
+                extra = ' <span class="r">starts finishing</span>'
+            A('        <tr><td><strong>iteration latency</strong> &mdash; same, refinement chain, '
+              '3 773 obl.</td><td class="num" colspan="3">%s &rarr; %s%s</td></tr>'
+              % (_f(ca), _f(cb), extra))
         for key, label in CORPORA:
             A('        <tr><td>%s</td><td class="num">%s</td><td class="num">%s</td><td class="num">%s</td></tr>' %
               (label, cell(b, c["pt"], key, "m0_ms"), cell(b, c["pt"], key, "m1_ms"),

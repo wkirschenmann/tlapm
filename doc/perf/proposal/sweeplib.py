@@ -82,3 +82,40 @@ def load_iteration_latency(path=None, boot=None):
         med[pt] = int(m)
         spread[pt] = (max(v) - min(v)) / m if m else 0.0
     return med, spread
+
+
+def load_iteration_latency_chain(path=None, boot=None):
+    """median warm iteration latency on the large private specification, in ms.
+
+    Same protocol as the synthetic one, with two differences forced by the corpus:
+    a real prover run leaves 641 of its 9 927 obligations unproved in this
+    environment, and those are re-attempted on every warm run, which would make
+    the metric measure prover time rather than tlapm.  So the proving range is
+    restricted with `--toolbox lo hi` to the widest span containing no failure
+    (3 773 obligations, 975 prover-proved and 2 798 trivial) while parsing,
+    elaboration and generation still cover the whole 14 522-line module.
+
+    Returns (median_ms, spread, reported, completed) per point; `completed` is
+    False for a run stopped at the ceiling, where `reported` says how far it got
+    out of 3 774."""
+    import statistics
+    path = path or os.path.join(S, "iteration_latency_chain.csv")
+    if not os.path.exists(path):
+        return {}
+    runs = collections.defaultdict(list)
+    boots = set()
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            boots.add(r["boot"])
+            runs[(r["boot"], r["point"])].append(r)
+    boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
+    out = {}
+    for (b, pt), rs in runs.items():
+        if b != boot:
+            continue
+        ms = [int(r["ms"]) for r in rs]
+        m = statistics.median(ms)
+        done = all(int(r["rc"]) == 0 for r in rs)
+        rep = max(int(r["proved"]) + int(r["trivial"]) for r in rs)
+        out[pt] = (int(m), (max(ms)-min(ms))/m if m else 0.0, rep, done)
+    return out
