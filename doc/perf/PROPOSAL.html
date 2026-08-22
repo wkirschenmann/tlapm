@@ -307,10 +307,21 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
   individually meaningful; the others say so in §6 and are argued on the mechanism.</p>
 
   <h4>Correctness gates, per change</h4>
-  <p>Every commit is checked with the two suites (<code>dune runtest src</code>,
-  <code>dune runtest lsp</code>) and with the known-failing set unchanged — 40 of 48 fast tests pass
-  in an environment without Isabelle, and a change to <em>which</em> eight fail would be a
-  regression.</p>
+  <p>Every commit is checked with both suites &mdash; <code>dune runtest src</code> and
+  <code>dune runtest lsp</code>, the latter 23 of 23 &mdash; and against the <code>test/fast</code>
+  suite run with the <strong>full prover stack</strong>: Z3 4.8.9, Zenon, and Isabelle 2025 with the
+  TLA+ heap built from this repository&rsquo;s own <code>isabelle/</code> sources. 47 of 48 pass, and
+  the gate is that the fail-set is <em>identical to <code>main</code>&rsquo;s</em>. The single failure
+  is <code>fast/fingerprint/FingerprintVariablesParameters_test.tla</code>: it expects 1 of 2
+  obligations to fail and gets 2 of 2, because Z3&nbsp;4.8.9 does not prove
+  <code>\E y : y # x</code> here. It fails the same way on <code>main</code>, so it is a property of
+  the prover versions in this environment, not of any change proposed here.</p>
+  <p class="note">An earlier version of this gate said &ldquo;40 of 48 pass without Isabelle&rdquo;.
+  That was measured in an environment where Isabelle was genuinely absent, and it under-states the
+  gate: with Isabelle present, seven of those eight failures disappear. The stack is worth installing
+  before reviewing this branch &mdash; the download is pinned by SHA-256 in
+  <code>deps/isabelle/dune.mk</code> and the TLA+ heap builds in about half a minute on four
+  cores.</p>
   <p>For output-preserving changes, the obligation stream is compared before and after:</p>
   <pre>tlapm -N --toolbox 0 0 --printallobs --nofp MODULE.tla 2&gt;&amp;1 \
   | grep -vE '^@!!(time-used|id):' &gt; arm.txt
@@ -333,7 +344,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
         <tr><td>memory</td><td class="num">16 GB</td></tr>
         <tr><td>kernel</td><td class="num">Linux 6.18.44</td></tr>
         <tr><td>compiler</td><td class="num">OCaml 4.14.1</td></tr>
-        <tr><td>provers present</td><td class="num">Z3 4.8.9, Zenon 0.8.4 — no Isabelle</td></tr>
+        <tr><td>provers present</td><td class="num">Z3 4.8.9, Zenon 0.8.4, Isabelle 2025 + TLA+ heap</td></tr>
         <tr><td>protocol</td><td class="num">one container, one boot, otherwise idle; absolute values compared only within this table</td></tr>
       </tbody>
     </table>
@@ -887,7 +898,7 @@ diff -ru before/ after/ | grep '^+[^+]'    # must be empty  ==  subset</pre>
       <p class="cm-h"><code>cb9ce43</code> util/Deque: cheaper nth, first_n and equal on rear-heavy deques <span class="mdl">Fable 5</span></p>
       <p class="cm-files"><span class="fl-h">1 file, +37/&minus;27</span> <code>src/util/deque.ml</code>&nbsp;<span class="pm">+37/&minus;27</span></p>
       <p><span class="lbl">changes</span> <code>nth</code> indexes the two underlying lists directly, with the same <code>None</code>/<code>Failure</code> behaviour; <code>first_n</code> shares structure with its input instead of re-consing the prefix; <code>equal</code> short-circuits on physical equality, which its main caller (the expression-level cache) hits by comparing a deque with itself.</p>
-      <p><span class="lbl">gate</span> Output-preserving: obligation stream identical, both suites green, known-failing set unchanged.</p>
+      <p><span class="lbl">gate</span> Output-preserving: obligation stream identical, both suites green, fail-set identical to <code>main</code>&rsquo;s.</p>
       <div class="scroller"><table><thead><tr><th>corpus</th><th class="num">gen</th><th class="num">prep</th><th class="num">peak</th></tr></thead><tbody>
         <tr><td><strong>iteration latency</strong> &mdash; one edit, warm cache, 1 800 obl.</td><td class="num" colspan="3">8.94 s &rarr; 5.94 s <span class="r">&times;1.51</span></td></tr>
         <tr><td>medium synthetic — 1 800 obligations</td><td class="num">2.12 s &rarr; 329 ms <span class="r">&times;6.46</span></td><td class="num">50.9 s &rarr; 45.0 s <span class="r">&times;1.13</span></td><td class="num">1.72 GB &rarr; 1.74 GB</td></tr>

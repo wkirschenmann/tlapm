@@ -160,7 +160,7 @@ PRS = [
       <code>None</code>/<code>Failure</code> behaviour; <code>first_n</code> shares structure with its
       input instead of re-consing the prefix; <code>equal</code> short-circuits on physical equality,
       which its main caller (the expression-level cache) hits by comparing a deque with itself.""",
-      gate="Output-preserving: obligation stream identical, both suites green, known-failing set unchanged.",
+      gate="Output-preserving: obligation stream identical, both suites green, fail-set identical to <code>main</code>&rsquo;s.",
       model="Fable 5"),
    ]),
 

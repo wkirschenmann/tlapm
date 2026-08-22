@@ -540,7 +540,8 @@ binary and a stopwatch.
 The same two protocols recur, so they are stated once.
 
 **Test protocol T1 (output-preserving change).**  `dune runtest src` and
-`dune runtest lsp` green; the `test/fast` fail-set unchanged (40/48 pass
+`dune runtest lsp` green; the `test/fast` fail-set identical to `main`'s (47/48 pass with Isabelle installed;
+without it, 40/48
 without Isabelle — any change to that set is a regression, see
 `BASELINE.md`); golden dumps **strict-identical** before and after, on
 the synthetic family and both real corpora, with
