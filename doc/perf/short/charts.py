@@ -11,11 +11,12 @@ import math
 import shortlib as L
 
 W, H = 900, 340
-PADL, PADR, PADT, PADB = 66, 20, 30, 82
+PADL, PADR, PADT, PADB = 66, 54, 30, 82   # PADR is the end-label gutter
 ZONE = 18                              # the "did not complete" band above the baseline
 
 PUB, PRIV = "var(--s-pub)", "var(--s-priv)"
 FAIL = "var(--fail)"
+END_LABEL_GAP = 11.5   # px; below this two end labels collide
 VIOLET, TEAL = "var(--lbl-286)", "var(--lbl-keep)"
 
 # hue = public or private, dash = size inside the family
@@ -79,6 +80,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
     rule: (value, label) drawn as a labelled horizontal reference line -- the cap a
     failing run hit, so a cross sitting on it reads as "this is where it stopped"."""
     series = series or SERIES
+    ends = []            # end labels, placed after every series is drawn
     points = points or L.POINTS
     n = len(points)
     xs = lambda i: PADL + i * (W - PADL - PADR) / float(n - 1)
@@ -194,9 +196,21 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                 if not (v is None or isinstance(v, dict) or v in L.FAILED)]
         if done:
             i, v = done[-1]
-            o.append('<text x="%.1f" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, monospace" '
-                     'font-size="10.5" font-weight="600" fill="%s">%s</text>'
-                     % (xs(i) - 5, y(v) - 8, col, fmt_end(v)))
+            ends.append([y(v) + 3.5, col, fmt_end(v)])
+    # End labels live in a gutter to the right of the plot, and are placed only now.
+    # Inside the plot two series ending close together put their labels on top of
+    # each other -- the 1 800-obligation corpus and the small one end 12 px apart --
+    # and nudging them apart there only moved one of them onto a curve.  A gutter
+    # fixes the class of problem rather than this instance: labels can be spread
+    # vertically without ever landing on data.
+    ends.sort()
+    for k in range(1, len(ends)):
+        if ends[k][0] - ends[k - 1][0] < END_LABEL_GAP:
+            ends[k][0] = ends[k - 1][0] + END_LABEL_GAP
+    for ey, ecol, etxt in ends:
+        o.append('<text x="%.1f" y="%.1f" font-family="IBM Plex Mono, monospace" '
+                 'font-size="10.5" font-weight="600" fill="%s">%s</text>'
+                 % (W - PADR + 6, ey, ecol, etxt))
     for i, pt in enumerate(points):
         lab, from286 = LABELS[pt]
         col = VIOLET if from286 else (TEAL if pt != "p00" else "currentColor")

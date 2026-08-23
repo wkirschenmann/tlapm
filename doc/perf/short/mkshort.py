@@ -342,6 +342,11 @@ figure{margin:0 0 8px;background:var(--card);border:1px solid var(--rule);border
   padding:20px 20px 14px;box-shadow:var(--shadow);overflow-x:auto}
 figure svg{max-width:100%;height:auto;display:block;margin:0 auto}
 figcaption{font-size:14px;color:var(--ink-2);margin-top:14px}
+.fig-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+.better{flex:none;display:inline-flex;align-items:center;gap:5px;
+  font:400 12px/1 "IBM Plex Mono",monospace;color:var(--ink-3);
+  border:1px solid var(--rule);border-radius:999px;padding:4px 9px 4px 8px;
+  white-space:nowrap}
 ul,ol{margin:0 0 14px;padding-left:22px}
 li{margin-bottom:6px}
 footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
@@ -1064,13 +1069,35 @@ def _drift_sentence():
 
 
 
+def _better(direction):
+    """Which way is good, as a mark rather than a sentence buried in the subtitle.
+
+    Every chart here is read as "did this get better", and half of them are times
+    where down is good while one is a rate where up is good.  A reader who takes the
+    direction from the previous chart gets that one backwards, so each chart states
+    it, in the same place, next to the title.
+
+    It wears muted ink rather than a good/bad colour: the arrow already carries the
+    meaning, and a green-or-red chip beside a chart reads as data about the chart.
+    """
+    up = direction == "higher"
+    arrow = ('<svg width="9" height="10" viewBox="0 0 9 10" aria-hidden="true" '
+             'style="vertical-align:-1px"><path d="%s" fill="none" '
+             'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" '
+             'stroke-linejoin="round"/></svg>'
+             % ("M4.5 9V1.6M1.4 4.5 4.5 1.2 7.6 4.5" if up
+                else "M4.5 1v7.4M1.4 5.5 4.5 8.8 7.6 5.5"))
+    return ('<span class="better">%s %s is better</span>' % (arrow, direction))
+
+
 def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=None,
-        rule=None):
-    return ('<figure style="margin-top:20px"><h4 style="margin:0 0 2px">%s</h4>'
-            '<p style="font-size:13.5px;color:var(--ink-2);margin:0 0 12px">%s</p>%s'
+        rule=None, better="lower"):
+    return ('<figure style="margin-top:20px"><div class="fig-head">'
+            '<h4 style="margin:0">%s</h4>%s</div>'
+            '<p style="font-size:13.5px;color:var(--ink-2);margin:2px 0 12px">%s</p>%s'
             '<figcaption>%s</figcaption></figure>'
-            % (title, sub, C.chart(aria, values, unit, fmt_end, series, points, rule),
-               caption))
+            % (title, _better(better), sub,
+               C.chart(aria, values, unit, fmt_end, series, points, rule), caption))
 
 
 def sec_curves():
@@ -1099,7 +1126,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     c.append(fig(
     "Preparation throughput",
     "Obligations prepared per second &mdash; <code>tlapm --noproving --nofp</code>, the "
-    "whole per-obligation pipeline with no prover. Higher is better. Obligations differ "
+    "whole per-obligation pipeline with no prover. Obligations differ "
     "in size between corpora, so compare the shape of a curve, not its height against "
     "another's.",
     "Preparation throughput in obligations per second, one point per commit, five corpora "
@@ -1114,12 +1141,12 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "<strong>protocol timeout</strong>, and therefore inconclusive &mdash; the number "
     "it would have had is unknown, not zero. On the two private specifications "
     "<code>main</code> is one of these marks, and the curve begins only where a commit "
-    "makes the specification runnable."))
+    "makes the specification runnable.", better="higher"))
 
     c.append(fig(
     "Peak memory of a preparation pass",
     "Maximum resident set of the same run, in gigabytes, under a 12&nbsp;GB address-space "
-    "cap. Lower is better.",
+    "cap.",
     "Peak resident set per commit, five corpora, logarithmic axis.",
     {cp: peak(cp) for cp in L.CORPORA}, "GB",
     lambda v: "%.0f MB" % (v * 1024) if v < 1 else "%.2f GB" % v,
@@ -1144,7 +1171,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     c.append(fig(
     "Generation time",
     "<code>tlapm -N --nofp</code>: parse, elaborate, generate the obligations, stop. "
-    "Seconds; lower is better. This is the floor under every editor interaction and "
+    "Seconds. This is the floor under every editor interaction and "
     "the fixed cost each worker of any parallel scheme pays before it proves "
     "anything.",
     "Generation time in seconds per commit, five corpora, logarithmic axis.",
@@ -1159,7 +1186,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     c.append(fig(
     "Iteration latency &mdash; the wait after one edit",
     "Warm prover, every fingerprint already in the cache, one proof step changed. "
-    "Seconds; lower is better. This is the loop a user sits in, not a batch run.",
+    "Seconds. This is the loop a user sits in, not a batch run.",
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
     {"synth300": iters("synth300"), "ffi": iters("ffi")}, "s",
@@ -1172,7 +1199,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
         "Keystroke to diagnostics, in the editor",
         "Time from the <code>didChange</code> notification to the "
         "<code>publishDiagnostics</code> that answers it, measured by a client speaking "
-        "the LSP protocol. Seconds; lower is better.",
+        "the LSP protocol. Seconds.",
         "Keystroke to diagnostics latency per commit on the private refinement chain.",
         keyser(), "s", lambda v: "%.1f s" % v,
         _keystroke_caption(),
