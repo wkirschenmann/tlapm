@@ -429,8 +429,9 @@ def sec_problem():
     tiny_tip = val("tiny", TIP, "prep")
     mono_tip = val("mono", TIP, "prep")
     ffi_tip = val("ffi", TIP, "prep")
-    ks_main = keys.get(("ffi", "p00"), (None,))[0]
-    ks_tip = keys.get(("ffi", TIP), (None,))[0]
+    ks_cp = _worst_keystroke()
+    ks_main = keys.get((ks_cp, "p00"), (None,))[0] if ks_cp else None
+    ks_tip = keys.get((ks_cp, TIP), (None,))[0] if ks_cp else None
     it_main = iterlat.get(("ffi", "p00"), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
@@ -459,10 +460,12 @@ def sec_problem():
                     else "takes " + L.fmt_ms(it_main),
                     L.fmt_ms(it_tip) if it_tip is not None else "&mdash;"))
     if ks_main and ks_tip:
-        c.append("<p>And at the keystroke: from <code>didChange</code> to "
+        c.append("<p>And at the keystroke, on the %s: from <code>didChange</code> to "
                  "<code>publishDiagnostics</code>, %.1f&nbsp;s on <code>main</code> "
-                 "against %.1f&nbsp;s after &mdash; <span class=\"r\">&times;%.1f</span>."
-                 "</p>" % (ks_main, ks_tip, ks_main / ks_tip))
+                 "against %.1f&nbsp;s after &mdash; <span class=\"r\">&times;%.1f</span>. "
+                 "That is the wait for <em>one typed character</em>, with every "
+                 "fingerprint already cached.</p>"
+                 % (CORPUS_NAME.get(ks_cp, ks_cp), ks_main, ks_tip, ks_main / ks_tip))
     c.append("<div class=\"claim\" style=\"margin-top:16px\"><strong>The constraint that "
              "shapes everything below:</strong> small proofs must not get slower. Every "
              "chart carries a 71-obligation module for exactly that reason &mdash; it is "
@@ -989,6 +992,20 @@ def _same_wall():
 
 
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
+
+
+def _worst_keystroke():
+    """The corpus whose keystroke costs most on main, and name it.
+
+    The opening used to quote the refinement chain because that was the only corpus
+    measured.  With five measured it should quote the worst case, and say which one it
+    is: a figure whose corpus is left unstated invites the reader to assume it is the
+    one they care about.
+    """
+    cands = [(v[0], cp) for (cp, pt), v in keys.items() if pt == "p00"
+             and (cp, TIP) in keys]
+    return max(cands)[1] if cands else None
+
 ORACLE, ORACLE_NEXT = "p14", "p15"
 
 
