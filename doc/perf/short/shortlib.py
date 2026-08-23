@@ -81,13 +81,24 @@ def load_sweep(path=None, boot=None):
             line_boot[k] = b
     # phase L supersedes a ceiling it was run to resolve, on the same line's boot
     longer = {(r["point"], r["corpus"]) for r in data
-              if r["phase"] == "L" and r["boot"] == line_boot.get((r["corpus"], "prep"))}
+              if r["phase"] == "L"
+              and (r["boot"] == line_boot.get((r["corpus"], "prep"))
+                   or _verdict(int(r["prep_rc"])) == ABORT)}
 
     out = collections.defaultdict(dict)
     for r in data:
         fld = field_of(r)
         if r["boot"] != line_boot.get((r["corpus"], fld)):
-            continue
+            # An extended-clock row from another boot is admissible when what it
+            # establishes is a VERDICT rather than a duration.  The cap is 12 GB on
+            # any machine, so "the cap refused an allocation" transfers between hosts;
+            # "it finished in 1035 s" does not, and is dropped like any other
+            # off-boot row.  This is what lets a stopped run be settled on whatever
+            # machine happens to be available, without putting a foreign timing on a
+            # curve.
+            if not (r["phase"] == "L" and fld == "prep"
+                    and _verdict(int(r["prep_rc"])) == ABORT):
+                continue
         if r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
                 and fld == "prep" and int(r["prep_rc"]) == 124:
             continue
