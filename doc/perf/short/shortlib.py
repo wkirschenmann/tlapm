@@ -380,15 +380,15 @@ def ratio(a, b):
     return a / float(b)
 
 def load_instance_demo(path=None):
-    """The INSTANCE ladder: one row per module, one obligation each, only the
-    number of INSTANCE declarations varying.  Counts are deterministic, so
-    there is no boot column and nothing to select between."""
+    """The INSTANCE demo readings: the Ladder context table and the level-2
+    proof module's totals.  A flat kind/key/value file because the two halves
+    are shaped differently and neither is a time series.  Counts here are
+    deterministic; the four timings are not, and are only ever quoted as
+    orders of magnitude for that reason."""
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "instance_demo.csv")
-    out = []
+    out = {}
     with open(path) as f:
         for r in csv.DictReader(f):
-            out.append({k: (int(v) if k != "module" else v)
-                        for k, v in r.items()})
-    out.sort(key=lambda r: r["instances"])
+            out.setdefault(r["kind"], {})[r["key"]] = int(r["value"])
     return out

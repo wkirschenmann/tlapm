@@ -474,31 +474,38 @@ def sec_problem():
 
 
 def _instance_demo():
-    """The nested-INSTANCE ladder, generated from instance_demo.csv so the
-    counts in the prose cannot drift from the table beside them."""
-    rows = L.load_instance_demo()
-    one = rows[0]
-    steps = [rows[i]["defn_per_obl"] - rows[i - 1]["defn_per_obl"]
-             for i in range(1, len(rows))]
-    step = steps[0] if len(set(steps)) == 1 else None
-    hstep = rows[1]["hyps_per_obl"] - rows[0]["hyps_per_obl"]
-    two_hop = one["frag_j1l0"]
-    share = 100.0 * two_hop / one["frag_j1"]
+    """The INSTANCE demo section.  Every count and every timing comes from
+    instance_demo.csv, so the prose cannot drift from the tables beside it."""
+    d = L.load_instance_demo()
+    lad, ldf = d["ladder"], d["ladder_defn"]
+    ks = sorted(lad, key=int)
+    dsteps = [ldf[ks[i]] - ldf[ks[i - 1]] for i in range(1, len(ks))]
+    hsteps = [lad[ks[i]] - lad[ks[i - 1]] for i in range(1, len(ks))]
+    dstep = dsteps[0] if len(set(dsteps)) == 1 else None
+    hstep = hsteps[0] if len(set(hsteps)) == 1 else None
+    one = d["ladder_frag_one_hop"]["1"]
+    two = d["ladder_frag_two_hop"]["1"]
+    pr = d["proofs"]
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance_demo")
     stack = ["L0State", "L0", "L0Theorems", "L1State", "L1", "L1Theorems", "L2"]
     widest = max(sum(1 for _ in open(os.path.join(here, m + ".tla")))
                  for m in stack)
-    words = {5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+    words = {5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine"}
     count = words.get(len(stack), str(len(stack)))
-    body = ["""<h4>The mechanism, in %s small modules</h4>
+    per_obl = pr["total_ctx_hyps"] // pr["obligations"]
+    inst_obl = pr["frag_one_hop"] // pr["obligations"]
+    two_obl = pr["frag_two_hop"] // pr["obligations"]
+
+    c = ["""<h4>The mechanism, in %s small modules and one real proof</h4>
 <p><code>doc/perf/short/instance_demo/</code> is the mechanism with nothing else in
 it: a three-level refinement stack shaped like the private one. Levels&nbsp;0
 and&nbsp;1 each get the same three modules &mdash; a state module holding the
 parameters and the standing assumptions, a specification, and a theorems module that
 declares results without proving them &mdash; and each reaches the level below by
-<code>EXTENDS</code> and instantiates its theorems by <code>INSTANCE</code>.
-Level&nbsp;2 is the citing module and does nothing else. The largest of the %s is %d
-lines.</p>""" % (count, count, widest) + """
+<code>EXTENDS</code> and instantiates its theorems by <code>INSTANCE</code>. The
+largest of the %s stack modules is %d lines. On top of them sits
+<code>L2Proofs.tla</code>, a level-2 proof of %s lines that cites their instantiated
+theorems %d times: %d at one <code>INSTANCE</code> hop and %d at two.</p>
 <p><code>INSTANCE</code> does not share; it <em>copies</em>. When level&nbsp;2
 instantiates level&nbsp;1, level&nbsp;1's body already contains a copy of level&nbsp;0
 &mdash; renamed once when level&nbsp;1 instantiated it &mdash; so level&nbsp;2 gets
@@ -506,46 +513,107 @@ level&nbsp;0 a second time, renamed twice. The nesting is flattened at elaborati
 time: by the time an obligation exists there is no indirection left to follow, only
 copies. The <code>Ladder</code><em>n</em> modules make that countable. Each has one
 obligation and differs from the next only in how many times it instantiates the same
-theorems module.</p>"""]
-    body.append('<div class="tw"><table><thead><tr><th><code>INSTANCE</code> '
-                'declarations</th><th class="n">definitions in the '
-                'obligation</th><th class="n">hypotheses in the '
-                'obligation</th></tr></thead><tbody>')
-    for r in rows:
-        body.append('<tr><td>%d</td><td class="n">%d</td><td class="n">%d</td></tr>'
-                    % (r["instances"], r["defn_per_obl"], r["hyps_per_obl"]))
-    body.append("</tbody></table></div>")
-    body.append("""<p>Exactly linear: %s definitions and %d hypotheses per
-<code>INSTANCE</code>, on a stack whose whole source is a few dozen lines. And %d of
-those %d definitions &mdash; %s&nbsp;%% &mdash; are the copy of level&nbsp;0 that
+theorems module.</p>""" % (count, count, widest,
+                           "{:,}".format(pr["lines"]).replace(",", "&nbsp;"),
+                           pr["cite_one_hop"] + pr["cite_two_hop"],
+                           pr["cite_one_hop"], pr["cite_two_hop"])]
+    c.append('<div class="tw"><table><thead><tr><th><code>INSTANCE</code> '
+             'declarations</th><th class="n">definitions in the obligation</th>'
+             '<th class="n">hypotheses in the obligation</th></tr></thead><tbody>')
+    for k in ks:
+        c.append('<tr><td>%s</td><td class="n">%d</td><td class="n">%d</td></tr>'
+                 % (k, ldf[k], lad[k]))
+    c.append("</tbody></table></div>")
+    c.append("""<p>Exactly linear: %s definitions and %s hypotheses per
+<code>INSTANCE</code>, on a stack whose whole source is %d lines. And %d of
+those %d definitions &mdash; %.0f&nbsp;%% &mdash; are the copy of level&nbsp;0 that
 arrived two renamings deep, inside the copy of level&nbsp;1. Nothing in the source is
-duplicated; the duplication is what instantiation is.</p>
-<p>This is why the two private specifications in this campaign behave the way they do,
-and why the two pruning changes bite hardest on exactly these stacks: the great
-majority of what those copies contribute is hidden and unreachable from the goal, and
-it is carried to the prover regardless. The consequence in wall-clock and in bytes is
-what the rest of this document measures &mdash; on real specifications, because at
-this scale the fixed cost of starting tlapm swamps it.</p>""" % (
-        "%d" % step if step else "a constant number of",
-        hstep, two_hop, one["frag_j1"], ("%.0f" % share)))
-    body.append("""<p>The same copying has a consequence that costs proof engineers
-time, and it is in <code>instance_demo/CiteTrap.tla</code>. That stack contains one
+duplicated; the duplication is what instantiation is.</p>""" % (
+        "%d" % dstep if dstep else "a constant number of",
+        "%d" % hstep if hstep else "a constant number of",
+        pr["stack_lines"], two, one, 100.0 * two / one))
+
+    c.append("""<h4>What that costs a proof that actually uses it</h4>
+<p>The ladder counts the copies; <code>L2Proofs.tla</code> shows what they cost once a
+proof cites them. It is %s lines: %d lemmas, each a proof tree of four or five nested
+levels (%d leaves at depth&nbsp;four, %d at depth&nbsp;five), splitting a conjunction
+into groups, groups into properties, and each property into &ldquo;the antecedent
+holds&rdquo; and &ldquo;the theorem applies&rdquo;. It is generated by
+<code>harness/gen_l2proofs.py</code> from the lemma index with no randomness, so
+regenerating is byte-identical. Depth is not decoration: tlapm emits one obligation
+per leaf, and every step's statement joins the context of its later siblings and of
+everything nested beneath it, so a tree of depth five costs quite differently from the
+same leaves laid out flat.</p>""" % (
+        "{:,}".format(pr["lines"]).replace(",", "&nbsp;"), pr["lemmas"],
+        pr["depth4_leaves"], pr["depth5_leaves"]))
+    rows = [("proof lines", "{:,}".format(pr["lines"]).replace(",", "&nbsp;")),
+            ("obligations", "{:,}".format(pr["obligations"]).replace(",", "&nbsp;")),
+            ("hypotheses per obligation, mean",
+             "{:,}".format(per_obl).replace(",", "&nbsp;")),
+            ("hypotheses per obligation, worst",
+             "{:,}".format(pr["max_ctx_hyps"]).replace(",", "&nbsp;")),
+            ("of those, instantiated copies (one hop or two)",
+             "{:,}".format(inst_obl).replace(",", "&nbsp;")),
+            ("of those, arrived two hops deep",
+             "{:,}".format(two_obl).replace(",", "&nbsp;")),
+            ("context entries walked over the whole run",
+             "{:,}".format(pr["total_ctx_hyps"]).replace(",", "&nbsp;"))]
+    c.append('<div class="tw"><table><tbody>')
+    for k, v in rows:
+        c.append('<tr><td>%s</td><td class="n">%s</td></tr>' % (k, v))
+    c.append("</tbody></table></div>")
+    c.append("""<p>Every one of the %s obligations is proved, with the stock backends:
+%s dispatched by tlapm itself, %d by SMT, %d by Zenon. That matters for a corpus meant
+to be run by other people &mdash; a green corpus can be used as a regression fixture,
+a red one cannot.</p>
+<p>The number to look at is the last row. A %s-line proof over a stack whose own
+source is %d lines makes tlapm walk <strong>%s context
+entries</strong> &mdash; %s per obligation, of which %d are instantiated copies and %d
+of those came two hops down. That is the mechanism of &sect;2 in one reading, on a
+corpus anyone can run.</p>
+<p>What this corpus does <em>not</em> show is the wall-clock consequence: generation,
+preparation and proving all finish in under two seconds each, and peak memory stays
+around %d&nbsp;MB. The properties are one-line predicates and the level modules are
+tiny, so there is nothing for the per-obligation cost to grow against. Producing the
+curves in &sect;5 needs specifications where it does, which is why two of the five
+corpora there are a customer's and cannot be published. This one publishes the
+mechanism, not the pain.</p>""" % (
+        "{:,}".format(pr["obligations"]).replace(",", "&nbsp;"),
+        "{:,}".format(pr["trivial"]).replace(",", "&nbsp;"),
+        pr["smt"], pr["zenon"],
+        "{:,}".format(pr["lines"]).replace(",", "&nbsp;"), pr["stack_lines"],
+        "{:,}".format(pr["total_ctx_hyps"]).replace(",", "&nbsp;"),
+        "{:,}".format(per_obl).replace(",", "&nbsp;"),
+        inst_obl, two_obl, pr["peak_kb"] // 1024))
+
+    c.append("""<p>Two hop-depth mistakes are easy to make in a stack like this, and
+<code>instance_demo/CiteTrap.tla</code> is about the first. That stack contains one
 <code>IsFiniteSet</code> &mdash; the standard one, <code>EXTENDS</code>ed once at the
-bottom. Level&nbsp;2 nonetheless sees three symbols with that body:
+bottom &mdash; and level&nbsp;2 nonetheless sees three symbols with that body:
 <code>IsFiniteSet</code> reached by <code>EXTENDS</code>, which prefixes nothing;
 <code>L1!IsFiniteSet</code>, one <code>INSTANCE</code> hop; and
-<code>L1!L0!IsFiniteSet</code>, two. The prefix counts <code>INSTANCE</code> hops, not
-<code>EXTENDS</code> hops &mdash; so an assumption that travelled up by
-<code>EXTENDS</code> and was then instantiated once is <code>L1!IsFiniteSet</code>,
-and naming the two-hop copy instead is well formed, means the same thing, and does not
+<code>L1!L0!IsFiniteSet</code>, two. <strong>The prefix counts <code>INSTANCE</code>
+hops, not <code>EXTENDS</code> hops.</strong> An assumption that travelled up by
+<code>EXTENDS</code> and was then instantiated once is <code>L1!IsFiniteSet</code>;
+naming the two-hop copy instead is well formed, means the same thing, and does not
 match. Both are opaque one-argument operators, so neither can be refuted. In
 <code>CiteTrap</code> the prover settles it and answers &ldquo;no proof&rdquo;; on a
 module carrying a few hundred instantiated hypotheses the identical mistake comes back
 as a <em>timeout</em>, which reads as a prover too weak for the goal rather than as a
-name. Dumping the obligation shows the supplied hypothesis and the required
-<code>ASSUME</code> one above the other, and the prefix difference is then immediate
-&mdash; which is the cheapest diagnostic available and is invisible in the source.</p>""")
-    return "".join(body)
+name.</p>
+<p>The second showed up while building <code>L2Proofs.tla</code>, which is why it is
+worth writing down: <strong>the hop depth of the assumptions equals the hop depth of
+the theorem being cited</strong>. An instantiated theorem carries the
+<code>ASSUME</code>s of its home module as hypotheses of an <code>ASSUME</code>/
+<code>PROVE</code>, renamed along the same path, so a level-0 theorem reached through
+level&nbsp;1's own instance needs <code>L1!L0!IsFiniteSet</code> discharged &mdash; and
+the level-1 assumptions too, because the instantiated statement accumulated both
+levels'. That is why the proof module states two bundles, <code>Asm</code> and
+<code>AsmDown</code>, and cites both wherever it reaches two hops down. The cheapest
+diagnostic for either mistake is to dump the obligation: the supplied hypothesis and
+the required <code>ASSUME</code> print one above the other, and the prefix difference
+is immediate there while being invisible in the source.</p>""")
+    return "".join(c)
 
 
 def sec_mechanism():
