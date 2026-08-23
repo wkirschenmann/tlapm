@@ -1,6 +1,6 @@
 # The harness that produced the campaign
 
-Four scripts and one LSP client. Each is resumable, stamps every row with
+Five scripts and one LSP client. Each is resumable, stamps every row with
 `/proc/stat btime`, and reports a run that did not complete as a return code
 rather than as a number.
 
@@ -9,6 +9,7 @@ WORK=/scratch/campaign CORPUS=/path/to/corpora ./short_sweep.sh      # gen, prep
 WORK=/scratch/campaign                        ./short_iterlat.sh    # iteration latency
 WORK=/scratch/campaign NRUN=10                ./short_keystroke.sh  # keystroke -> diagnostics
 WORK=/scratch/campaign LONG_CORPUS=ffi        ./short_longtail.sh   # the extended clock
+WORK=/scratch/campaign                        ./short_refresh.sh    # merge, regenerate, commit
 ```
 
 `WORK` holds the scratch git worktree, one cached binary per commit, and the
@@ -24,6 +25,7 @@ run time, so adding or removing a commit does not need an edit here.
 | `short_iterlat.sh` | a corpus directory **plus a warm fingerprint cache** and an edited copy of the spec |
 | `short_keystroke.sh` | a spec, a line number inside a proof body, and `lsp_keystroke_client.py` |
 | `short_longtail.sh` | a sweep CSV with stopped runs in it; re-uses the binaries `short_sweep.sh` cached |
+| `short_refresh.sh` | the CSVs; merges them into the repository, regenerates the page, commits the data |
 
 The warm-cache fixtures are the one part that cannot simply be re-run: each is a
 `.tlacache` directory produced by proving the specification once to completion,
