@@ -617,11 +617,17 @@ table is the part that has a version, and quoting a timing without naming the bi
 that produced it is a mistake this document made until it was caught &mdash; the
 figures below are medians over %d rounds of the base commit against the branch tip,
 interleaved, one machine, one boot.</p>""" % ab["reps"])
-    tr = [("generation", "gen_ms", 1000.0, "%.2f&nbsp;s"),
-          ("preparation", "prep_ms", 1000.0, "%.2f&nbsp;s"),
-          ("proving, four threads", "prove_ms", 1000.0, "%.2f&nbsp;s"),
-          ("peak memory", "peak_kb", 1024.0, "%.0f&nbsp;MB"),
-          ("obligations", "obligations", 1.0, "%.0f")]
+    def _s(v):
+        # two decimals under ten seconds, one under a hundred, none above:
+        # "80.00 s" claims a precision three interleaved rounds do not have
+        return ("%.2f" if v < 10 else "%.1f" if v < 100 else "%.0f") % v + "&nbsp;s"
+    tr = [("generation", "gen_ms", 1000.0, _s),
+          ("preparation", "prep_ms", 1000.0, _s),
+          ("proving, four threads", "prove_ms", 1000.0, _s),
+          ("peak memory", "peak_kb", 1024.0,
+           lambda v: "%.0f&nbsp;MB" % v),
+          ("obligations", "obligations", 1.0,
+           lambda v: "{:,}".format(int(v)).replace(",", "&nbsp;"))]
     c.append('<div class="tw"><table><thead><tr><th></th>'
              '<th class="n">base commit</th><th class="n">branch tip</th>'
              '<th class="n"></th></tr></thead><tbody>')
@@ -638,14 +644,14 @@ interleaved, one machine, one boot.</p>""" % ab["reps"])
             note = "&times;%.2f slower" % (b / a)
         c.append('<tr><td>%s</td><td class="n">%s</td><td class="n">%s</td>'
                  '<td class="mdl">%s</td></tr>'
-                 % (label, fmt % a, fmt % b, note))
+                 % (label, fmt(a), fmt(b), note))
     c.append("</tbody></table></div>")
     gen_slower = tp["gen_ms"] > mn["gen_ms"]
     c.append("""<p>This is the corpus earning its keep. A %s-line proof over a stack
 whose own source is %d lines takes <strong>%.0f&nbsp;s of preparation and
 %.1f&nbsp;GB of peak memory on the base commit</strong>, and %.1f&nbsp;s and
-%.0f&nbsp;MB at the tip &mdash; %s&times; and %s&times; on the two quantities the
-series is about. Every obligation is proved on both sides, and the generated
+%.0f&nbsp;MB at the tip &mdash; &times;%s on preparation and &divide;%s on
+memory, the two quantities the series is about. Every obligation is proved on both sides, and the generated
 obligation stream is <strong>byte-identical</strong> between them (%s lines of
 <code>--printallobs</code> dump compared), which is the subset invariant checked on a
 corpus small enough to check it exactly. <code>harness/instance_demo.sh</code> refuses
@@ -654,7 +660,7 @@ fails.</p>""" % (
         "{:,}".format(pr["lines"]).replace(",", "&nbsp;"), pr["stack_lines"],
         mn["prep_ms"] / 1000.0, mn["peak_kb"] / 1048576.0,
         tp["prep_ms"] / 1000.0, tp["peak_kb"] / 1024.0,
-        "%.0f" % (mn["prep_ms"] / float(tp["prep_ms"])),
+        "%.1f" % (mn["prep_ms"] / float(tp["prep_ms"])),
         "%.0f" % (mn["peak_kb"] / float(tp["peak_kb"])),
         "{:,}".format(ab["golden_lines"]).replace(",", "&nbsp;")))
     if gen_slower:
