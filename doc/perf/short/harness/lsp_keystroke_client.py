@@ -67,7 +67,7 @@ t0 = time.time()
 send("textDocument/didOpen", {"textDocument": {
     "uri": uri, "languageId": "tlaplus", "version": 1, "text": text}}, notify=True)
 dt, diags = pull_diags(1)
-print(f"open->markers: {time.time()-t0:.2f}s")
+print(f"open->markers: {time.time()-t0:.4f}s")
 
 ver = 1
 orig = lines[EDIT_LINE]
@@ -81,6 +81,6 @@ for i in range(N_EDITS):
         "textDocument": {"uri": uri, "version": ver},
         "contentChanges": [{"text": "\n".join(lines)}]}, notify=True)
     dt, diags = pull_diags(ver)
-    print(f"edit{i+1}->diag: {time.time()-t0:.2f}s (diags: {len(diags.get('diagnostics', []))})")
+    print(f"edit{i+1}->diag: {time.time()-t0:.4f}s (diags: {len(diags.get('diagnostics', []))})")
 
 proc.kill()
