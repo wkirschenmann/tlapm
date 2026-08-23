@@ -187,7 +187,7 @@ than by testing.</p><h4>What can be switched, and what cannot</h4><p>Three of th
 Every measured row carries the machine's <code>/proc/stat btime</code> and every
 reader filters to a single boot, so a container restart mid-campaign appears as a
 missing cell rather than as a step averaged into a curve. <code>main</code> is
-measured once per curve, at the point each curve starts from; one fixed cell is re-measured every eight, and its 18 readings span 7.5&nbsp;% across the whole campaign &mdash; that is the drift every curve carries, measured rather than assumed. Over the last three it is 0.45&nbsp;%, so the run settles rather than drifting without bound.</p></section><section><div class="sec-head"><span class="n">05</span><h2>Commit by commit</h2></div><p>One point per commit, <code>main</code> at the left, in the order the
+measured once per curve, at the point each curve starts from; one fixed cell is re-measured every eight, and its 19 readings span 7.5&nbsp;% across the whole campaign &mdash; that is the drift every curve carries, measured rather than assumed. Over the last three it is 1.31&nbsp;%, so the run settles rather than drifting without bound.</p></section><section><div class="sec-head"><span class="n">05</span><h2>Commit by commit</h2></div><p>One point per commit, <code>main</code> at the left, in the order the
 series is proposed in. A cross in the band below the axis means the run
 <strong>did not complete</strong>; the tables in &sect;6 say which of the two ways,
 because the difference matters &mdash; a change that speeds preparation up reaches the
