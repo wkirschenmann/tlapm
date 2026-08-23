@@ -14,7 +14,7 @@ cd $R || exit 1
 # then see every anchor twice, which is exactly what a first attempt did.  So the key
 # drops the sha and collapses every K phase to one family; two rows with the same key
 # are the same run recorded twice.
-for f in short_sweep.csv short_iterlat.csv short_keystroke.csv; do
+for f in short_sweep.csv short_iterlat.csv short_keystroke.csv short_reps.csv; do
   [ -f $S/$f ] || continue
   python3 - "$S/$f" "$R/doc/perf/short/$f" <<'PYMERGE'
 import io, os, sys

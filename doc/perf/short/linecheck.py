@@ -87,6 +87,10 @@ def check_inconclusive(page="/home/user/tlapm/doc/perf/SHORT_PROPOSAL.html"):
 
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
+    # Apply the repeated pass, exactly as the generator does.  Without this the
+    # checker reads single samples while the document reads medians, so it reports a
+    # trend the reader cannot see and stays silent about one the reader can.
+    sweep, _reps = L.apply_reps(sweep)
     msgs = check(sweep) + check_inconclusive()
     for m in msgs:
         print("LINECHECK " + m)
