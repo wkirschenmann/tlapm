@@ -20,6 +20,13 @@ mkdir -p $BINS
 
 SMALL="tiny:$P/Synth_L5_S3_D4_C2.tla synth100:$P/Synth_L100_S5_D50_C3.tla synth300:$P/Synth_L300_S5_D50_C3.tla"
 LARGE="ffi:$P/abstractgrpc/FfiGrpcTheorems_proofs.tla mono:$P/oom_repro/timer_wheel_l1_mono.tla"
+# The one corpus on these curves that lives in the repository.  It is a
+# refinement stack, not a flat synthetic file: preparation on the base commit
+# costs 80 s and 1.6 GB for a 3,239-line proof, so it reaches the regime the
+# two private corpora are here for -- and unlike them it can be published, run
+# and disputed by anyone.  Measured at every point, not just the PR endpoints,
+# because it is cheap enough: the whole 18-point pass is minutes.
+PUBLIC="idemo:$(git rev-parse --show-toplevel)/doc/perf/short/instance_demo/L2Proofs.tla"
 
 # p00 = main; p01..p16 = the short branch in order; p00b re-measures main at the end.
 ALL="p00:4600b24 $(i=0; for s in $(git rev-list --reverse main..tlapm-perf-short); do i=$((i+1)); printf 'p%02d:%s ' $i $s; done) p00b:4600b24"
@@ -78,6 +85,7 @@ measure () {  # $1 phase $2 gen|prep|both $3 points  $4.. corpora
 }
 
 measure A  both "$ALL"       $SMALL
+measure P  both "$ALL"       $PUBLIC
 measure B0 gen  "$ENDPOINTS" $LARGE
 measure B1 prep "$REV"       $LARGE
 echo SHORT_SWEEP_DONE

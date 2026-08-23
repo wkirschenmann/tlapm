@@ -32,8 +32,30 @@ PRS = [
 ]
 ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS]
 
-OBL = {"tiny": 71, "synth100": 600, "synth300": 1800, "ffi": 9967, "mono": 29965}
-CORPORA = ["tiny", "synth100", "synth300", "ffi", "mono"]
+OBL = {"tiny": 71, "synth100": 600, "synth300": 1800, "idemo": 2703,
+       "ffi": 9967, "mono": 29965}
+
+# Every corpus this campaign knows how to measure, smallest first.  Which of
+# them actually appear on the curves is decided by the data, not by this list:
+# a corpus with no rows in the sweep would otherwise contribute an empty line
+# and a legend entry pointing at nothing.
+CORPUS_ORDER = ["tiny", "synth100", "synth300", "idemo", "ffi", "mono"]
+
+
+def _corpora_present(path=None):
+    path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "short_sweep.csv")
+    seen = set()
+    try:
+        with open(path) as f:
+            for r in csv.DictReader(f):
+                seen.add(r["corpus"])
+    except OSError:
+        return set(CORPUS_ORDER)
+    return seen
+
+
+CORPORA = [c for c in CORPUS_ORDER if c in _corpora_present()]
 
 
 def _verdict(rc):

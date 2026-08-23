@@ -21,6 +21,39 @@ keys, kboot = L.load_keystroke()
 
 
 # ---------------------------------------------------------------- branch facts
+# One row per corpus: the short kind, the name used in the narrative table of
+# §1, and why it is on the curves at all.  Both tables iterate L.CORPORA, so a
+# corpus that has no measurements does not appear -- and one that does appear
+# cannot appear unlabelled.
+CORPUS_META = {
+    "tiny": ("public synthetic, small", "a small module",
+             "the control: it must not get slower, and it is on every chart to"
+             " show that it does not"),
+    "synth100": ("public synthetic, medium", "a 600-obligation synthetic module",
+                 "the small end of the growth curve, where <code>main</code> is"
+                 " still comfortable"),
+    "synth300": ("public synthetic, large",
+                 "a 1&nbsp;800-obligation synthetic module",
+                 "the flat public corpus large enough to show the growth, and the"
+                 " one every ratio in &sect;6 is quoted on"),
+    "idemo": ("public refinement stack",
+              "a public three-level refinement stack",
+              "the public corpus that reaches the regime the private two are here"
+              " for: a nested-INSTANCE stack whose 3&nbsp;239-line proof costs"
+              " <code>main</code> 80&nbsp;s and 1.6&nbsp;GB. It is in this"
+              " repository, so every number on its line can be re-run and"
+              " disputed &mdash; see &sect;2"),
+    "ffi": ("private refinement chain",
+            "a private refinement chain",
+            "a real INSTANCE-heavy refinement chain: the shape this series is"
+            " aimed at"),
+    "mono": ("private monolith", "a private 30k-line monolith",
+             "a real 30k-line monolith: the specification <code>main</code>"
+             " cannot prepare at all"),
+}
+NUMWORD = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven"}
+
+
 def points():
     """[(label, sha, subject, [(file, plus, minus)])] for main..BRANCH."""
     shas = subprocess.check_output(
@@ -435,14 +468,15 @@ def sec_problem():
     it_main = iterlat.get(("ffi", "p00"), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
-             "boundary is not gradual. The four specifications below are the same tool on "
+             "boundary is not gradual. The %s specifications below are the same tool on "
+             % NUMWORD[len([c for c in L.CORPORA if c != "synth100"])] +
              "the same machine: seventy obligations finish before you notice, and ten "
              "thousand do not finish at all.</p>")
     c.append('<div class="scroller"><table><thead><tr><th>specification</th>'
              '<th class="num">obligations</th><th class="num">prepare, <code>main</code></th>'
              '<th class="num">prepare, after</th></tr></thead><tbody>')
-    for cp, name in (("tiny", "a small module"), ("synth300", "a 1&nbsp;800-obligation synthetic module"),
-                     ("ffi", "a private refinement chain"), ("mono", "a private 30k-line monolith")):
+    for cp in [c for c in L.CORPORA if c != "synth100"]:
+        name = CORPUS_META[cp][1]
         a = L.main_point(sweep, cp, "prep")
         b = val(cp, TIP, "prep")
         c.append("<tr><td>%s</td><td class=\"num\">%s</td><td class=\"num\">%s</td>"
@@ -762,23 +796,18 @@ def sec_method():
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>' % (name, how, what))
     c.append("</tbody></table></div>")
 
-    c.append("<h4>Corpora</h4><p>Five, and every chart carries all five. The two public "
-             "synthetics and the small control are in the repository; the two private "
-             "specifications are a customer's and are not published &mdash; only these "
-             "numbers are.</p>")
+    c.append("<h4>Corpora</h4><p>%s, and every chart carries all of them. "
+             "Everything marked public is in this repository; the two private "
+             "specifications are a customer's and are not published &mdash; only "
+             "these numbers are.</p>"
+             % NUMWORD[len(L.CORPORA)].capitalize())
     c.append('<div class="scroller"><table><thead><tr><th>corpus</th>'
              '<th class="num">obligations</th><th>why it is here</th></tr></thead><tbody>')
-    for cp, why in (
-        ("tiny", "the control: it must not get slower, and it is on every chart to show that it does not"),
-        ("synth100", "the small end of the growth curve, where <code>main</code> is still comfortable"),
-        ("synth300", "the public corpus large enough to reproduce the wall &mdash; and the one every ratio in &sect;6 is quoted on"),
-        ("ffi", "a real INSTANCE-heavy refinement chain: the shape this series is aimed at"),
-        ("mono", "a real 30k-line monolith: the specification <code>main</code> cannot prepare at all")):
+    for cp in L.CORPORA:
+        kind, _, why = CORPUS_META[cp]
         c.append('<tr><td class="num">%s</td><td class="num">%s</td>'
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
-                 % ({"tiny": "public synthetic, small", "synth100": "public synthetic, medium",
-                     "synth300": "public synthetic, large", "ffi": "private refinement chain",
-                     "mono": "private monolith"}[cp],
+                 % (kind,
                     "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"), why))
     c.append("</tbody></table></div>")
 
