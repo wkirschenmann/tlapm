@@ -743,7 +743,8 @@ of change for each:</p>
   <div class="card"><h3>Context recomputed from scratch</h3>
     <p>Consecutive obligations share almost all of their context &mdash; on a 30k
     module, 699 of 743 hypotheses are the physically same objects as in the previous
-    one &mdash; and all three preparation passes recomputed the whole thing.</p>
+    one, measured on the private monolith with the <code>TLAPM_PREP_SHARE</code>
+    probe &mdash; and all three preparation passes recomputed the whole thing.</p>
     <p class="mdl">PR6</p></div>
 </div>
 
@@ -1807,9 +1808,13 @@ def build():
 <p>Every figure in &sect;1 and &sect;4&ndash;&sect;6 &mdash; every point on every
 chart, every cell of every table, and the counts and ratios quoted in the prose around
 them &mdash; is produced by <code>doc/perf/short/mkshort.py</code> from the campaign
-CSVs beside it. The exception is &sect;8, whose nine ranges come from a separate,
-larger campaign on a different machine whose data is not in this directory: those are
-transcribed, and the section says so. Where a claim about a measurement had to be
+CSVs beside it, and the figures in &sect;2 that carry a version come from
+<code>instance_demo.csv</code> the same way. Two things are transcribed rather than
+generated, and both say so where they appear: &sect;8's nine ranges, which come from a
+separate and larger campaign on a different machine whose data is not in this
+directory, and the sharing figure in &sect;2's fourth card, which comes from a
+<code>TLAPM_PREP_SHARE</code> probe run on the private monolith and has no CSV here to
+be regenerated from. Where a claim about a measurement had to be
 written by hand it has been turned into a slot the generator fills, because in the
 course of this campaign three such sentences went stale against the charts above them
 and one contradicted the table beside it.</p>
