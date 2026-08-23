@@ -34,7 +34,11 @@ VIOLET, TEAL = "var(--lbl-286)", "var(--lbl-keep)"
 SERIES = [("public synthetic, 1 800", "synth300", PUB,  None),
           ("public synthetic, 600",   "synth100", PUB,  "5 3"),
           ("public synthetic, 71",    "tiny",     PUB,  "1 3"),
-          ("public refinement stack", "idemo",    PUB,  "9 3"),
+          # long-short, not another plain dash: rendered at this size "9 3" was
+          # indistinguishable from synth100's "5 3", which makes the dash stop
+          # being a secondary encoding and leaves two same-hue series told
+          # apart only by where they happen to sit.
+          ("public refinement stack", "idemo",    PUB,  "11 3 2 3"),
           ("private 30k monolith",    "mono",     PRIV, None),
           ("private refinement chain","ffi",      PRIV, "5 3")]
 
@@ -130,7 +134,21 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
         (isinstance(v, dict) and not v.get("at")) or (not isinstance(v, dict) and v in L.FAILED)
         for cp in values for v in values[cp].values() if v is not None)
     zone = ZONE if needs_band else 0
-    top, bot = PADT, H - PADB - zone
+    # The legend is laid out before the plot, because how many rows it needs
+    # decides where the plot can start.  Row 1 used to be drawn at PADT + 2 --
+    # two pixels INSIDE the plot area -- and a third row was not handled at
+    # all: the loop only wrapped once, so a sixth series would have run off the
+    # right edge without saying so.  Rendering the page is the only way that
+    # shows up, which is why it survived five corpora.
+    LEG_ROW = 16
+    rows, lx = [[]], PADL
+    for t in series:
+        w = 30 + int(5.9 * len(t[0]))
+        if lx + w > W - PADR and rows[-1]:
+            rows.append([]); lx = PADL
+        rows[-1].append((lx, t)); lx += w
+    top = PADT + LEG_ROW * (len(rows) - 1)
+    bot = H - PADB - zone
     y = lambda v: bot - (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo)) * (bot - top)
     o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W, H, aria)]
     o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="currentColor" stroke-width="1" '
@@ -147,7 +165,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                  'font-size="10" fill="currentColor" opacity=".65">%s</text>'
                  % (PADL - 8, yy + 3.5, _tick(v)))
     o.append('<text x="%d" y="%d" text-anchor="end" font-family="IBM Plex Mono, monospace" '
-             'font-size="9.5" fill="currentColor" opacity=".55">%s</text>' % (PADL - 8, PADT - 10, unit))
+             'font-size="9.5" fill="currentColor" opacity=".55">%s</text>' % (PADL - 8, top - 10, unit))
     if needs_band:
         o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, '
                  'monospace" font-size="9" fill="currentColor" opacity=".55">none</text>'
@@ -156,7 +174,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
     for i, pt in enumerate(points):
         if pt in PR_END and pt != points[-1]:
             o.append('<line x1="%.1f" y1="%d" x2="%.1f" y2="%d" stroke="currentColor" '
-                     'stroke-width="0.6" opacity=".10"/>' % (xs(i) + xs(1) / 2 - PADL / 2, PADT - 4,
+                     'stroke-width="0.6" opacity=".10"/>' % (xs(i) + xs(1) / 2 - PADL / 2, top - 4,
                                                              xs(i) + xs(1) / 2 - PADL / 2, H - PADB))
     if rule:
         rv, rl = rule
@@ -248,16 +266,15 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
         o.append('<text x="%.1f" y="%d" text-anchor="end" font-family="IBM Plex Mono, monospace" '
                  'font-size="9.5" fill="%s" opacity="%s"%s transform="rotate(-45 %.1f %d)">%s</text>'
                  % (xs(i), H - PADB + 15, col, op, wt, xs(i), H - PADB + 15, lab))
-    lx, ly, row = PADL, PADT - 14, 0
     o.append('<g font-family="IBM Plex Sans, sans-serif" font-size="11">')
-    for lab, cp, col, dash in series:
-        w = 30 + int(5.9 * len(lab))
-        if lx + w > W - PADR and row == 0:
-            row, lx, ly = 1, PADL, PADT + 2
-        da = ' stroke-dasharray="%s"' % dash if dash else ""
-        o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="2"%s/>'
-                 % (lx, ly - 4, lx + 20, ly - 4, col, da))
-        o.append('<text x="%d" y="%d" fill="currentColor" opacity=".8">%s</text>' % (lx + 25, ly, lab))
-        lx += w
+    for r, entries in enumerate(rows):
+        ly = top - 14 - LEG_ROW * (len(rows) - 1 - r)
+        for lx, (lab, cp, col, dash) in entries:
+            da = ' stroke-dasharray="%s"' % dash if dash else ""
+            o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" '
+                     'stroke-width="2"%s/>'
+                     % (lx, ly - 4, lx + 20, ly - 4, col, da))
+            o.append('<text x="%d" y="%d" fill="currentColor" opacity=".8">%s</text>'
+                     % (lx + 25, ly, lab))
     o.append('</g></svg>')
     return "".join(o)
