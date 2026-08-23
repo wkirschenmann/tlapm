@@ -505,6 +505,7 @@ than by testing.</p>""")
     c.append(_switches())
     c.append(_noise_sentence())
     c.append(_completeness())
+    c.append(_extended_clock())
     c.append("""<h4>Measurement machine</h4>
 <div class="scroller"><table><tbody>
 <tr><td>CPU</td><td class="num">Intel Xeon @ 2.10 GHz, 4 cores</td></tr>
@@ -513,14 +514,14 @@ than by testing.</p>""")
 <tr><td>compiler</td><td class="num">OCaml 4.14.1</td></tr>
 <tr><td>provers</td><td class="num">Z3 4.8.9, Zenon 0.8.4, Isabelle 2025 + TLA+ heap</td></tr>
 <tr><td>ceilings</td><td class="num">600 s generation, 900 s preparation, 1800 s iteration latency</td></tr>
-<tr><td>boot</td><td class="num">%s</td></tr>
+<tr><td>boots</td><td class="num">%s</td></tr>
 </tbody></table></div>
 <p style="margin-top:12px">Absolute values are comparable only inside this table.
 Every measured row carries the machine's <code>/proc/stat btime</code> and every
 reader filters to a single boot, so a container restart mid-campaign appears as a
 missing cell rather than as a step averaged into a curve. <code>main</code> is
-measured once per curve, at the point each curve starts from; %s</p>""" % (
-        boot or "&mdash;", _drift_sentence()))
+measured once per curve, at the point each curve starts from; %s</p>%s""" % (
+        _boot_list(), _drift_sentence(), _provenance()))
     return "".join(c)
 
 
@@ -640,6 +641,68 @@ def _completeness():
     return "".join(out)
 
 
+def _extended_clock():
+    """Which stopped runs were re-run on an hour's clock, and how well the rule that
+    picked them held up once the answer was known."""
+    return """<h4>Which stopped runs got a longer clock</h4>
+<p>A run the fifteen-minute clock stopped is not yet a fact about the commit, so some
+of them are re-run on an hour&rsquo;s. Not all of them: an hour spent confirming a
+failure we already know is an hour not spent measuring something. The rule is two
+questions asked of the stopped run, and it runs only if <em>either</em> answer lands
+inside the budget. <em>When would it finish?</em> &mdash; taken from the ratio between
+this commit and the same commit on the public 1&nbsp;800-obligation corpus, which
+does complete. <em>When would it abort?</em> &mdash; taken from extrapolating its own
+memory growth to the 12&nbsp;GB cap. If the sooner of the two is past 90&nbsp;% of the
+budget, the run is not launched and the point stays marked as inferred.</p>
+<p>The rule is an estimate and it is worth saying how badly it estimates. On the one
+point where it said yes and the answer came back &mdash; the definitions prune on the
+refinement chain &mdash; it predicted 1&nbsp;937&nbsp;s and the run took
+1&nbsp;035&nbsp;s: it overestimated by <strong>&times;1.9</strong>. That direction is
+the safe one for a gate whose job is to avoid launching hopeless hours, and it is the
+reason the threshold is 90&nbsp;% rather than 100&nbsp;%; but it also means the rule
+is a scheduling heuristic and never a source of a number in this document. Every
+figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
+stopped one.</p>"""
+
+
+CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
+
+
+def _boot_list():
+    """The boots the curves actually come from, newest last."""
+    bs = sorted({b for b in sweep.get("_line_boot", {}).values()})
+    return ", ".join(str(b) for b in bs) or "&mdash;"
+
+
+def _provenance():
+    """Which curve was measured on which boot.
+
+    A chart line is one (metric, corpus) pair and comparability only has to hold
+    within a line, so a container restart costs the lines that were still missing,
+    not the ones already complete.  That is only honest if the document says which
+    line came from which boot, so it says so.
+    """
+    lb = sweep.get("_line_boot", {})
+    if len(set(lb.values())) < 2:
+        return ""
+    NAME = {"gen": "generation", "prep": "preparation"}
+    by = {}
+    for (cp, fld), b in sorted(lb.items()):
+        by.setdefault(b, []).append("%s %s" % (CORPUS_NAME.get(cp, cp), NAME.get(fld, fld)))
+    rows = "".join('<tr><td class="num">%s</td><td>%s</td></tr>'
+                   % (b, ", ".join(v)) for b, v in sorted(by.items()))
+    return ('<p style="margin-top:12px">The container restarted during the campaign, '
+            'so the curves do not all come from the same boot. One chart line is one '
+            '(metric, corpus) pair and comparability only has to hold <em>within</em> a '
+            'line, so each line is measured end to end on a single boot and the restart '
+            'costs the lines that were still missing rather than the ones already '
+            'complete. Both hosts report the same CPU model and clock; the split is '
+            'recorded here anyway, because a reader should not have to take that on '
+            'trust:</p>'
+            '<div class="scroller"><table><thead><tr><th>boot</th><th>curves measured on it</th>'
+            '</tr></thead><tbody>%s</tbody></table></div>' % rows)
+
+
 def _drift_sentence():
     """The campaign no longer measures main twice; one fixed cell is re-measured
     throughout instead, which bounds drift far better than two endpoints do."""
@@ -714,6 +777,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "The step is the fourth pull request, and it is a step rather than a slope: peak "
     "memory stops being a function of the file and becomes a function of one obligation. "
     "Everything to the right of it is flat, which is the point &mdash; no later commit "
+    "gives any of it back. "
     "A solid cross on the cap line is a run the cap stopped &mdash; that reading is "
     "real, the resident set reached just before the allocation the cap refused. "
     "A <strong>dashed</strong> cross on the cap line is inferred rather than "
