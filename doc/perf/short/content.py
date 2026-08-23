@@ -248,8 +248,7 @@ CM = {
       "<code>TLAPM_CHECK_ELABCACHE</code> is set in the environment; unset, the "
       "branch is not taken and preparation runs exactly as it did before the "
       "commit &mdash; the whole residual cost is one <code>getenv</code> per "
-      "obligation. The campaign confirms it: on the refinement chain this commit "
-      "measures inside the noise of its neighbours."),
+      "obligation. The campaign confirms it: {oracle_noise}"),
 "p15": dict(
   what="Elaborating a <code>BY</code> or <code>OBVIOUS</code> asks one question of "
        "the context: does any fact in it cite the <code>ENABLEDaxioms</code> pragma? "

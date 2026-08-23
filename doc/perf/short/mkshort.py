@@ -530,7 +530,7 @@ def _switches():
     rows = []
     for pid, title, tag, cms, _ in CT.PRS:
         for cm in cms:
-            off = CT.CM[cm]["off"]
+            off = _fill(CT.CM[cm]["off"])
             if off.lower().startswith("no switch"):
                 continue
             rows.append((pid, BY_LABEL[cm][1], BY_LABEL[cm][2], off))
@@ -679,6 +679,37 @@ def _inferred_sentence():
 
 
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
+
+
+ORACLE, ORACLE_NEXT = "p14", "p15"
+
+
+def _oracle_noise():
+    """The oracle is only defensible if it is free when unset, so say what it cost.
+
+    Measured against the commit after it, which is the neighbour that shares its
+    preparation path: anything above the run-to-run spread here would mean the
+    unset branch is not actually free.
+    """
+    out = []
+    for cp in L.CORPORA:
+        a = _cell(cp, ORACLE).get("prep")
+        b = _cell(cp, ORACLE_NEXT).get("prep")
+        if not isinstance(a, int) or not isinstance(b, int) or not b:
+            continue
+        out.append("%s %+.1f&nbsp;%%" % (CORPUS_NAME.get(cp, cp), (a - b) / float(b) * 100))
+    if not out:
+        return ("the commit has not been measured against its neighbour yet.")
+    return ("against the commit after it, which shares its preparation path, "
+            "preparation differs by %s &mdash; the run-to-run spread, not a cost."
+            % "; ".join(out))
+
+
+def _fill(txt):
+    """Content strings may carry a slot the campaign fills, so that a claim about
+    a measurement cannot go stale against the measurement."""
+    return txt.replace("{oracle_noise}", _oracle_noise())
+
 
 
 def _boot_list():
@@ -900,7 +931,7 @@ def sec_perpr():
                 % (f, p, m) for f, p, m in fl))
             c.append('<p><span class="lbl">changes</span>%s</p>' % d["what"])
             c.append('<p><span class="lbl">validate</span>%s</p>' % d["how"])
-            c.append('<p><span class="lbl">switch off</span>%s</p>' % d["off"])
+            c.append('<p><span class="lbl">switch off</span>%s</p>' % _fill(d["off"]))
             c.append(_cm_table(cm))
             c.append("</div>")
         c.append("</div>")
