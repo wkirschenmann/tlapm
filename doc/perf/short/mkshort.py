@@ -671,17 +671,14 @@ questions asked of the stopped run, and it runs only if <em>either</em> answer l
 inside the budget. <em>When would it finish?</em> &mdash; taken from the ratio between
 this commit and the same commit on the public 1&nbsp;800-obligation corpus, which
 does complete. <em>When would it abort?</em> &mdash; taken from extrapolating its own
-memory growth to the 12&nbsp;GB cap. If the sooner of the two is past 90&nbsp;% of the
-budget, the run is not launched and the point stays marked as inferred.</p>
-<p>The rule is an estimate and it is worth saying how badly it estimates. On the one
-point where it said yes and the answer came back &mdash; the definitions prune on the
-refinement chain &mdash; it predicted 1&nbsp;937&nbsp;s and the run took
-1&nbsp;035&nbsp;s: it overestimated by <strong>&times;1.9</strong>. That direction is
-the safe one for a gate whose job is to avoid launching hopeless hours, and it is the
-reason the threshold is 90&nbsp;% rather than 100&nbsp;%; but it also means the rule
-is a scheduling heuristic and never a source of a number in this document. Every
-figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
-stopped one.</p>"""
+memory growth to the 12&nbsp;GB cap. If the sooner of the two is past 90&nbsp;%% of the
+budget, the run is not launched and the point stays a ring.</p>
+<p>The rule is an estimate and it is worth saying how badly it estimates, so here is
+its record on every point where it said yes and the answer came back.</p>
+%s
+<p>That is a scheduling heuristic, and never a source of a number in this document.
+Every figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
+stopped one.</p>""" % _estimator_record()
 
 
 def _pending_sentence():
@@ -780,6 +777,70 @@ def _iter_caption():
         txt += (" No commit in the series makes this metric worse by more than the "
                 "spread, the memory pull request included.")
     return txt
+
+
+def _estimator_record():
+    """Recompute what the scheduling rule predicted, against what the run did.
+
+    The predictions are not stored -- they are a function of the campaign, so they are
+    recomputed here from the same rows the harness used.  Both are simple: expected
+    completion is the nearest completing point scaled by the ratio between the two
+    commits on the public corpus that never fails; expected abort extrapolates the
+    stopped run's own resident set to the cap.
+    """
+    import csv as _csv
+    rows = list(_csv.DictReader(open(os.path.join(HERE, "short_sweep.csv"))))
+    prep = [r for r in rows if int(r["prep_ms"]) != -2 and not r["phase"].startswith("K")]
+    syn = {r["point"]: int(r["prep_ms"]) / 1000.0
+           for r in prep if r["corpus"] == "synth300" and int(r["prep_rc"]) == 0}
+    out = []
+    for cp in L.CORPORA:
+        mine = [r for r in prep if r["corpus"] == cp]
+        ceil = {r["point"]: r for r in mine if r["phase"] != "L" and int(r["prep_rc"]) == 124}
+        done = sorted((r["point"], int(r["prep_ms"]) / 1000.0)
+                      for r in mine if r["phase"] != "L" and int(r["prep_rc"]) == 0)
+        if not done:
+            continue
+        ref_p, ref_v = done[0]
+        for r in sorted((r for r in mine if r["phase"] == "L"), key=lambda r: r["point"]):
+            pt = r["point"]
+            c = ceil.get(pt)
+            if not c:
+                continue
+            ed = ref_v * syn[pt] / syn[ref_p] if (pt in syn and ref_p in syn) else None
+            pk = int(c["peak_kb"])
+            eo = (int(c["prep_ms"]) / 1000.0) * 12000000 / pk if pk else None
+            cands = [(e, w) for e, w in ((ed, "completion"), (eo, "abort")) if e]
+            if not cands:
+                continue
+            est, why = min(cands)
+            act = int(r["prep_ms"]) / 1000.0
+            v = L._verdict(int(r["prep_rc"]))
+            got = ("aborted" if v == L.ABORT else
+                   "still running" if v == L.CEIL else "completed")
+            out.append((CORPUS_NAME.get(cp, cp), C.LABELS[pt][0], why, est, got, act,
+                        est / act if act else None))
+    if not out:
+        return ('<p class="pr-meta">No stopped run has been re-run on the longer clock '
+                'yet, so the rule has no record to show.</p>')
+    body = "".join(
+        '<tr><td>%s</td><td>%s</td><td class="num">%s, ~%.0f&nbsp;s</td>'
+        '<td class="num">%s at %.0f&nbsp;s</td><td class="num">%s</td></tr>'
+        % (cp, lab, why, est, got, act,
+           ("&times;%.2f" % r) if r else "&mdash;")
+        for cp, lab, why, est, got, act, r in out)
+    over = [r for *_, r in out if r and r > 1]
+    tail = ""
+    if over:
+        tail = ("<p style=\"margin-top:10px\">It overestimates on %d of %d, by up to "
+                "&times;%.1f. That is the safe direction for a gate whose job is to "
+                "avoid launching hopeless hours, and it is why the threshold is "
+                "90&nbsp;%% rather than 100&nbsp;%%.</p>"
+                % (len(over), len(out), max(over)))
+    return ('<div class="scroller"><table><thead><tr><th>corpus</th><th>commit</th>'
+            '<th class="num">the rule predicted</th><th class="num">the run</th>'
+            '<th class="num">ratio</th></tr></thead><tbody>%s</tbody></table></div>%s'
+            % (body, tail))
 
 
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}

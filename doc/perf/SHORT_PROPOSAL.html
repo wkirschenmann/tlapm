@@ -182,15 +182,12 @@ inside the budget. <em>When would it finish?</em> &mdash; taken from the ratio b
 this commit and the same commit on the public 1&nbsp;800-obligation corpus, which
 does complete. <em>When would it abort?</em> &mdash; taken from extrapolating its own
 memory growth to the 12&nbsp;GB cap. If the sooner of the two is past 90&nbsp;% of the
-budget, the run is not launched and the point stays marked as inferred.</p>
-<p>The rule is an estimate and it is worth saying how badly it estimates. On the one
-point where it said yes and the answer came back &mdash; the definitions prune on the
-refinement chain &mdash; it predicted 1&nbsp;937&nbsp;s and the run took
-1&nbsp;035&nbsp;s: it overestimated by <strong>&times;1.9</strong>. That direction is
-the safe one for a gate whose job is to avoid launching hopeless hours, and it is the
-reason the threshold is 90&nbsp;% rather than 100&nbsp;%; but it also means the rule
-is a scheduling heuristic and never a source of a number in this document. Every
-figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
+budget, the run is not launched and the point stays a ring.</p>
+<p>The rule is an estimate and it is worth saying how badly it estimates, so here is
+its record on every point where it said yes and the answer came back.</p>
+<div class="scroller"><table><thead><tr><th>corpus</th><th>commit</th><th class="num">the rule predicted</th><th class="num">the run</th><th class="num">ratio</th></tr></thead><tbody><tr><td>private refinement chain</td><td>prune/defs</td><td class="num">completion, ~1937&nbsp;s</td><td class="num">completed at 1035&nbsp;s</td><td class="num">&times;1.87</td></tr></tbody></table></div><p style="margin-top:10px">It overestimates on 1 of 1, by up to &times;1.9. That is the safe direction for a gate whose job is to avoid launching hopeless hours, and it is why the threshold is 90&nbsp;% rather than 100&nbsp;%.</p>
+<p>That is a scheduling heuristic, and never a source of a number in this document.
+Every figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
 stopped one.</p><h4>Measurement machine</h4>
 <div class="scroller"><table><tbody>
 <tr><td>CPU</td><td class="num">Intel Xeon @ 2.10 GHz, 4 cores</td></tr>
