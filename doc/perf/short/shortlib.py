@@ -104,6 +104,10 @@ def load_sweep(path=None, boot=None):
             out[k]["peak"] = v or int(r["peak_kb"])
             out[k]["prep_raw"] = p_
             out[k]["peak_raw"] = int(r["peak_kb"]) or None
+            # Phase L is the extended clock.  A verdict that comes from it is settled;
+            # one that comes from the ordinary ceiling is still awaiting that run, and
+            # the charts mark the two differently.
+            out[k]["long"] = (r["phase"] == "L")
     out = dict(out)
     out["_line_boot"] = line_boot
 

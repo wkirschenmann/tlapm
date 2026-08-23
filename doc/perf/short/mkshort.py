@@ -65,6 +65,19 @@ def _cell(cp, pt):
     return sweep.get((pt, cp), {})
 
 
+def _pending(cp, pt):
+    """True when the only reading for this cell comes from the ordinary ceiling.
+
+    A run the cap stopped is settled -- the allocation was refused, more time
+    changes nothing.  A run the *clock* stopped is not: it is one measurement short
+    of a verdict, and it stays marked as pending until the extended clock has been
+    spent on it.  The charts draw those as a ring rather than a cross, so a reader
+    never mistakes an unfinished measurement for a result.
+    """
+    c = _cell(cp, pt)
+    return c.get("prep") == L.CEIL and not c.get("long")
+
+
 def thr(cp):
     """Obligations prepared per second.  A run that did not complete prepared none of
     them to the end, so its throughput is zero -- which a logarithmic axis cannot
@@ -76,7 +89,7 @@ def thr(cp):
         if v is None or v == L.DNC:
             d[pt] = None                       # not measured: absent, not failed
         elif v in L.FAILED:
-            d[pt] = {"kind": v, "at": None}
+            d[pt] = {"kind": v, "at": None, "pending": _pending(cp, pt)}
         else:
             d[pt] = L.OBL[cp] * 1000.0 / v
     return d
@@ -109,10 +122,11 @@ def peak(cp):
             d[pt] = {"kind": "OOM", "at": (raw / 1048576.0) if raw else CAP_GB}
         elif v == L.CEIL:
             gb = (raw / 1048576.0) if raw else None
+            pend = _pending(cp, pt)
             if gb and gb > HEADING_FOR_CAP * CAP_GB:
-                d[pt] = {"kind": "OOM?", "at": CAP_GB, "inferred": True}
+                d[pt] = {"kind": "OOM?", "at": CAP_GB, "pending": pend}
             else:
-                d[pt] = {"kind": "CEIL", "at": gb}
+                d[pt] = {"kind": "CEIL", "at": gb, "pending": pend}
         else:
             d[pt] = v / 1048576.0
     return d
@@ -141,14 +155,21 @@ def prep(cp):
 
 
 def iters(cp):
-    """A run stopped at the ceiling has a coordinate on this axis: the ceiling."""
+    """A run stopped at the ceiling has a coordinate on this axis: the ceiling.
+
+    It does not have a verdict, though.  No extended clock has been spent on this
+    metric, so every clock stop here is still an open measurement and is drawn as a
+    ring; a memory abort is settled and keeps its cross.
+    """
     d = {}
     for pt in L.POINTS:
         r = iterlat.get((cp, pt))
         if not r:
             d[pt] = None
         elif r[0] in L.FAILED:
-            d[pt] = {"kind": r[0], "at": (r[4] / 1000.0) if len(r) > 4 and r[4] else None}
+            d[pt] = {"kind": r[0],
+                     "at": (r[4] / 1000.0) if len(r) > 4 and r[4] else None,
+                     "pending": r[0] == L.CEIL}
         else:
             d[pt] = r[0] / 1000.0
     return d
@@ -513,7 +534,7 @@ than by testing.</p>""")
 <tr><td>kernel</td><td class="num">Linux 6.18.44</td></tr>
 <tr><td>compiler</td><td class="num">OCaml 4.14.1</td></tr>
 <tr><td>provers</td><td class="num">Z3 4.8.9, Zenon 0.8.4, Isabelle 2025 + TLA+ heap</td></tr>
-<tr><td>ceilings</td><td class="num">600 s generation, 900 s preparation, 1800 s iteration latency</td></tr>
+<tr><td>ceilings</td><td class="num">600 s generation, 900 s preparation, 900 s iteration latency; 3600 s for the extended-clock pass</td></tr>
 <tr><td>boots</td><td class="num">%s</td></tr>
 </tbody></table></div>
 <p style="margin-top:12px">Absolute values are comparable only inside this table.
@@ -665,22 +686,21 @@ figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
 stopped one.</p>"""
 
 
-def _inferred_sentence():
-    """How many crosses are still inferred, counted rather than asserted."""
+def _pending_sentence():
+    """How many marks are still rings, counted rather than asserted."""
     n = sum(1 for cp in L.CORPORA for v in peak(cp).values()
-            if isinstance(v, dict) and v.get("inferred"))
+            if isinstance(v, dict) and v.get("pending"))
     if not n:
-        return ("No cross on this chart is inferred any more: the extended-clock pass "
-                "ran every one of them to its real end.")
-    return ("%d such %s left on this chart, and %s being re-run on an hour&rsquo;s "
-            "clock, which turns each inference into a measurement."
-            % (n, "cross is" if n == 1 else "crosses are",
-               "it is" if n == 1 else "they are"))
+        return ("Every mark on this chart is a cross: the extended clock has been "
+                "spent on all of them, so none is still an open measurement.")
+    if n == 1:
+        return ("One mark is still a ring, so it is an open measurement rather than "
+                "a result.")
+    return ("%d marks are still rings, so they are open measurements rather than "
+            "results." % n)
 
 
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
-
-
 ORACLE, ORACLE_NEXT = "p14", "p15"
 
 
@@ -703,7 +723,6 @@ def _oracle_noise():
         return "the commit has not been measured against its neighbour yet."
     txt = ("against the commit after it, which shares its preparation path, "
            "preparation differs by %s." % "; ".join(out))
-    # The anchor cell is this commit on the chain, so its spread is measured.
     b = sweep.get("_line_boot", {}).get(("ffi", "prep"))
     a = sorted(sweep.get("_anchors", {}).get(b, []))
     nb = _cell("ffi", ORACLE_NEXT).get("prep")
@@ -793,12 +812,17 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
 
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
-series is proposed in. A cross in the band below the axis means the run
-<strong>did not complete</strong>; the tables in &sect;6 say which of the two ways,
-because the difference matters &mdash; a change that speeds preparation up reaches the
-memory wall <em>sooner</em>, turning a ceiling into an abort without being a
-regression. Public and private corpora share each chart: hue separates them, dash
-separates sizes.</p>
+series is proposed in. A red mark instead of a point means the run
+<strong>did not complete</strong>, and its <em>shape</em> says how much we know about
+that. A <strong>cross</strong> is a settled verdict: the run was refused memory, or it
+was given a full hour and still did not finish. A <strong>ring</strong> is a run the
+ordinary fifteen-minute clock stopped and that has not yet been given the hour &mdash;
+an open measurement, not a result, and this document says how many are outstanding
+rather than letting them read as verdicts. The tables in &sect;6 say which of the two
+ways a settled failure failed, because the difference matters &mdash; a change that
+speeds preparation up reaches the memory wall <em>sooner</em>, turning a ceiling into an
+abort without being a regression. Public and private corpora share each chart: hue
+separates them, dash separates sizes.</p>
 <p>Commit labels are coloured by provenance: <span style="color:var(--lbl-286);font-weight:600">violet</span>
 is a commit whose message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>,
 <span style="color:var(--lbl-keep);font-weight:600">green</span> is new here. Bold
@@ -817,13 +841,13 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "on a logarithmic axis; the two private specifications do not complete on main.",
     {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
     lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
-    "A red cross below the axis is a run that did not complete. It has no height "
+    "A red mark below the axis is a run that did not complete. It has no height "
     "because its throughput is <strong>zero</strong> &mdash; it never finished preparing "
     "the corpus &mdash; and zero has no place on a logarithmic axis. That is why these "
-    "are crosses in a band rather than points on a curve: the other two charts can put a "
-    "failure somewhere meaningful, this one cannot. On the two private specifications "
-    "<code>main</code> is one of them, and the curve begins only where a commit makes "
-    "the specification runnable."))
+    "sit in a band rather than on the curve: the other charts can put a failure "
+    "somewhere meaningful, this one cannot. A cross is settled, a ring is a run still "
+    "owed its hour. On the two private specifications <code>main</code> is one of them, "
+    "and the curve begins only where a commit makes the specification runnable."))
 
     c.append(fig(
     "Peak memory of a preparation pass",
@@ -836,16 +860,18 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "memory stops being a function of the file and becomes a function of one obligation. "
     "Everything to the right of it is flat, which is the point &mdash; no later commit "
     "gives any of it back. "
-    "A solid cross on the cap line is a run the cap stopped &mdash; that reading is "
-    "real, the resident set reached just before the allocation the cap refused. "
-    "A <strong>dashed</strong> cross on the cap line is inferred rather than "
-    "measured: the clock stopped that run while it already held a large share of "
-    "the cap and was still climbing, so its recorded figure is a fact about when "
-    "we stopped looking, not about the commit. " + _inferred_sentence() + " A cross "
-    "<em>below</em> the cap is neither: a run that was simply slow, sitting at a "
-    "few hundred megabytes when the clock ran out, and there its reading is its "
-    "peak. The distinction is the whole point of the pull request in the middle: "
-    "to its left the failure is memory, to its right it is only time.",
+    "Two marks, and the difference between them is what we know rather than what "
+    "happened. A <strong>cross</strong> is a settled verdict: the cap refused an "
+    "allocation, and that reading is real &mdash; the resident set reached just "
+    "before the refusal. More time cannot change it. A <strong>red ring</strong> is "
+    "not a verdict at all: the fifteen-minute clock stopped that run, which says "
+    "where we stopped looking and not where the commit ends up, and the hour that "
+    "would settle it has not been spent yet. " + _pending_sentence() + " A ring on "
+    "the cap line was holding a large share of it and still climbing; a ring below "
+    "the cap was simply slow, and sits at the peak it had reached. Either way it is "
+    "a measurement this document still owes. The distinction the chart is really "
+    "about is the pull request in the middle: to its left the failure is memory, to "
+    "its right it is only time.",
     rule=(12.0, "12 GB address-space cap")))
 
     c.append(fig(
