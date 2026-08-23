@@ -304,28 +304,33 @@ def load_keystroke(path=None, boot=None):
     path = path or os.path.join(S, "short_keystroke.csv")
     if not os.path.exists(path):
         return {}, None
-    vals, boots = collections.defaultdict(list), set()
+    per = collections.defaultdict(lambda: collections.defaultdict(list))
     with open(path) as f:
         for r in csv.DictReader(f):
             if r["kind"] != "edit":
                 continue
-            boots.add(r["boot"])
-            vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
-    if not boots:
+            cp = r.get("corpus") or "ffi"
+            per[cp][(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(
+                float(r["seconds"]))
+    if not per:
         return {}, None
-    boot = _keystroke_boot(vals, boot)
-    best = {}
-    for (b, pt, n), v in vals.items():
-        if b != boot:
-            continue
-        if pt not in best or n > best[pt][0]:
-            best[pt] = (n, v)
-    out = {}
-    for pt, (n, v) in best.items():
-        med = statistics.median(v)
-        sp = (max(v) - min(v)) / float(max(v)) if max(v) else 0.0
-        out[pt] = (med, sp, len(v))
-    return out, boot
+    out, boots = {}, {}
+    for cp, vals in per.items():
+        b = _keystroke_boot(vals, boot)
+        boots[cp] = b
+        best = {}
+        for (bb, pt, n), v in vals.items():
+            if bb != b:
+                continue
+            if pt not in best or n > best[pt][0]:
+                best[pt] = (n, v)
+        for pt, (n, v) in best.items():
+            med = statistics.median(v)
+            sp = (max(v) - min(v)) / float(max(v)) if max(v) else 0.0
+            out[(cp, pt)] = (med, sp, len(v))
+    # the representative boot, for the machine table: the one carrying the most lines
+    rep = collections.Counter(boots.values()).most_common(1)
+    return out, (rep[0][0] if rep else None)
 
 
 def keystroke_ranges(path=None, boot=None):
@@ -333,20 +338,23 @@ def keystroke_ranges(path=None, boot=None):
     path = path or os.path.join(S, "short_keystroke.csv")
     if not os.path.exists(path):
         return {}
-    vals, boots = collections.defaultdict(list), set()
+    per = collections.defaultdict(lambda: collections.defaultdict(list))
     with open(path) as f:
         for r in csv.DictReader(f):
             if r["kind"] != "edit":
                 continue
-            boots.add(r["boot"])
-            vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
-    if not boots:
-        return {}
-    boot = _keystroke_boot(vals, boot)
+            cp = r.get("corpus") or "ffi"
+            per[cp][(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(
+                float(r["seconds"]))
     best = {}
-    for (b, pt, n), v in vals.items():
-        if b == boot and (pt not in best or n > best[pt][0]):
-            best[pt] = (n, min(v), max(v))
+    for cp, vals in per.items():
+        b = _keystroke_boot(vals, boot)
+        for (bb, pt, n), v in vals.items():
+            if bb != b:
+                continue
+            k = (cp, pt)
+            if k not in best or n > best[k][0]:
+                best[k] = (n, min(v), max(v))
     return best
 
 

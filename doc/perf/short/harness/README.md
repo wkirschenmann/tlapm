@@ -23,7 +23,7 @@ run time, so adding or removing a commit does not need an edit here.
 |---|---|
 | `short_sweep.sh` | the corpora; builds each commit itself |
 | `short_iterlat.sh` | a corpus directory **plus a warm fingerprint cache** and an edited copy of the spec |
-| `short_keystroke.sh` | a spec, a line number inside a proof body, and `lsp_keystroke_client.py` |
+| `short_keystroke.sh` | one workspace directory per corpus, each with a spec and a line inside a proof body, and `lsp_keystroke_client.py`; corpora are given as `corpus:spec:line` triples in `CORPORA` |
 | `short_longtail.sh` | a sweep CSV with stopped runs in it; re-uses the binaries `short_sweep.sh` cached |
 | `short_refresh.sh` | the CSVs; merges them into the repository, regenerates the page, commits the data |
 | `short_mono.sh` | one corpus, a point list, and the CSV; picks each point's clock from what the CSV already holds |

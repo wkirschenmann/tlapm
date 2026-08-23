@@ -236,7 +236,10 @@ def iters(cp):
 
 
 def keyser():
-    return {"ffi": {pt: (keys[pt][0] if pt in keys else None) for pt in L.POINTS}}
+    """One series per corpus that has keystroke data, in the chart's usual order."""
+    return {cp: {pt: (keys[(cp, pt)][0] if (cp, pt) in keys else None)
+                 for pt in L.POINTS}
+            for cp in L.CORPORA if any(c == cp for c, _ in keys)}
 
 
 def val(cp, pt, field):
@@ -413,8 +416,8 @@ def sec_problem():
     tiny_tip = val("tiny", TIP, "prep")
     mono_tip = val("mono", TIP, "prep")
     ffi_tip = val("ffi", TIP, "prep")
-    ks_main = keys.get("p00", (None,))[0]
-    ks_tip = keys.get(TIP, (None,))[0]
+    ks_main = keys.get(("ffi", "p00"), (None,))[0]
+    ks_tip = keys.get(("ffi", TIP), (None,))[0]
     it_main = iterlat.get(("ffi", "p00"), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
@@ -1210,7 +1213,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
 def _keystroke_caption():
     """The strongest form of the claim about the last pull requests that the data
     supports -- pair by pair, because it turned out not to hold for all of them."""
-    rng = L.keystroke_ranges()
+    rng = {pt: v for (cp, pt), v in L.keystroke_ranges().items() if cp == "ffi"}
     tail = [c[-1] for _, _, c in L.PRS][-4:]          # the deque's successors at the end
     have = [pt for pt in tail if pt in rng]
     base = ("After the deque, this is the only metric the last pull requests move at "
