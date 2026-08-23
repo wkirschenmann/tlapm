@@ -85,13 +85,53 @@ def check_inconclusive(page="/home/user/tlapm/doc/perf/SHORT_PROPOSAL.html"):
     return out
 
 
+def check_demo_readme():
+    """The corpus README quotes figures in prose; instance_demo.csv holds them.
+
+    Prose cannot be generated from a slot the way the document's cells are, so
+    it is checked instead: regenerating the corpus moves these numbers, and a
+    README that still claims the old ones is exactly the kind of stale sentence
+    this checker exists to catch.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "instance_demo", "README.md")
+    if not os.path.exists(path):
+        return ["MISSING instance_demo/README.md, which the document points readers at"]
+    txt = open(path).read()
+    d = L.load_instance_demo()
+    pr, lad, ldf = d["proofs"], d["ladder"], d["ladder_defn"]
+    ks = sorted(lad, key=int)
+    want = [
+        ("%d definitions and %d hypotheses" % (ldf[ks[1]] - ldf[ks[0]],
+                                               lad[ks[1]] - lad[ks[0]]),
+         "definitions and hypotheses per INSTANCE"),
+        ("%d of those %d" % (d["ladder_frag_two_hop"]["1"], ldf[ks[1]] - ldf[ks[0]]),
+         "the two-hop share of one INSTANCE"),
+        ("{:,} lines".format(pr["lines"]), "proof size"),
+        ("{:,} obligations".format(pr["obligations"]), "obligation count"),
+        ("%d lemmas" % pr["lemmas"], "lemma count"),
+        ("{:,}".format(pr["total_ctx_hyps"]), "context entries walked"),
+        ("%d per obligation" % (pr["total_ctx_hyps"] // pr["obligations"]),
+         "context entries per obligation"),
+        ("%d lines" % pr["stack_lines"], "stack source size"),
+        ("%.0f s and %.1f GB" % (d["main"]["prep_ms"] / 1000.0,
+                                 d["main"]["peak_kb"] / 1048576.0),
+         "cost on the base commit"),
+        ("%.1f s and %.0f MB" % (d["tip"]["prep_ms"] / 1000.0,
+                                 d["tip"]["peak_kb"] / 1024.0),
+         "cost at the tip"),
+    ]
+    return ["STALE instance_demo/README.md: %s should read \"%s\"" % (why, s)
+            for s, why in want if s not in txt]
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:
