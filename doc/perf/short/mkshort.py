@@ -54,7 +54,22 @@ CORPUS_META = {
              "a real 30k-line monolith: the specification <code>main</code>"
              " cannot prepare at all"),
 }
-NUMWORD = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven"}
+NUMWORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+           7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven",
+           12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
+           16: "sixteen", 17: "seventeen", 18: "eighteen"}
+
+
+N_PR = len(L.PRS)
+N_CM = sum(len(c) for _, _, c in L.PRS)
+
+
+def numword(n):
+    """Spelled where the document spells, digits past the table.  One sentence
+    used to read 'Three of the seventeen commits ... the other 14', mixing both
+    forms -- and worse, the three was typed while the fourteen was derived, so a
+    commit gaining or losing a switch would have made the halves contradict."""
+    return NUMWORD.get(n, str(n))
 
 # Three things have to agree about which corpora exist: this table, the
 # obligation counts, and the campaign's order.  When they did not, the symptom
@@ -444,6 +459,15 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
 # ---------------------------------------------------------------- sections
 import content as CT
 
+# The two tables have to agree about how big the series is: every spelled
+# commit count in the document is derived from the pull-request list, and a
+# commit present in one table and not the other would make them lie.
+if N_CM != len(CT.CM):
+    raise SystemExit(
+        "mkshort: the pull-request table lists %d commits, the commit table %d. "
+        "Every 'seventeen commits' in the document is derived from the first, so "
+        "they have to agree." % (N_CM, len(CT.CM)))
+
 METRICS = [
     ("preparation time", "<code>tlapm --noproving --nofp</code>",
      "the whole per-obligation pipeline with no prover launched: find the method, "
@@ -485,7 +509,7 @@ def sec_problem():
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
              "boundary is not gradual. The %s specifications below are the same tool on "
-             % NUMWORD[len([c for c in L.CORPORA if c != "synth100"])] +
+             % numword(len([c for c in L.CORPORA if c != "synth100"])) +
              "the same machine: seventy obligations finish before you notice, and ten "
              "thousand do not finish at all.</p>")
     c.append('<div class="scroller"><table><thead><tr><th>specification</th>'
@@ -775,9 +799,11 @@ without them the measurements that justify the rest are not available.</p>
 
 
 def sec_proposal():
-    c = ["<p>Nine pull requests, seventeen commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
+    c = ["<p>%s pull requests, %s commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
          "Each commit is one subject, states its own invariant, and passes the gate in "
-         "&sect;4 on its own.</p>" % (TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
+         "&sect;4 on its own.</p>"
+         % (numword(N_PR).capitalize(), numword(N_CM),
+            TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
     c.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>pull request</th>'
              '<th class="num">commits</th><th class="num">files</th>'
              '<th>what it is for</th></tr></thead><tbody>')
@@ -823,7 +849,7 @@ def sec_method():
              "Everything marked public is in this repository; the two private "
              "specifications are a customer's and are not published &mdash; only "
              "these numbers are.</p>"
-             % NUMWORD[len(L.CORPORA)].capitalize())
+             % numword(len(L.CORPORA)).capitalize())
     c.append('<div class="scroller"><table><thead><tr><th>corpus</th>'
              '<th class="num">obligations</th><th>why it is here</th></tr></thead><tbody>')
     for cp in L.CORPORA:
@@ -835,7 +861,7 @@ def sec_method():
     c.append("</tbody></table></div>")
 
     c.append("""<h4>The correctness gate every commit passes</h4>
-<p>Not a benchmark gate &mdash; a soundness one. For each of the seventeen commits,
+<p>Not a benchmark gate &mdash; a soundness one. For each of the """ + numword(N_CM) + """ commits,
 in sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green,
 and the <code>test/fast</code> suite run against the full prover stack &mdash;
 Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built from this
@@ -898,13 +924,18 @@ def _switches():
                 continue
             rows.append((pid, BY_LABEL[cm][1], BY_LABEL[cm][2], off))
     n_none = sum(1 for c in CT.CM.values() if c["off"].lower().startswith("no switch"))
+    n_sw = len(rows)
+    assert n_sw + n_none == len(CT.CM), (
+        "switch tally disagrees with the commit list: %d with, %d without, %d total"
+        % (n_sw, n_none, len(CT.CM)))
     out = ["<h4>What can be switched, and what cannot</h4>",
-           "<p>Three of the seventeen commits carry a switch; the other %d do not, and "
+           "<p>%s of the %s commits carry a switch; the other %s do not, and "
            "deliberately so &mdash; they are output-preserving changes to a single code "
            "path, so a flag would mean carrying two implementations of the same "
            "function and testing neither of them properly. Where a switch does exist it "
            "restores the <em>original</em> code rather than disabling a feature, which "
-           "is what makes it usable as a differential reference.</p>" % n_none]
+           "is what makes it usable as a differential reference.</p>"
+           % (numword(n_sw).capitalize(), numword(len(CT.CM)), numword(n_none))]
     out.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>commit</th>'
                '<th>switch</th></tr></thead><tbody>')
     for pid, sha, subj, off in rows:
@@ -1787,7 +1818,7 @@ those is an architectural change with a design discussion in front of it, not a 
 
 def sec_286():
     n286 = sum(1 for v in C.LABELS.values() if v[1])
-    return """<p>Six of these seventeen commits credit <a
+    return """<p>""" + numword(n286).capitalize() + """ of these """ + numword(N_CM) + """ commits credit <a
 href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>, and the
 issue itself describes four families of optimisation. The counts differ for a
 reason worth stating plainly, because it looks like inflation and is not.</p>
@@ -1807,7 +1838,8 @@ is in a component the issue does not touch at all.</p>""".replace("Six of these 
 def build():
     parts = ['<div class="wrap"><header>',
              '<p class="eyebrow">tlapm &middot; performance</p>',
-             '<h1>Nine pull requests to make large proofs tractable</h1>',
+             '<h1>%s pull requests to make large proofs tractable</h1>'
+             % numword(N_PR).capitalize(),
              '<p class="lede">Seventeen commits, one subject each, measured commit by commit '
              'on five specifications with five metrics a user can time from outside the '
              'tool. Two of those specifications cannot be prepared at all today.</p>',
