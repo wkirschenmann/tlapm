@@ -4,7 +4,8 @@
 # 734 s, so the one before it is plausibly just over the line -- and "completes,
 # slower than its successor" is a different claim from "does not complete".
 #
-# Re-run, with an hour, every chain point that the campaign stopped at the clock.
+# Re-run, with an hour, every point of one corpus (LONG_CORPUS, default the chain)
+# that the campaign stopped at the clock.
 # Memory aborts are excluded: more time cannot help a run that ran out of address
 # space.  Rows are phase L and the reader prefers them over a ceiling.
 set -u
@@ -15,7 +16,9 @@ BINS=$S/shortbin; OUT=$S/short_sweep.csv
 P=$CORPUS
 BOOT=$(awk '/btime/{print $2}' /proc/stat)
 LONG_T=${LONG_T:-3600}; CAP=12000000
-SPEC=$P/abstractgrpc/FfiGrpcTheorems_proofs.tla
+CN=${LONG_CORPUS:-ffi}
+case $CN in mono) SPEC=$P/oom_repro/timer_wheel_l1_mono.tla;;
+            *)    SPEC=$P/abstractgrpc/FfiGrpcTheorems_proofs.tla;; esac
 ALL=$(tr '\n' ' ' < $S/short_points.txt)
 sha_of () { for p in $ALL; do [ "${p%%:*}" = "$1" ] && echo "${p##*:}"; done; }
 
@@ -26,16 +29,16 @@ sha_of () { for p in $ALL; do [ "${p%%:*}" = "$1" ] && echo "${p##*:}"; done; }
 # adjacent commits there estimates the ratio here; applied to the nearest chain
 # point that did complete, it gives an expected time.  Spending an hour to learn
 # that a point estimated at seventy minutes does not finish in sixty buys nothing.
-PTS=$(python3 - "$OUT" "$BOOT" "$LONG_T" <<'PYEOF'
+PTS=$(python3 - "$OUT" "$BOOT" "$LONG_T" "$CN" <<'PYEOF'
 import csv, sys
-out, boot, budget = sys.argv[1], sys.argv[2], float(sys.argv[3])
+out, boot, budget, CN = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
 sy, ch = {}, {}
 for r in csv.DictReader(open(out)):
     if r["phase"] != "Ap" or r["boot"] != boot or int(r["prep_ms"]) == -2:
         continue
     if r["corpus"] == "synth300" and int(r["prep_rc"]) == 0:
         sy[r["point"]] = int(r["prep_ms"]) / 1000.0
-    if r["corpus"] == "ffi":
+    if r["corpus"] == CN:
         ch[r["point"]] = (int(r["prep_ms"]) / 1000.0, int(r["prep_rc"]),
                           int(r["peak_kb"]))
 done = [(p, v) for p, (v, rc, _) in sorted(ch.items()) if rc == 0]
@@ -75,15 +78,15 @@ PYEOF
 echo "chain points worth an extended clock: ${PTS:-none}"
 for pt in $PTS; do
   sha=$(sha_of $pt)
-  grep -q "^L,$BOOT,$pt,$sha,ffi," $OUT && continue
+  grep -q "^L,$BOOT,$pt,$sha,$CN," $OUT && continue
   d=$(mktemp -d); t0=$(date +%s%N)
   ( ulimit -v $CAP; cd $(dirname $SPEC) && /usr/bin/time -f "%M" -o $d/r \
       timeout $LONG_T $BINS/$pt.exe --noproving --nofp --cache-dir $d/p $SPEC ) >/dev/null 2>&1
   rc=$?; ms=$(( ($(date +%s%N)-t0)/1000000 )); pk=$(tail -1 $d/r 2>/dev/null)
   case "${pk:-}" in ''|*[!0-9]*) pk=0;; esac
   rm -rf $d
-  echo "L,$BOOT,$pt,$sha,ffi,-2,0,$ms,$rc,$pk" >> $OUT
-  echo "  [L] $pt ffi ${ms}ms rc=$rc ${pk}kB"
+  echo "L,$BOOT,$pt,$sha,$CN,-2,0,$ms,$rc,$pk" >> $OUT
+  echo "  [L] $pt $CN ${ms}ms rc=$rc ${pk}kB"
   [ $rc -ne 0 ] && { echo "  stopping: $pt did not finish inside ${LONG_T}s either, so the ones below it will not"; break; }
 done
 echo LONGTAIL_DONE
