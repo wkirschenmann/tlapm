@@ -68,11 +68,11 @@ def _cell(cp, pt):
 def _pending(cp, pt):
     """True when the only reading for this cell comes from the ordinary ceiling.
 
-    A run the cap stopped is settled -- the allocation was refused, more time
-    changes nothing.  A run the *clock* stopped is not: it is one measurement short
-    of a verdict, and it stays marked as pending until the extended clock has been
-    spent on it.  The charts draw those as a ring rather than a cross, so a reader
-    never mistakes an unfinished measurement for a result.
+    A run the cap stopped is a result -- the allocation was refused, more time
+    changes nothing.  A run the *clock* stopped is a protocol timeout: the ceiling is
+    ours, not the commit's, so the cell is inconclusive until the extended clock has
+    been spent on it.  The charts draw those as a ring rather than a cross, so an
+    inconclusive cell can never be read as a result.
     """
     c = _cell(cp, pt)
     return c.get("prep") == L.CEIL and not c.get("long")
@@ -368,10 +368,8 @@ def sec_problem():
                  % (name, "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"),
                     L.fmt_ms(a), L.fmt_ms(b), fmt_x(a, b)))
     c.append("</tbody></table></div>")
-    c.append("<p style=\"margin-top:14px\">The failure is not slowness. On the monolith "
-             "<code>main</code> exhausts a 12&nbsp;GB address space before it finishes "
-             "preparing, and on the refinement chain it exceeds a fifteen-minute ceiling. "
-             "There is no number to make faster; there is a wall to remove.</p>")
+    c.append("<p style=\"margin-top:14px\">The failure is not slowness. %s</p>"
+             % _wall_sentence())
     if isinstance(it_main, str) or it_main:
         c.append("<p>The same wall stands in the editor. Re-checking the refinement chain "
                  "after a single edit, with every fingerprint already in the cache, "
@@ -691,13 +689,50 @@ def _pending_sentence():
     n = sum(1 for cp in L.CORPORA for v in peak(cp).values()
             if isinstance(v, dict) and v.get("pending"))
     if not n:
-        return ("Every mark on this chart is a cross: the extended clock has been "
-                "spent on all of them, so none is still an open measurement.")
+        return ("No mark on this chart is a ring: the extended clock has been spent on "
+                "every stopped run, so every failure here is a result.")
     if n == 1:
-        return ("One mark is still a ring, so it is an open measurement rather than "
-                "a result.")
-    return ("%d marks are still rings, so they are open measurements rather than "
-            "results." % n)
+        return ("One mark is a ring, so one cell of this chart is inconclusive and is "
+                "not quoted anywhere in this document as a figure.")
+    return ("%d marks are rings, so that many cells are inconclusive, and none of them "
+            "is quoted anywhere in this document as a figure." % n)
+
+
+def _wall_sentence():
+    """What the two private specifications actually do on main, from the campaign.
+
+    The point of the paragraph is that the failure is categorical rather than slow,
+    so it must not overstate which category: a run the cap refused and a run our own
+    ceiling stopped are different claims, and one of them is not a claim at all.
+    """
+    out = []
+    for cp, name in (("mono", "the monolith"), ("ffi", "the refinement chain")):
+        v = L.main_point(sweep, cp, "prep")
+        if v == L.ABORT:
+            out.append("on %s <code>main</code> exhausts the 12&nbsp;GB address space "
+                       "before it finishes preparing" % name)
+        elif v == L.CEIL:
+            out.append("on %s it is still preparing when our fifteen-minute ceiling "
+                       "stops it &mdash; a protocol timeout, so how much longer it "
+                       "would need is not known" % name)
+        elif isinstance(v, int):
+            out.append("on %s <code>main</code> takes %s" % (name, L.fmt_ms(v)))
+        else:
+            out.append("on %s <code>main</code> has not been measured on this "
+                       "campaign" % name)
+    txt = ("On %s, and %s." % (out[0], out[1])).replace("On on ", "On ")
+    # The claim the paragraph is making is that the failure is categorical.  Only a
+    # refused allocation demonstrates that; a ceiling of our own does not.  So say it
+    # only where the campaign has a refused allocation to point at.
+    oom = sorted({cp for cp in ("ffi", "mono")
+                  for pt in L.POINTS
+                  if _cell(cp, pt).get("prep") == L.ABORT})
+    if oom:
+        where = " and ".join(CORPUS_NAME.get(cp, cp) for cp in oom)
+        txt += (" The wall itself is not in doubt: on the %s the cap refuses an "
+                "allocation outright at the commits marked with a cross in &sect;5, "
+                "and there is no number there to make faster." % where)
+    return txt
 
 
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
@@ -813,16 +848,18 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
 series is proposed in. A red mark instead of a point means the run
-<strong>did not complete</strong>, and its <em>shape</em> says how much we know about
-that. A <strong>cross</strong> is a settled verdict: the run was refused memory, or it
-was given a full hour and still did not finish. A <strong>ring</strong> is a run the
-ordinary fifteen-minute clock stopped and that has not yet been given the hour &mdash;
-an open measurement, not a result, and this document says how many are outstanding
-rather than letting them read as verdicts. The tables in &sect;6 say which of the two
-ways a settled failure failed, because the difference matters &mdash; a change that
-speeds preparation up reaches the memory wall <em>sooner</em>, turning a ceiling into an
-abort without being a regression. Public and private corpora share each chart: hue
-separates them, dash separates sizes.</p>
+<strong>did not complete</strong>, and its <em>shape</em> says whether that is a result.
+A <strong>cross</strong> is a result: the run was refused memory, or it was given a full
+hour and still did not finish. A <strong>ring</strong> is a
+<strong>protocol timeout &mdash; inconclusive</strong>: the run was stopped by the
+ceiling this measurement protocol sets, not by anything in the commit, so it says where
+we stopped looking and nothing about where the commit ends up. It is not a slower
+version of a cross; it is the absence of an answer, and the count of outstanding rings
+is stated rather than left to be inferred. The tables in &sect;6 say which of the two
+ways a real failure failed, because the difference matters &mdash; a change that speeds
+preparation up reaches the memory wall <em>sooner</em>, turning a ceiling into an abort
+without being a regression. Public and private corpora share each chart: hue separates
+them, dash separates sizes.</p>
 <p>Commit labels are coloured by provenance: <span style="color:var(--lbl-286);font-weight:600">violet</span>
 is a commit whose message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>,
 <span style="color:var(--lbl-keep);font-weight:600">green</span> is new here. Bold
@@ -845,9 +882,11 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "because its throughput is <strong>zero</strong> &mdash; it never finished preparing "
     "the corpus &mdash; and zero has no place on a logarithmic axis. That is why these "
     "sit in a band rather than on the curve: the other charts can put a failure "
-    "somewhere meaningful, this one cannot. A cross is settled, a ring is a run still "
-    "owed its hour. On the two private specifications <code>main</code> is one of them, "
-    "and the curve begins only where a commit makes the specification runnable."))
+    "somewhere meaningful, this one cannot. A cross is a result; a ring is a "
+    "<strong>protocol timeout</strong>, and therefore inconclusive &mdash; the number "
+    "it would have had is unknown, not zero. On the two private specifications "
+    "<code>main</code> is one of these marks, and the curve begins only where a commit "
+    "makes the specification runnable."))
 
     c.append(fig(
     "Peak memory of a preparation pass",
@@ -860,18 +899,17 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "memory stops being a function of the file and becomes a function of one obligation. "
     "Everything to the right of it is flat, which is the point &mdash; no later commit "
     "gives any of it back. "
-    "Two marks, and the difference between them is what we know rather than what "
-    "happened. A <strong>cross</strong> is a settled verdict: the cap refused an "
-    "allocation, and that reading is real &mdash; the resident set reached just "
-    "before the refusal. More time cannot change it. A <strong>red ring</strong> is "
-    "not a verdict at all: the fifteen-minute clock stopped that run, which says "
-    "where we stopped looking and not where the commit ends up, and the hour that "
-    "would settle it has not been spent yet. " + _pending_sentence() + " A ring on "
-    "the cap line was holding a large share of it and still climbing; a ring below "
-    "the cap was simply slow, and sits at the peak it had reached. Either way it is "
-    "a measurement this document still owes. The distinction the chart is really "
-    "about is the pull request in the middle: to its left the failure is memory, to "
-    "its right it is only time.",
+    "Two marks, and only one of them is a result. A <strong>cross</strong> is a "
+    "result: the cap refused an allocation, and the reading is real &mdash; the "
+    "resident set reached just before the refusal. More time cannot change it. A "
+    "<strong>red ring</strong> is a <strong>protocol timeout, and therefore "
+    "inconclusive</strong>: the fifteen-minute ceiling this protocol sets stopped the "
+    "run, so the mark records our own cut-off and not the commit&rsquo;s behaviour. "
+    + _pending_sentence() + " Where a ring sits says what little is known: on the cap "
+    "line it was holding a large share of the cap and still climbing, below the cap it "
+    "was merely slow and sits at the peak it had reached. Neither is a figure to quote. "
+    "The distinction the chart is really about is the pull request in the middle: to "
+    "its left the failure is memory, to its right it is only time.",
     rule=(12.0, "12 GB address-space cap")))
 
     c.append(fig(

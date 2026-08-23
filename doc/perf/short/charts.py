@@ -3,7 +3,8 @@
 
 x is the branch: one point per commit, main at the left.  y is log, because the
 corpora span three decades and the shape of each curve is what carries meaning.
-A run that did not complete is a cross in a band below the axis, never a number:
+A run that did not complete is a mark in a band below the axis, never a number
+(a cross for a result, a ring for an inconclusive protocol timeout):
 a ratio against a ceiling or an abort would be fiction.
 """
 import math
@@ -173,9 +174,9 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                 cy = pts[i][0]
                 r = 4.0
                 if isinstance(v, dict) and v.get("pending"):
-                    # Stopped by the clock and not yet given the longer one: a
-                    # measurement still owed, not a verdict.  A ring says "we do not
-                    # know yet" where a cross would claim we do.
+                    # A protocol timeout: the ceiling that stopped this run is ours,
+                    # not the commit's, so the cell is inconclusive.  A ring says "no
+                    # answer" where a cross would claim there is one.
                     o.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" '
                              'stroke="%s" stroke-width="2"/>'
                              % (xs(i), cy, r - 0.4, FAIL))
