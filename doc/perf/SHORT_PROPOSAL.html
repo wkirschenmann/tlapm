@@ -196,30 +196,25 @@ sequence lengths, cardinalities, nested application &mdash; and level&nbsp;1's a
 compositional, naming level&nbsp;0's properties through the instance prefix as well as
 constraining its own state. That is deliberate: the quantity this corpus is about is
 what a context of definitions costs, and a one-line predicate makes a definition that
-costs nothing to carry.</p><div class="tw"><table><tbody><tr><td>stack source, all seven modules</td><td class="n">264 lines</td></tr><tr><td>proof</td><td class="n">3&nbsp;239 lines</td></tr><tr><td>obligations</td><td class="n">2&nbsp;703</td></tr><tr><td>hypotheses per obligation, mean</td><td class="n">369</td></tr><tr><td>hypotheses per obligation, worst</td><td class="n">422</td></tr><tr><td>of those, instantiated copies (one hop or two)</td><td class="n">143</td></tr><tr><td>of those, arrived two hops deep</td><td class="n">71</td></tr><tr><td>context entries walked over the whole run</td><td class="n">999&nbsp;558</td></tr><tr><td>generation / preparation / proving</td><td class="n">0.24&thinsp;/&thinsp;4.25&thinsp;/&thinsp;1.50&nbsp;s</td></tr><tr><td>peak memory</td><td class="n">65&nbsp;MB</td></tr></tbody></table></div><p>Every one of the 2&nbsp;703 obligations is proved with the stock backends
-&mdash; 1&nbsp;781 dispatched by tlapm itself, 619 by SMT, 303 by Zenon &mdash; and
-<code>harness/instance_demo.sh</code> refuses to write the CSV this table is built
-from if any of them fails. A green corpus can be used as a regression fixture; a red
-one cannot, and a document that claims one should not be able to ship the other.</p>
-<p>Two numbers carry the point. A 3&nbsp;239-line proof over a stack whose own source is 264
-lines makes tlapm walk <strong>999&nbsp;558 context entries</strong> &mdash; 369 per obligation,
-of which 143 are instantiated copies and 71 of those came two hops down. And
-preparation costs <strong>1.57&nbsp;ms per obligation</strong>, against
-0.09&nbsp;ms for generation: the work is not in finding the obligations, it is in
-preparing each one against its context.</p>
-<p>That ratio &mdash; preparation costing about 18&times; generation &mdash; is the
-mechanism stated as a measurement, and it is why the changes in this series cluster in
-preparation rather than in generation. An earlier draft of this corpus
-used one-line predicates and prepared visibly faster per obligation; the number is not
-quoted here because that draft also differed in proof structure, so the comparison
-would confound definition weight with tree shape. What can be said without a
-confound is that this corpus was rewritten to carry invariants of a realistic weight
-precisely because the light version was measuring the wrong thing.</p>
-<p>What the corpus still does not reproduce is the wall: everything here finishes in
-seconds and peak memory stays around 65&nbsp;MB. The mechanism is faithful, the scale
-is not, and no synthetic corpus of a few thousand lines will be &mdash; which is why
-two of the five corpora in &sect;5 are a customer's and cannot be published. This one
-publishes the mechanism.</p><p>Two hop-depth mistakes are easy to make in a stack like this, and
+costs nothing to carry.</p><div class="tw"><table><tbody><tr><td>stack source, all seven modules</td><td class="n">264 lines</td></tr><tr><td>proof</td><td class="n">3&nbsp;239 lines</td></tr><tr><td>obligations</td><td class="n">2&nbsp;703</td></tr><tr><td>hypotheses per obligation, mean</td><td class="n">369</td></tr><tr><td>hypotheses per obligation, worst</td><td class="n">422</td></tr><tr><td>of those, instantiated copies (one hop or two)</td><td class="n">143</td></tr><tr><td>of those, arrived two hops deep</td><td class="n">71</td></tr><tr><td>context entries walked over the whole run</td><td class="n">999&nbsp;558</td></tr></tbody></table></div><p>Those counts are a property of the corpus, not of a version: they
+are read off the generated obligations, which this series does not change. The next
+table is the part that has a version, and quoting a timing without naming the binary
+that produced it is a mistake this document made until it was caught &mdash; the
+figures below are medians over 3 rounds of the base commit against the branch tip,
+interleaved, one machine, one boot.</p><div class="tw"><table><thead><tr><th></th><th class="n">base commit</th><th class="n">branch tip</th><th class="n"></th></tr></thead><tbody><tr><td>generation</td><td class="n">0.83&nbsp;s</td><td class="n">0.25&nbsp;s</td><td class="mdl">&times;3.3 faster</td></tr><tr><td>preparation</td><td class="n">80.00&nbsp;s</td><td class="n">5.42&nbsp;s</td><td class="mdl">&times;14.8 faster</td></tr><tr><td>proving, four threads</td><td class="n">44.41&nbsp;s</td><td class="n">1.43&nbsp;s</td><td class="mdl">&times;31.1 faster</td></tr><tr><td>peak memory</td><td class="n">1656&nbsp;MB</td><td class="n">60&nbsp;MB</td><td class="mdl">&divide;28</td></tr><tr><td>obligations</td><td class="n">2703</td><td class="n">2703</td><td class="mdl">identical</td></tr></tbody></table></div><p>This is the corpus earning its keep. A 3&nbsp;239-line proof over a stack
+whose own source is 264 lines takes <strong>80&nbsp;s of preparation and
+1.6&nbsp;GB of peak memory on the base commit</strong>, and 5.4&nbsp;s and
+60&nbsp;MB at the tip &mdash; 15&times; and 28&times; on the two quantities the
+series is about. Every obligation is proved on both sides, and the generated
+obligation stream is <strong>byte-identical</strong> between them (82&nbsp;792 lines of
+<code>--printallobs</code> dump compared), which is the subset invariant checked on a
+corpus small enough to check it exactly. <code>harness/instance_demo.sh</code> refuses
+to write the CSV behind these tables if either the gate or that comparison
+fails.</p><p>What the corpus does not reproduce is scale: 2&nbsp;703 obligations against
+the 29&nbsp;965 of the private monolith, and seconds where that file needs an hour. The
+mechanism is faithful and now the cost is too; the size is not, and no synthetic
+corpus of a few thousand lines will be. That is why two of the five corpora in
+&sect;5 are a customer's. This one is the part anyone can run.</p><p>Two hop-depth mistakes are easy to make in a stack like this, and
 <code>instance_demo/CiteTrap.tla</code> is about the first. That stack contains one
 <code>IsFiniteSet</code> &mdash; the standard one, <code>EXTENDS</code>ed once at the
 bottom &mdash; and level&nbsp;2 nonetheless sees three symbols with that body:

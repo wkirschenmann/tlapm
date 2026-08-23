@@ -492,6 +492,7 @@ def _instance_demo():
                  for m in stack)
     words = {5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine"}
     count = words.get(len(stack), str(len(stack)))
+    ab, mn, tp = d["ab"], d["main"], d["tip"]
     per_obl = pr["total_ctx_hyps"] // pr["obligations"]
     inst_obl = pr["frag_one_hop"] // pr["obligations"]
     two_obl = pr["frag_two_hop"] // pr["obligations"]
@@ -573,51 +574,74 @@ costs nothing to carry.</p>""" % (
             ("of those, arrived two hops deep",
              "{:,}".format(two_obl).replace(",", "&nbsp;")),
             ("context entries walked over the whole run",
-             "{:,}".format(pr["total_ctx_hyps"]).replace(",", "&nbsp;")),
-            ("generation / preparation / proving",
-             "%.2f&thinsp;/&thinsp;%.2f&thinsp;/&thinsp;%.2f&nbsp;s"
-             % (pr["gen_ms"] / 1000.0, pr["prep_ms"] / 1000.0,
-                pr["prove_ms"] / 1000.0)),
-            ("peak memory", "%d&nbsp;MB" % (pr["peak_kb"] // 1024))]
+             "{:,}".format(pr["total_ctx_hyps"]).replace(",", "&nbsp;"))]
     c.append('<div class="tw"><table><tbody>')
     for k, v in rows:
         c.append('<tr><td>%s</td><td class="n">%s</td></tr>' % (k, v))
     c.append("</tbody></table></div>")
-    c.append("""<p>Every one of the %s obligations is proved with the stock backends
-&mdash; %s dispatched by tlapm itself, %d by SMT, %d by Zenon &mdash; and
-<code>harness/instance_demo.sh</code> refuses to write the CSV this table is built
-from if any of them fails. A green corpus can be used as a regression fixture; a red
-one cannot, and a document that claims one should not be able to ship the other.</p>
-<p>Two numbers carry the point. A %s-line proof over a stack whose own source is %d
-lines makes tlapm walk <strong>%s context entries</strong> &mdash; %s per obligation,
-of which %d are instantiated copies and %d of those came two hops down. And
-preparation costs <strong>%.2f&nbsp;ms per obligation</strong>, against
-%.2f&nbsp;ms for generation: the work is not in finding the obligations, it is in
-preparing each one against its context.</p>
-<p>That ratio &mdash; preparation costing about %.0f&times; generation &mdash; is the
-mechanism stated as a measurement, and it is why the changes in this series cluster in
-preparation rather than in generation. An earlier draft of this corpus
-used one-line predicates and prepared visibly faster per obligation; the number is not
-quoted here because that draft also differed in proof structure, so the comparison
-would confound definition weight with tree shape. What can be said without a
-confound is that this corpus was rewritten to carry invariants of a realistic weight
-precisely because the light version was measuring the wrong thing.</p>
-<p>What the corpus still does not reproduce is the wall: everything here finishes in
-seconds and peak memory stays around %d&nbsp;MB. The mechanism is faithful, the scale
-is not, and no synthetic corpus of a few thousand lines will be &mdash; which is why
-two of the five corpora in &sect;5 are a customer's and cannot be published. This one
-publishes the mechanism.</p>""" % (
-        "{:,}".format(pr["obligations"]).replace(",", "&nbsp;"),
-        "{:,}".format(pr["trivial"]).replace(",", "&nbsp;"),
-        pr["smt"], pr["zenon"],
+    c.append("""<p>Those counts are a property of the corpus, not of a version: they
+are read off the generated obligations, which this series does not change. The next
+table is the part that has a version, and quoting a timing without naming the binary
+that produced it is a mistake this document made until it was caught &mdash; the
+figures below are medians over %d rounds of the base commit against the branch tip,
+interleaved, one machine, one boot.</p>""" % ab["reps"])
+    tr = [("generation", "gen_ms", 1000.0, "%.2f&nbsp;s"),
+          ("preparation", "prep_ms", 1000.0, "%.2f&nbsp;s"),
+          ("proving, four threads", "prove_ms", 1000.0, "%.2f&nbsp;s"),
+          ("peak memory", "peak_kb", 1024.0, "%.0f&nbsp;MB"),
+          ("obligations", "obligations", 1.0, "%.0f")]
+    c.append('<div class="tw"><table><thead><tr><th></th>'
+             '<th class="n">base commit</th><th class="n">branch tip</th>'
+             '<th class="n"></th></tr></thead><tbody>')
+    for label, key, div, fmt in tr:
+        a, b = mn[key] / div, tp[key] / div
+        if key == "obligations":
+            note = "identical" if mn[key] == tp[key] else "DIFFER"
+        elif b <= 0 or a <= 0:
+            note = "&mdash;"
+        elif b < a:
+            note = "&times;%.1f faster" % (a / b) if key != "peak_kb" \
+                   else "&divide;%.0f" % (a / b)
+        else:
+            note = "&times;%.2f slower" % (b / a)
+        c.append('<tr><td>%s</td><td class="n">%s</td><td class="n">%s</td>'
+                 '<td class="mdl">%s</td></tr>'
+                 % (label, fmt % a, fmt % b, note))
+    c.append("</tbody></table></div>")
+    gen_slower = tp["gen_ms"] > mn["gen_ms"]
+    c.append("""<p>This is the corpus earning its keep. A %s-line proof over a stack
+whose own source is %d lines takes <strong>%.0f&nbsp;s of preparation and
+%.1f&nbsp;GB of peak memory on the base commit</strong>, and %.1f&nbsp;s and
+%.0f&nbsp;MB at the tip &mdash; %s&times; and %s&times; on the two quantities the
+series is about. Every obligation is proved on both sides, and the generated
+obligation stream is <strong>byte-identical</strong> between them (%s lines of
+<code>--printallobs</code> dump compared), which is the subset invariant checked on a
+corpus small enough to check it exactly. <code>harness/instance_demo.sh</code> refuses
+to write the CSV behind these tables if either the gate or that comparison
+fails.</p>""" % (
         "{:,}".format(pr["lines"]).replace(",", "&nbsp;"), pr["stack_lines"],
-        "{:,}".format(pr["total_ctx_hyps"]).replace(",", "&nbsp;"),
-        "{:,}".format(per_obl).replace(",", "&nbsp;"),
-        inst_obl, two_obl,
-        pr["prep_ms"] / float(pr["obligations"]),
-        pr["gen_ms"] / float(pr["obligations"]),
-        pr["prep_ms"] / float(pr["gen_ms"]),
-        pr["peak_kb"] // 1024))
+        mn["prep_ms"] / 1000.0, mn["peak_kb"] / 1048576.0,
+        tp["prep_ms"] / 1000.0, tp["peak_kb"] / 1024.0,
+        "%.0f" % (mn["prep_ms"] / float(tp["prep_ms"])),
+        "%.0f" % (mn["peak_kb"] / float(tp["peak_kb"])),
+        "{:,}".format(ab["golden_lines"]).replace(",", "&nbsp;")))
+    if gen_slower:
+        c.append("""<p>One metric moves the wrong way, and it is left in rather than
+dropped: <strong>generation is %.0f&nbsp;%% slower at the tip</strong> on this corpus
+(%.2f&nbsp;s against %.2f). Generation is the cheapest of the three by an order of
+magnitude and the regression is a fraction of a second against %.0f&nbsp;s recovered
+in preparation, so it is a trade this series takes knowingly &mdash; but a document
+that only reported the ratios that flatter it would not be worth reading.</p>"""
+                 % (100.0 * (tp["gen_ms"] - mn["gen_ms"]) / mn["gen_ms"],
+                    tp["gen_ms"] / 1000.0, mn["gen_ms"] / 1000.0,
+                    (mn["prep_ms"] - tp["prep_ms"]) / 1000.0))
+    c.append("""<p>What the corpus does not reproduce is scale: %s obligations against
+the %s of the private monolith, and seconds where that file needs an hour. The
+mechanism is faithful and now the cost is too; the size is not, and no synthetic
+corpus of a few thousand lines will be. That is why two of the five corpora in
+&sect;5 are a customer's. This one is the part anyone can run.</p>""" % (
+        "{:,}".format(pr["obligations"]).replace(",", "&nbsp;"),
+        "{:,}".format(L.OBL["mono"]).replace(",", "&nbsp;")))
 
     c.append("""<p>Two hop-depth mistakes are easy to make in a stack like this, and
 <code>instance_demo/CiteTrap.tla</code> is about the first. That stack contains one

@@ -8,17 +8,41 @@
 # L2Proofs.tla is the level-2 proof: what those copies cost once a proof cites
 # them, plus the proof's own totals.
 #
-# Run this on an idle machine.  The counts are deterministic; the four timings
-# are not, and this must never share cores with a timing campaign.
+# THREE BINARIES, and which one produced what matters.
 #
-# Requires the TLAPM_TRACE_DEFS probe, which lives on the documentation branch,
-# not on the proposal branch being measured.
+#   TLAPM       carries the TLAPM_TRACE_DEFS probe, which lives on the
+#               documentation branch.  Used ONLY for the deterministic context
+#               counts, never for a timing.
+#   TLAPM_MAIN  built from the base commit.
+#   TLAPM_TIP   built from the tip of the proposal branch.
+#
+# The timings come from those last two, A/B interleaved over $REPS rounds and
+# reported as medians, because a timing is only comparable against another
+# timing from the same boot on the same machine.  The published table quoted a
+# single unnamed binary before -- the documentation branch's, which is not a
+# point on any curve in the document -- which is exactly the kind of number
+# this script now refuses to produce.
+#
+# The obligation stream is compared between the two as well: the series claims
+# provers receive a subset and that generation is unchanged, and this corpus is
+# small enough to check that claim byte for byte.
+#
+# Run this on an idle machine.  The counts are deterministic; the timings are
+# not, and this must never share cores with another timing campaign.
 set -eu
 R=$(cd "$(dirname "$0")/../../../.." && pwd)
 D=$R/doc/perf/short/instance_demo
 H=$R/doc/perf/short/harness
 T=${TLAPM:-$R/_build/default/src/tlapm.exe}
+TMAIN=${TLAPM_MAIN:-}
+TTIP=${TLAPM_TIP:-}
 LIB=${TLAPM_LIB:-$R/_build/default/library}
+REPS=${REPS:-3}
+[ -n "$TMAIN" ] && [ -n "$TTIP" ] || {
+  echo "Set TLAPM_MAIN and TLAPM_TIP to binaries built from the base commit and"
+  echo "from the branch tip.  Without both there is no comparison to publish,"
+  echo "and a lone timing from an unnamed binary is what this script exists to"
+  echo "stop producing."; exit 2; }
 OUT=$R/doc/perf/short/instance_demo.csv
 LEMMAS=${LEMMAS:-40}
 STACK="L0State L0 L0Theorems L1State L1 L1Theorems L2"
@@ -98,20 +122,78 @@ OBL=$1
 
 # The proving run doubles as the corpus's own gate: the document says every
 # obligation is proved, so the counts come out of the run that proves them.
-PROVE=$(ms timeout 1800 $T -I $LIB -I . --toolbox 0 0 --threads 4 L2Proofs.tla)
+# It runs on the TIP binary -- the corpus is a fixture for the series, and what
+# has to be green is the series.
 rm -rf $D/.tlacache
-$T -I $LIB -I . --toolbox 0 0 --threads 4 L2Proofs.tla > $D/prove.log 2>&1 || true
+$TTIP -I $LIB -I . --toolbox 0 0 --threads 4 L2Proofs.tla > $D/prove.log 2>&1 || true
 { echo "proofs,trivial,$(grep -cE '^@!!status:trivial' $D/prove.log)"
   echo "proofs,smt,$(grep -cE '^@!!prover:smt' $D/prove.log)"
   echo "proofs,zenon,$(grep -cE '^@!!prover:zenon' $D/prove.log)"
-  echo "proofs,gen_ms,$(ms $T -I $LIB -I . -N --nofp L2Proofs.tla)"
-  echo "proofs,prep_ms,$(ms $T -I $LIB -I . --noproving --nofp L2Proofs.tla)"
-  echo "proofs,prove_ms,$PROVE"
 } >> $OUT
-rm -rf $D/.tlacache
-PK=$( { /usr/bin/time -f "%M" $T -I $LIB -I . --noproving --nofp L2Proofs.tla >/dev/null; } 2>&1 | tail -1)
-echo "proofs,peak_kb,$PK" >> $OUT
 fail=$(grep -cE '^@!!status:failed' $D/prove.log || true)
-rm -f $D/prove.log; rm -rf $D/.tlacache
+rm -f $D/prove.log
 [ "$fail" = 0 ] || { echo "REFUSING: $fail obligations failed -- the document claims none do"; exit 1; }
+
+# --- timings: base commit against branch tip, interleaved, medians ----------
+ms () { local t0=$(date +%s%N); rm -rf $D/.tlacache; "$@" >/dev/null 2>&1 || true
+        echo $(( ($(date +%s%N)-t0)/1000000 )); }
+med () { printf '%s\n' "$@" | sort -n | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}'; }
+declare -A acc
+for rep in $(seq 1 $REPS); do
+  for side in main tip; do
+    [ $side = main ] && B=$TMAIN || B=$TTIP
+    g=$(ms $B -I $LIB -I . -N --nofp L2Proofs.tla)
+    p=$(ms $B -I $LIB -I . --noproving --nofp L2Proofs.tla)
+    rm -rf $D/.tlacache
+    t0=$(date +%s%N)
+    timeout 2400 $B -I $LIB -I . --toolbox 0 0 --threads 4 L2Proofs.tla \
+        > $D/ab.log 2>&1 || true
+    v=$(( ($(date +%s%N)-t0)/1000000 ))
+    o=$(grep -cE '^@!!status:(proved|trivial|failed)' $D/ab.log)
+    rm -f $D/ab.log; rm -rf $D/.tlacache
+    k=$( { /usr/bin/time -f "%M" $B -I $LIB -I . --noproving --nofp L2Proofs.tla \
+             >/dev/null; } 2>&1 | tail -1)
+    acc[$side.gen]="${acc[$side.gen]:-} $g"
+    acc[$side.prep]="${acc[$side.prep]:-} $p"
+    acc[$side.prove]="${acc[$side.prove]:-} $v"
+    acc[$side.peak]="${acc[$side.peak]:-} $k"
+    acc[$side.obl]="${acc[$side.obl]:-} $o"
+    echo "  [$side rep$rep] gen=${g}ms prep=${p}ms prove=${v}ms peak=$((k/1024))MB obl=$o"
+  done
+done
+echo "ab,reps,$REPS" >> $OUT
+for side in main tip; do
+  for f in gen prep prove peak obl; do
+    case $f in
+      peak) u=peak_kb ;;
+      obl)  u=obligations ;;
+      *)    u=${f}_ms ;;
+    esac
+    echo "$side,$u,$(med ${acc[$side.$f]})" >> $OUT
+  done
+done
+
+# --- the subset invariant, on this corpus, byte for byte --------------------
+for side in main tip; do
+  [ $side = main ] && B=$TMAIN || B=$TTIP
+  rm -rf $D/.tlacache
+  # Strip the timings, the prover names -- and the banner: tlapm opens its
+  # output with its version, the launch time and the full command line, so a
+  # comparison that keeps those lines always differs, on the timestamp and on
+  # the path of the binary being compared.  That false positive cost a whole
+  # twelve-minute run.
+  $B -I $LIB -I . -N --toolbox 0 0 --printallobs --nofp L2Proofs.tla 2>&1 \
+    | grep -vE '^@!!(time-used|prover|meth|already|reason):' \
+    | grep -vE '^\\\*' > $D/dump_$side.txt
+done
+if diff -q $D/dump_main.txt $D/dump_tip.txt >/dev/null; then
+  echo "ab,golden_identical,1" >> $OUT
+  echo "ab,golden_lines,$(wc -l < $D/dump_main.txt)" >> $OUT
+  echo "GOLDEN_IDENTICAL ($(wc -l < $D/dump_main.txt) lines)"
+else
+  echo "GOLDEN DIFFERS -- refusing to write, the series claims it does not"
+  diff $D/dump_main.txt $D/dump_tip.txt | head -20
+  rm -f $D/dump_main.txt $D/dump_tip.txt; exit 1
+fi
+rm -f $D/dump_main.txt $D/dump_tip.txt; rm -rf $D/.tlacache
 echo "--- $OUT"; cat $OUT

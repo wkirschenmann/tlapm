@@ -380,11 +380,14 @@ def ratio(a, b):
     return a / float(b)
 
 def load_instance_demo(path=None):
-    """The INSTANCE demo readings: the Ladder context table and the level-2
-    proof module's totals.  A flat kind/key/value file because the two halves
-    are shaped differently and neither is a time series.  Counts here are
-    deterministic; the four timings are not, and are only ever quoted as
-    orders of magnitude for that reason."""
+    """The INSTANCE demo readings, as kind/key/value because the halves are
+    shaped differently and none is a time series.
+
+    Kinds: 'ladder*' the context table; 'proofs' the level-2 proof module's
+    deterministic counts, produced by the probe-carrying binary; 'main' and
+    'tip' its timings, medians over 'ab,reps' interleaved rounds of the base
+    commit against the branch tip; 'ab' the run's own metadata, including
+    whether the two obligation streams came out byte-identical."""
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "instance_demo.csv")
     out = {}
