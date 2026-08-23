@@ -843,6 +843,41 @@ def _estimator_record():
             % (body, tail))
 
 
+def _same_wall():
+    """Do the aborts land at one resident set, or at several?
+
+    It is the difference between a wall and a slope, and the chart cannot show it --
+    every cross sits on the cap line by construction.  So say it: if the refusals
+    happen at the same reading each time, the binding constraint is the cap and the
+    failure is one failure, not a family of them.
+    """
+    best = None
+    for cp in L.CORPORA:
+        at = [v["at"] for v in peak(cp).values()
+              if isinstance(v, dict) and v.get("kind") == "OOM" and v.get("at")]
+        if len(at) > 1 and (best is None or len(at) > len(best[1])):
+            best = (cp, at)
+    if not best:
+        return ""
+    cp, at = best
+    lo, hi = min(at), max(at)
+    spread = (hi - lo) / hi * 100
+    where = CORPUS_NAME.get(cp, cp)
+    if spread > 2.0:
+        return (" The %d refusals on the %s land between %.2f and %.2f&nbsp;GB, so the "
+                "commits differ in how much they hold when the cap stops them."
+                % (len(at), where, lo, hi))
+    return (" The crosses carry one more fact the chart cannot show, because every "
+            "cross sits on the cap line by construction: the %d refusals on the %s "
+            "happen at the <strong>same</strong> resident set, %.2f&nbsp;GB, within "
+            "%.2f&nbsp;%%. The cap is on address space and the reading is the resident "
+            "set, which is why it is a little under 12&nbsp;GB; that it is the same "
+            "figure every time is the point. These commits do not fail at four "
+            "different memory profiles &mdash; they fail at one wall, and what "
+            "separates them is only how long they take to reach it."
+            % (len(at), where, hi, spread))
+
+
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
 ORACLE, ORACLE_NEXT = "p14", "p15"
 
@@ -1016,7 +1051,8 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     + _pending_sentence() + " Where a ring sits says what little is known: on the cap "
     "line it was holding a large share of the cap and still climbing, below the cap it "
     "was merely slow and sits at the peak it had reached. Neither is a figure to quote. "
-    "The distinction the chart is really about is the pull request in the middle: to "
+    + _same_wall() +
+    " The distinction the chart is really about is the pull request in the middle: to "
     "its left the failure is memory, to its right it is only time.",
     rule=(12.0, "12 GB address-space cap")))
 
