@@ -994,6 +994,54 @@ def _same_wall():
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
 
 
+def fmt_secs(v):
+    """Seconds, at a precision the value deserves.
+
+    This figure spans five orders of magnitude -- 2 ms on the 71-obligation control
+    against two minutes on the 30k-line monolith -- so one format cannot serve it.
+    A fixed "%.1f s" printed the control's end label as "0.0 s", which reads as zero
+    rather than as small.
+    """
+    if v < 0.01:
+        return "%.1f ms" % (v * 1000)
+    if v < 1:
+        return "%d ms" % round(v * 1000)
+    if v < 100:
+        return "%.1f s" % v
+    return "%d s" % round(v)
+
+
+def _worst_case_steps():
+    """Where the wait actually goes, on the corpus where it is worst.
+
+    The rest of this caption reads the refinement chain, because that is where the
+    last four commits are separable.  But the largest waits on this chart are the
+    monolith's, and the commit that moves them most is not the one the chain's ranges
+    are about -- so the caption would otherwise discuss the smaller of the two.
+    """
+    cp = _worst_keystroke()
+    if not cp:
+        return ""
+    v = [(pt, keys[(cp, pt)][0]) for pt in L.POINTS if (cp, pt) in keys]
+    if len(v) < 3:
+        return ""
+    steps, prev = [], None
+    for pt, x in v:
+        if prev and prev[1] / x > 1.15:
+            steps.append((C.LABELS[pt][0], prev[1], x, prev[1] / x))
+        prev = (pt, x)
+    if not steps:
+        return ""
+    name = CORPUS_NAME.get(cp, cp)
+    lead = (" The largest waits on this chart are the %s&rsquo;s, %s on <code>main</code> "
+            "for a single typed character, and they fall in %s: %s."
+            % (name, fmt_secs(v[0][1]),
+               "one step" if len(steps) == 1 else "%d steps" % len(steps),
+               "; ".join("<code>%s</code>, %s to %s, &times;%.1f"
+                         % (lab, fmt_secs(a), fmt_secs(b), r) for lab, a, b, r in steps)))
+    return lead
+
+
 def _worst_keystroke():
     """The corpus whose keystroke costs most on main, and name it.
 
@@ -1227,8 +1275,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "Seconds. This is the loop a user sits in, not a batch run.",
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
-    IT, "s",
-    lambda v: "%.1f s" % v if v < 100 else "%.0f s" % v,
+    IT, "s", fmt_secs,
     _iter_caption(),
     series=_series_for(IT)))
 
@@ -1239,7 +1286,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
         "<code>publishDiagnostics</code> that answers it, measured by a client speaking "
         "the LSP protocol. Seconds.",
         "Keystroke to diagnostics latency per commit, one series per corpus measured.",
-        KS, "s", lambda v: "%.1f s" % v,
+        KS, "s", fmt_secs,
         _keystroke_caption(),
         series=_series_for(KS)))
     return "".join(c)
@@ -1253,7 +1300,8 @@ def _keystroke_caption():
     have = [pt for pt in tail if pt in rng]
     base = ("After the deque, this is the only metric the last pull requests move at "
             "all, and it is why they are in the series: none of them touches the "
-            "per-obligation preparation loop, so on every other chart they are flat.")
+            "per-obligation preparation loop, so on every other chart they are flat."
+            + _worst_case_steps())
     if len(have) < 2:
         return base
     pairs = []
