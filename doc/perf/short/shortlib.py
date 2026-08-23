@@ -221,10 +221,23 @@ def load_iteration_latency(path=None, boot=None):
         rep[k] = r["_obl"]
     if not boots:
         return {}, None
-    boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
+    # The boot is chosen per corpus, for the same reason the sweep chooses it per
+    # chart line: a line is one (metric, corpus) pair and comparability only has to
+    # hold within a line.  Choosing one boot for the whole file would let a freshly
+    # measured corpus evict a complete line measured on an earlier one.
+    if boot:
+        line_boot = {cp: boot for _, cp, _ in runs}
+    else:
+        tally = collections.Counter((cp, b) for b, cp, _ in runs)
+        line_boot = {}
+        for (cp, b), n in tally.items():
+            if cp not in line_boot or n > tally[(cp, line_boot[cp])]:
+                line_boot[cp] = b
+    boot = max(collections.Counter(line_boot.values()).items(),
+               key=lambda kv: kv[1])[0] if line_boot else None
     out = {}
     for (b, cp, pt), v in runs.items():
-        if b != boot:
+        if b != line_boot.get(cp):
             continue
         if any(rc == 124 for _, rc in v):
             # keep the wall clock the ceiling was hit at, so the point can be drawn
