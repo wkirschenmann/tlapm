@@ -235,6 +235,19 @@ def iters(cp):
     return d
 
 
+def _series_for(values):
+    """The chart's legend, derived from the data it was handed.
+
+    Hardcoding it is how a chart comes to lag behind its own measurements: the
+    keystroke figure listed one corpus because that is all there had ever been, so
+    measuring a second would have changed the CSV and nothing on the page.  Filtering
+    the standard series order by what actually has points keeps the two in step, and
+    keeps hue and dash meaning the same thing on every chart.
+    """
+    return [t for t in C.SERIES
+            if any(v is not None for v in (values.get(t[1]) or {}).values())]
+
+
 def keyser():
     """One series per corpus that has keystroke data, in the chart's usual order."""
     return {cp: {pt: (keys[(cp, pt)][0] if (cp, pt) in keys else None)
@@ -1186,27 +1199,28 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "keystroke: the linear <code>ENABLED</code> scan and the memoized grammar do "
     "nothing to per-obligation preparation, because neither runs in that loop."))
 
+    IT = {cp: iters(cp) for cp in L.CORPORA}
     c.append(fig(
     "Iteration latency &mdash; the wait after one edit",
     "Warm prover, every fingerprint already in the cache, one proof step changed. "
     "Seconds. This is the loop a user sits in, not a batch run.",
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
-    {"synth300": iters("synth300"), "ffi": iters("ffi")}, "s",
+    IT, "s",
     lambda v: "%.1f s" % v if v < 100 else "%.0f s" % v,
     _iter_caption(),
-    series=[("public synthetic, 1 800", "synth300", C.PUB, None),
-            ("private refinement chain", "ffi", C.PRIV, "5 3")]))
+    series=_series_for(IT)))
 
+    KS = keyser()
     c.append(fig(
         "Keystroke to diagnostics, in the editor",
         "Time from the <code>didChange</code> notification to the "
         "<code>publishDiagnostics</code> that answers it, measured by a client speaking "
         "the LSP protocol. Seconds.",
-        "Keystroke to diagnostics latency per commit on the private refinement chain.",
-        keyser(), "s", lambda v: "%.1f s" % v,
+        "Keystroke to diagnostics latency per commit, one series per corpus measured.",
+        KS, "s", lambda v: "%.1f s" % v,
         _keystroke_caption(),
-        series=[("private refinement chain", "ffi", C.PRIV, "5 3")]))
+        series=_series_for(KS)))
     return "".join(c)
 
 
