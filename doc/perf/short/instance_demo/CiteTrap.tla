@@ -23,6 +23,12 @@
 (* neither can be refuted, and the search simply runs out the clock.  The *)
 (* symptom then reads as a prover too weak for the goal.  The cause is a  *)
 (* name.                                                                 *)
+(*                                                                       *)
+(* THIS MODULE IS EXPECTED TO REPORT ONE FAILED OBLIGATION.  CitesWrong    *)
+(* failing is the demonstration; a run where all 26 pass would mean the    *)
+(* corpus had stopped showing anything.  It is deliberately NOT part of    *)
+(* what harness/instance_demo.sh gates -- that gate covers L2Proofs.tla,   *)
+(* which must be entirely green.                                          *)
 (***************************************************************************)
 
 EXTENDS L2, TLAPS
@@ -31,28 +37,32 @@ EXTENDS L2, TLAPS
 LEMMA AsmWrong ==
     /\ "none" \notin Ids
     /\ L1!L0!IsFiniteSet(Ids)
+    /\ L1!IsFiniteSet(Slots) /\ Slots # {}
     /\ L1!IsFiniteSet(Buffers) /\ Buffers # {}
-    BY NoneNotAnId, FiniteIds, FiniteBuffers, Zenon
+    /\ Ceiling \in Nat \ {0}
+    BY NoneNotAnId, FiniteIds, FiniteSlots, FiniteBuffers, CeilingPositive, Zenon
     DEF L1!L0!IsFiniteSet, L1!IsFiniteSet, IsFiniteSet
 
 \* Right: one hop, matching what L1Theorems' own assumptions became.
 LEMMA AsmRight ==
     /\ "none" \notin Ids
     /\ L1!IsFiniteSet(Ids)
+    /\ L1!IsFiniteSet(Slots) /\ Slots # {}
     /\ L1!IsFiniteSet(Buffers) /\ Buffers # {}
-    BY NoneNotAnId, FiniteIds, FiniteBuffers, Zenon
+    /\ Ceiling \in Nat \ {0}
+    BY NoneNotAnId, FiniteIds, FiniteSlots, FiniteBuffers, CeilingPositive, Zenon
     DEF L1!IsFiniteSet, IsFiniteSet
 
-THEOREM CitesWrong == L1!IndInv => L1!Invariant
-    BY AsmWrong, L1!IndInvImpliesInvariant, Zenon
+THEOREM CitesWrong == L1!IndInv => L1!SafetyCore
+    BY AsmWrong, L1!IndInvImpliesSafetyCore, Zenon
 
-THEOREM CitesRight == L1!IndInv => L1!Invariant
-    BY AsmRight, L1!IndInvImpliesInvariant, Zenon
+THEOREM CitesRight == L1!IndInv => L1!SafetyCore
+    BY AsmRight, L1!IndInvImpliesSafetyCore, Zenon
 
 \* The escape hatch, for when the right name is not obvious: unfold both
 \* copies at the citation and let the prover bridge them itself.  It works,
 \* and it costs -- the two definitions enter the obligation expanded.
-THEOREM CitesBridged == L1!IndInv => L1!Invariant
-    BY AsmWrong, L1!IndInvImpliesInvariant, Zenon
+THEOREM CitesBridged == L1!IndInv => L1!SafetyCore
+    BY AsmWrong, L1!IndInvImpliesSafetyCore, Zenon
     DEF L1!IsFiniteSet, L1!L0!IsFiniteSet
 =====================================================================
