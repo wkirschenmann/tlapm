@@ -36,18 +36,36 @@ for r in csv.DictReader(open(out)):
     if r["corpus"] == "synth300" and int(r["prep_rc"]) == 0:
         sy[r["point"]] = int(r["prep_ms"]) / 1000.0
     if r["corpus"] == "ffi":
-        ch[r["point"]] = (int(r["prep_ms"]) / 1000.0, int(r["prep_rc"]))
-done = [(p, v) for p, (v, rc) in sorted(ch.items()) if rc == 0]
+        ch[r["point"]] = (int(r["prep_ms"]) / 1000.0, int(r["prep_rc"]),
+                          int(r["peak_kb"]))
+done = [(p, v) for p, (v, rc, _) in sorted(ch.items()) if rc == 0]
 if not done:
     sys.exit(0)
 ref_p, ref_v = done[0]                      # lowest-numbered completing point
+CAP_KB = 12000000
 run = []
-for p in sorted((p for p, (_, rc) in ch.items() if rc == 124), reverse=True):
-    if p not in sy or ref_p not in sy:
+for p in sorted((p for p, (_, rc, _k) in ch.items() if rc == 124), reverse=True):
+    # Two ways a longer clock can end this run, and either one resolves the point.
+    #   completion: estimated from the ratio between the same two commits on the
+    #     public corpus, where nothing fails;
+    #   memory abort: the run was stopped mid-growth with a known resident set, so
+    #     extrapolating that growth says roughly when it would reach the cap.
+    # A point heading for the cap reaches its terminal state well before it would
+    # have finished, and that terminal state is the one worth having -- it puts the
+    # cross on the cap line instead of at whatever the clock happened to interrupt.
+    est_done = ref_v * sy[p] / sy[ref_p] if (p in sy and ref_p in sy) else None
+    t, _rc, pk = ch[p]
+    est_oom = t * CAP_KB / float(pk) if pk else None
+    cands = [(e, w) for e, w in ((est_done, "completion"), (est_oom, "memory abort")) if e]
+    if not cands:
         continue
-    est = ref_v * sy[p] / sy[ref_p]
+    est, why = min(cands)
     ok = est <= 0.9 * budget
-    print("%s estimated %.0f s -- %s" % (p, est, "run" if ok else "skip, over budget"),
+    print("%s: completion ~%s, abort ~%s -> expect %s at ~%.0f s -- %s"
+          % (p,
+             "%.0f s" % est_done if est_done else "?",
+             "%.0f s" % est_oom if est_oom else "?",
+             why, est, "run" if ok else "skip, over budget"),
           file=sys.stderr)
     if ok:
         run.append(p)
