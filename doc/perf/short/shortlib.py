@@ -203,15 +203,23 @@ def load_iteration_latency(path=None, boot=None):
     # An interrupted run is indistinguishable from a fast one by its exit status:
     # tlapm handles SIGTERM by shutting its provers down, printing the verdicts it
     # already had and exiting 0.  A container restart or the OOM killer produces the
-    # same shape.  What gives it away is the obligation count -- a real run of a
-    # corpus reports the same number every time -- so a row that reports materially
-    # fewer than that corpus's usual count is dropped rather than averaged in.
+    # same shape.  What gives it away is the obligation count: a run that COMPLETES a
+    # corpus reports the same number every time, so one that claims success with
+    # materially fewer is a run that was stopped and reported what it had.
+    #
+    # The check applies only to rows claiming success.  A row stopped by the clock is
+    # expected to report a partial count -- that is what being stopped means -- and an
+    # earlier version of this guard, which checked every row, threw away the very
+    # timeouts the charts need in order to draw a ring.
+    done = [r for r in raw if int(r["rc"]) == 0]
     usual = {}
-    for cp in {r["_cp"] for r in raw}:
-        counts = collections.Counter(r["_obl"] for r in raw if r["_cp"] == cp)
+    for cp in {r["_cp"] for r in done}:
+        counts = collections.Counter(r["_obl"] for r in done if r["_cp"] == cp)
         usual[cp] = max(counts, key=lambda n: (counts[n], n))
-    short = [r for r in raw if r["_obl"] < 0.9 * usual[r["_cp"]]]
-    raw = [r for r in raw if r not in short]
+    def truncated(r):
+        return (int(r["rc"]) == 0 and r["_cp"] in usual
+                and r["_obl"] < 0.9 * usual[r["_cp"]])
+    raw = [r for r in raw if not truncated(r)]
     runs, boots = collections.defaultdict(list), set()
     rep = {}
     for r in raw:
