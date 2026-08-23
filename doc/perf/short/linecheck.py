@@ -125,13 +125,42 @@ def check_demo_readme():
             for s, why in want if s not in txt]
 
 
+def check_sixth_corpus():
+    """Would the generator survive the next corpus getting measurements?
+
+    Every corpus label lived in three places -- two constants and one inline
+    dict -- and all three would have raised KeyError the moment a sixth corpus
+    had rows in the sweep.  That is a crash the reader meets before the author
+    does, so it is checked here rather than discovered there: the whole
+    CORPUS_ORDER is forced on, the document is built to a scratch path, and any
+    exception is the finding.
+    """
+    import importlib, tempfile, os as _os
+    saved = L.CORPORA
+    try:
+        L.CORPORA = list(L.CORPUS_ORDER)
+        M = importlib.import_module("mkshort")
+        out = M.OUT
+        try:
+            M.OUT = _os.path.join(tempfile.gettempdir(), "linecheck_preflight.html")
+            M.build()
+        finally:
+            M.OUT = out
+    except Exception as e:
+        return ["CANNOT BUILD with every corpus in CORPUS_ORDER measured: %s: %s"
+                % (type(e).__name__, e)]
+    finally:
+        L.CORPORA = saved
+    return []
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:

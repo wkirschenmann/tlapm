@@ -25,33 +25,51 @@ keys, kboot = L.load_keystroke()
 # §1, and why it is on the curves at all.  Both tables iterate L.CORPORA, so a
 # corpus that has no measurements does not appear -- and one that does appear
 # cannot appear unlabelled.
+# (kind, the name used in the narrative table of §1, the short name used in
+# the dense per-commit tables, why it is on the curves at all)
 CORPUS_META = {
-    "tiny": ("public synthetic, small", "a small module",
+    "tiny": ("public synthetic, small", "a small module", "small",
              "the control: it must not get slower, and it is on every chart to"
              " show that it does not"),
     "synth100": ("public synthetic, medium", "a 600-obligation synthetic module",
+                 "600",
                  "the small end of the growth curve, where <code>main</code> is"
                  " still comfortable"),
     "synth300": ("public synthetic, large",
-                 "a 1&nbsp;800-obligation synthetic module",
+                 "a 1&nbsp;800-obligation synthetic module", "1 800",
                  "the flat public corpus large enough to show the growth, and the"
                  " one every ratio in &sect;6 is quoted on"),
     "idemo": ("public refinement stack",
-              "a public three-level refinement stack",
+              "a public three-level refinement stack", "stack",
               "the public corpus that reaches the regime the private two are here"
               " for: a nested-INSTANCE stack whose 3&nbsp;239-line proof costs"
               " <code>main</code> 80&nbsp;s and 1.6&nbsp;GB. It is in this"
               " repository, so every number on its line can be re-run and"
               " disputed &mdash; see &sect;2"),
     "ffi": ("private refinement chain",
-            "a private refinement chain",
+            "a private refinement chain", "chain",
             "a real INSTANCE-heavy refinement chain: the shape this series is"
             " aimed at"),
-    "mono": ("private monolith", "a private 30k-line monolith",
+    "mono": ("private monolith", "a private 30k-line monolith", "monolith",
              "a real 30k-line monolith: the specification <code>main</code>"
              " cannot prepare at all"),
 }
 NUMWORD = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven"}
+
+# Three things have to agree about which corpora exist: this table, the
+# obligation counts, and the campaign's order.  When they did not, the symptom
+# was a bare KeyError from inside a dict comprehension at import time, several
+# frames away from the table that was actually wrong.  Say it plainly instead.
+_missing = [cp for cp in L.CORPUS_ORDER if cp not in CORPUS_META]
+_extra = [cp for cp in CORPUS_META if cp not in L.CORPUS_ORDER]
+_uncounted = [cp for cp in CORPUS_META if cp not in L.OBL]
+if _missing or _extra or _uncounted:
+    raise SystemExit(
+        "mkshort: the corpus tables disagree.\n"
+        "  in shortlib.CORPUS_ORDER but unlabelled here: %s\n"
+        "  labelled here but unknown to the campaign:    %s\n"
+        "  labelled here but absent from shortlib.OBL:   %s"
+        % (_missing or "none", _extra or "none", _uncounted or "none"))
 
 
 def points():
@@ -809,7 +827,7 @@ def sec_method():
     c.append('<div class="scroller"><table><thead><tr><th>corpus</th>'
              '<th class="num">obligations</th><th>why it is here</th></tr></thead><tbody>')
     for cp in L.CORPORA:
-        kind, _, why = CORPUS_META[cp]
+        kind, _, _short, why = CORPUS_META[cp]
         c.append('<tr><td class="num">%s</td><td class="num">%s</td>'
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
                  % (kind,
@@ -932,8 +950,7 @@ def _noise_sentence():
             e = (abs(pa - pb) / float(max(pa, pb)) * 100
                  if isinstance(pa, int) and isinstance(pb, int) and max(pa, pb) else None)
             parts.append("%s %.1f&nbsp;%%%s" % (
-                {"tiny": "small", "synth100": "600", "synth300": "1 800",
-                 "ffi": "chain", "mono": "monolith"}[cp], d,
+                SHORT_CP[cp], d,
                 "" if e is None else " (memory %.2f&nbsp;%%)" % e))
     if not parts:
         return ""
@@ -1643,10 +1660,16 @@ def sec_perpr():
     return "".join(c)
 
 
-SHORT_CP = {"tiny": "small", "synth100": "600", "synth300": "1 800",
-            "ffi": "chain", "mono": "monolith"}
-LONG_CP = {"tiny": "small", "synth100": "600", "synth300": "1 800",
-           "ffi": "chain, 9 967", "mono": "monolith, 29 965"}
+# Derived, not repeated.  There used to be three copies of this mapping -- two
+# constants and one inline -- and all three would have raised KeyError the
+# moment a sixth corpus had measurements, which is a crash the reader would
+# have met before I did.
+SHORT_CP = {cp: m[2] for cp, m in CORPUS_META.items()}
+# The long form appends the obligation count, except where the short name IS
+# the count already.
+LONG_CP = {cp: (n if n.replace(" ", "").isdigit()
+                else "%s, %s" % (n, "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;")))
+           for cp, n in SHORT_CP.items()}
 
 
 def _cm_table(cm):
