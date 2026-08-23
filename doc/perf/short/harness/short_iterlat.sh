@@ -49,7 +49,12 @@ for p in $ALL; do
 done
 echo ITER_SYNTH_DONE
 
-# --- private refinement chain, 3773 obligations in the failure-free span, 2 runs, 1800 s ceiling
+# --- private refinement chain, 3773 obligations in the measured span, 2 runs, 1800 s ceiling
+# The span is not failure-free -- 641 of the 10031 obligations in the cold pass are
+# discharged by no prover, so every warm run re-attempts them.  That is a constant
+# added to every point of the series, identical across commits, so it does not touch
+# a ratio; it does inflate the absolute figure, and an earlier comment here claimed
+# the opposite.
 for q in $CHAIN_PTS; do
   for p in $ALL; do [ "${p%%:*}" = "$q" ] && { n=$q; sha=${p##*:}; }; done
   grep -q ",chain,$n,$sha,2," $OUT && continue
