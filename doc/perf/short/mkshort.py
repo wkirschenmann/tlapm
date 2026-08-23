@@ -1171,8 +1171,8 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
 
 
 def _keystroke_caption():
-    """The strongest available form of the claim about the last pull requests:
-    not a ratio of medians but whether the measured ranges overlap at all."""
+    """The strongest form of the claim about the last pull requests that the data
+    supports -- pair by pair, because it turned out not to hold for all of them."""
     rng = L.keystroke_ranges()
     tail = [c[-1] for _, _, c in L.PRS][-4:]          # the deque's successors at the end
     have = [pt for pt in tail if pt in rng]
@@ -1181,22 +1181,70 @@ def _keystroke_caption():
             "per-obligation preparation loop, so on every other chart they are flat.")
     if len(have) < 2:
         return base
-    chain, ok = [], True
-    for a, b in zip(have, have[1:]):
-        na, loa, hia = rng[a]
-        nb, lob, hib = rng[b]
-        ok = ok and hib < loa
-        chain.append("%.2f&ndash;%.2f&nbsp;s" % (lob, hib))
+    pairs = []
+    for x, y in zip(have, have[1:]):
+        _, lox, _hix = rng[x]
+        _, _loy, hiy = rng[y]
+        pairs.append((C.LABELS[x][0], C.LABELS[y][0], lox - hiy))
     n = min(rng[pt][0] for pt in have)
-    first = rng[have[0]]
-    if ok:
-        return (base + " The separation is not a ratio of medians: at n&nbsp;=&nbsp;%d the "
-                "measured ranges are <strong>entirely disjoint</strong> &mdash; %s, then %s "
-                "&mdash; so each of these pull requests is below its predecessor on every "
-                "single repetition, not on average." %
-                (n, "%.2f&ndash;%.2f&nbsp;s" % (first[1], first[2]), ", then ".join(chain)))
-    return (base + " At n&nbsp;=&nbsp;%d the ranges are %s, then %s." %
-            (n, "%.2f&ndash;%.2f&nbsp;s" % (first[1], first[2]), ", then ".join(chain)))
+    ranges = " &rarr; ".join("%.2f&ndash;%.2f&nbsp;s" % (rng[pt][1], rng[pt][2])
+                             for pt in have)
+    clean = [p for p in pairs if p[2] > 0]
+    dirty = [p for p in pairs if p[2] <= 0]
+    txt = (base + " Read as ranges rather than medians, at n&nbsp;=&nbsp;%d: %s."
+           % (n, ranges))
+    if not dirty:
+        return (txt + " Every consecutive pair is <strong>entirely disjoint</strong> "
+                "&mdash; each of these pull requests is below its predecessor on every "
+                "single repetition, not on average, the narrowest gap being "
+                "%.2f&nbsp;s." % min(p[2] for p in clean))
+    txt += (" %d of the %d consecutive pairs are <strong>entirely disjoint</strong> "
+            "&mdash; %s %s below the commit before it on every single repetition, not "
+            "on average."
+            % (len(clean), len(pairs),
+               " and ".join("<code>%s</code>" % b for _, b, _ in clean),
+               "is" if len(clean) == 1 else "are each"))
+    txt += (" The remaining %s does not separate that cleanly: %s, so there the claim "
+            "is a difference of medians and nothing stronger."
+            % ("pair" if len(dirty) == 1 else "%d pairs" % len(dirty),
+               "; ".join("<code>%s</code> and <code>%s</code> overlap by "
+                         "%.2f&nbsp;s" % (a_, b_, -g) for a_, b_, g in dirty)))
+    txt += _first_edit_note(dirty)
+    return txt
+
+
+def _first_edit_note(dirty):
+    """Where an overlap comes from one slow repetition, say which one -- but only
+    where the data says it is the first, which is not true of every point here."""
+    import csv as _csv
+    import collections as _c
+    runs = _c.defaultdict(list)
+    boot = kboot
+    for r in _csv.DictReader(open(os.path.join(HERE, "short_keystroke.csv"))):
+        if r["boot"] == boot and r["kind"] == "edit":
+            runs[(r["point"], int(r.get("n") or 0))].append(
+                (int(r["idx"]), float(r["seconds"])))
+    lab = {C.LABELS[pt][0]: pt for pt in L.POINTS}
+    first_worst, other = [], []
+    for a_, b_, _ in dirty:
+        for name in (a_, b_):
+            pt = lab.get(name)
+            keys = [k for k in runs if k[0] == pt]
+            if not keys:
+                continue
+            v = [x for _, x in sorted(runs[max(keys, key=lambda k: k[1])])]
+            (first_worst if v and v[0] == max(v) else other).append(name)
+    if not first_worst:
+        return ""
+    note = (" On %s the slowest repetition of the run is its <em>first</em>, so the "
+            "overlap is a session warming up rather than a spread in steady state. "
+            "It is left in rather than trimmed: a user's first edit is also an edit."
+            % " and ".join("<code>%s</code>" % x for x in first_worst))
+    if other:
+        note += (" It is not a general effect &mdash; on %s the slowest repetition is "
+                 "not the first."
+                 % " and ".join("<code>%s</code>" % x for x in other))
+    return note
 
 
 def sec_perpr():
