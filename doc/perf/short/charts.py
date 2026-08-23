@@ -172,10 +172,13 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
             if isinstance(v, dict) or v in L.FAILED:
                 cy = pts[i][0]
                 r = 4.0
-                o.append('<g stroke="%s" stroke-width="2" stroke-linecap="round">'
+                inf = isinstance(v, dict) and v.get("inferred")
+                da = ' stroke-dasharray="2.2 2"' if inf else ""
+                op = ' opacity=".75"' if inf else ""
+                o.append('<g stroke="%s" stroke-width="2" stroke-linecap="round"%s%s>'
                          '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
                          '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/></g>'
-                         % (FAIL, xs(i) - r, cy - r, xs(i) + r, cy + r,
+                         % (FAIL, da, op, xs(i) - r, cy - r, xs(i) + r, cy + r,
                             xs(i) - r, cy + r, xs(i) + r, cy - r))
             else:
                 rr = 3.2 if points[i] in PR_END else 2.2

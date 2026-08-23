@@ -270,7 +270,7 @@ def keystroke_ranges(path=None, boot=None):
 
 def fmt_ms(v, unit="s"):
     if v in FAILED:
-        return {DNC: "&mdash;", CEIL: "ceiling", ABORT: "aborts"}[v]
+        return {DNC: "&mdash;", CEIL: "&gt; ceiling", ABORT: "OOM"}[v]
     if unit == "ms" or v < 1000:
         return "%d ms" % v
     return ("%.1f s" if v < 100000 else "%d s") % (v / 1000.0)
@@ -278,7 +278,8 @@ def fmt_ms(v, unit="s"):
 
 def fmt_kb(v):
     if v in FAILED:
-        return {DNC: "&mdash;", CEIL: "ceiling", ABORT: "aborts"}[v]
+        # on a memory column the failure to name is the memory one
+        return {DNC: "&mdash;", CEIL: "stopped by the clock", ABORT: "OOM"}[v]
     return "%.0f MB" % (v / 1024.0) if v < 1024 * 1024 else "%.2f GB" % (v / 1048576.0)
 
 
