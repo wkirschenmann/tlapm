@@ -584,20 +584,27 @@ def sec_method():
     c.append("""<h4>The correctness gate every commit passes</h4>
 <p>Not a benchmark gate &mdash; a soundness one. For each of the seventeen commits,
 in sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green,
-and every one of the 48 <code>test/fast</code> tests passing with the full prover
-stack &mdash; Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built
-from this repository's <code>isabelle/</code> sources. <code>main</code> is 48 of 48
-under the same conditions, so the fail-set is empty on both sides. The gate is
-fail-set <em>identity</em>, not a pass count: a newly failing test is a regression
-even where the count would still look healthy.</p>
-<p>Two conditions matter and are easy to get wrong. Putting <code>isabelle</code> on
-<code>PATH</code> is not enough &mdash; tlapm invokes it with a session root under its
-own backends directory, and without that link seven tests fail in a way that reads
-like a proof failure rather than a missing backend. And the tree must be clean of
-<code>.tlacache</code>: a fingerprint recorded by an earlier run with a different
-prover set replays as a failure, which is exactly how an earlier pass here reported
-47 of 48 and blamed Z3.</p>
-<p>Two invariants hold across the whole series. <strong>The provers receive a subset
+and the <code>test/fast</code> suite run against the full prover stack &mdash;
+Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built from this
+repository's <code>isabelle/</code> sources. The gate is fail-set
+<em>identity</em> with <code>main</code>, not a pass count: a newly failing test is
+a regression even where the count would still look healthy, and a suite that is not
+green to begin with still gates perfectly well as long as the comparison is honest.</p>
+<p>What that comparison currently reports, measured in this container on both sides
+in sequence: <strong>47 of 48, with byte-identical fail sets</strong>. The single
+failure is <code>fast/fingerprint/FingerprintVariablesParameters_test</code>, which
+expects <code>1/2 obligations failed</code> on each of two consecutive runs and gets
+<code>2/2</code> &mdash; the provable half of the pair,
+<code>ASSUME NEW VARIABLE x PROVE \\E y : y # x</code>, is not discharged here. It
+fails the same way on <code>main</code>, so it is not attributable to this series,
+and the fail-set identity that the gate actually asserts holds.</p>
+<p>One condition is easy to get wrong and worth stating: putting <code>isabelle</code>
+on <code>PATH</code> is not enough &mdash; tlapm invokes it with a session root under
+its own backends directory, and without that link eight tests fail in a way that
+reads like a proof failure rather than a missing backend. That was the shape of an
+earlier reading here, and it is why the number above is stated as measured rather
+than as expected.</p>""")
+    c.append("""<p>Two invariants hold across the whole series. <strong>The provers receive a subset
 of what they receive today</strong>, never more, and no obligation is created that
 does not exist today. <strong>Fingerprints do not move</strong>: the digest is
 computed on the const-annotated pre-expansion obligation, and every change that
