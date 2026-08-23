@@ -1460,9 +1460,17 @@ def build():
         parts.append('<section><div class="sec-head"><span class="n">%s</span><h2>%s</h2></div>%s</section>'
                      % (n, title, fn()))
     parts.append("""<footer>
-<p>Every figure in this document is produced by <code>doc/perf/short/mkshort.py</code>
-from the campaign CSVs beside it; none is typed in. The two private specifications are
-a customer's and are not published &mdash; only the measurements taken on them are.</p>
+<p>Every figure in &sect;1 and &sect;4&ndash;&sect;6 &mdash; every point on every
+chart, every cell of every table, and the counts and ratios quoted in the prose around
+them &mdash; is produced by <code>doc/perf/short/mkshort.py</code> from the campaign
+CSVs beside it. The exception is &sect;8, whose nine ranges come from a separate,
+larger campaign on a different machine whose data is not in this directory: those are
+transcribed, and the section says so. Where a claim about a measurement had to be
+written by hand it has been turned into a slot the generator fills, because in the
+course of this campaign three such sentences went stale against the charts above them
+and one contradicted the table beside it.</p>
+<p>The two private specifications are a customer's and are not published &mdash; only
+the measurements taken on them are.</p>
 <p>This work &mdash; the code, the measurement harness, and this document &mdash; was
 produced by a human working with Anthropic's Claude models (Opus&nbsp;5, Fable&nbsp;5,
 Sonnet&nbsp;5). Every commit was reviewed against its diff, and every number here comes
