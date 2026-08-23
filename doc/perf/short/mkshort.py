@@ -935,41 +935,46 @@ def _estimator_record():
 
 
 def _same_wall():
-    """Do the aborts land at one resident set, and which crosses were measured?
+    """Do the refusals land at one resident set, and which crosses were measured?
 
     The chart cannot show either: every cross sits on the cap line by construction,
-    so the reader can see neither that the refusals agree nor which of them were run
-    to their end.  Both belong in the caption, counted from the data.
+    so the reader can see neither that the refusals agree nor which were run to their
+    end.  Both belong in the caption, counted from the data.
+
+    Pooled across corpora when they agree, because that is the stronger statement: a
+    wall that is the same on two unrelated specifications is a property of the cap,
+    not of either specification.
     """
-    best = None
+    at, per = [], {}
     for cp in L.CORPORA:
-        at = [v["at"] for v in peak(cp).values()
-              if isinstance(v, dict) and v.get("kind") == "OOM" and v.get("at")]
-        if len(at) > 1 and (best is None or len(at) > len(best[1])):
-            best = (cp, at)
-    if not best:
+        v = [x["at"] for x in peak(cp).values()
+             if isinstance(x, dict) and x.get("kind") == "OOM" and x.get("at")]
+        if v:
+            per[cp] = v
+            at += v
+    if len(at) < 2:
         return ""
-    cp, at = best
     lo, hi = min(at), max(at)
     spread = (hi - lo) / hi * 100
-    where = CORPUS_NAME.get(cp, cp)
+    names = ["the " + CORPUS_NAME.get(cp, cp) for cp in per]
+    where = names[0] if len(names) == 1 else "%s and %s" % (", ".join(names[:-1]), names[-1])
     if spread > WALL_SPREAD * 100:
-        return (" The %d refusals on the %s land between %.2f and %.2f&nbsp;GB, so the "
+        return (" The %d refusals on %s land between %.2f and %.2f&nbsp;GB, so the "
                 "commits differ in how much they hold when the cap stops them."
                 % (len(at), where, lo, hi))
     txt = (" The crosses carry one more fact the chart cannot show, because every "
-           "cross sits on the cap line by construction: the refusals on the %s all "
-           "happen at the <strong>same</strong> resident set, %.2f&nbsp;GB, within "
-           "%.2f&nbsp;%%. The cap is on address space and the reading is the resident "
-           "set, which is why it is a little under 12&nbsp;GB; that it is the same "
-           "figure every time is the point. These commits do not fail at several "
-           "different memory profiles &mdash; they fail at one wall, and what "
-           "separates them is only how long they take to reach it."
-           % (where, hi, spread))
-    w = WALL.get(cp)
-    if w:
-        _, att, refused, (rlo, rhi) = w
-        n_meas = len(at) - len(att)
+           "cross sits on the cap line by construction: all %d refusals &mdash; on "
+           "%s alike &mdash; happen at the <strong>same</strong> resident set, "
+           "%.2f&nbsp;GB, within %.3f&nbsp;%%. The cap is on address space and the "
+           "reading is the resident set, which is why it is a little under "
+           "12&nbsp;GB; that it is the same figure on unrelated specifications is the "
+           "point. This is not a family of memory profiles that happen to be large "
+           "&mdash; it is one wall, and what separates these commits is only how long "
+           "each takes to reach it." % (len(at), where, hi, spread))
+    tot_att = sum(len(WALL[cp][1]) for cp in WALL if cp in per)
+    if tot_att:
+        rlo = min(WALL[cp][3][0] for cp in WALL if cp in per)
+        rhi = max(WALL[cp][3][1] for cp in WALL if cp in per)
         txt += (" %d of those %d crosses are runs taken to their refusal; the other %d "
                 "are <strong>attributed</strong> to that wall rather than measured to "
                 "it, and the ground is stated so a reader can reject it: at the "
@@ -979,8 +984,7 @@ def _same_wall():
                 "pruning nor the streaming that removes the wall. A run stopped "
                 "holding a few hundred megabytes is nowhere near that range and stays "
                 "a ring, which is what keeps the attribution from swallowing every "
-                "timeout."
-                % (n_meas, len(at), len(att), rlo, rhi))
+                "timeout." % (len(at) - tot_att, len(at), tot_att, rlo, rhi))
     return txt
 
 
