@@ -688,8 +688,9 @@ def _oracle_noise():
     """The oracle is only defensible if it is free when unset, so say what it cost.
 
     Measured against the commit after it, which is the neighbour that shares its
-    preparation path: anything above the run-to-run spread here would mean the
-    unset branch is not actually free.
+    preparation path.  On the chain that comparison has an unusually good control:
+    this same cell is the campaign's drift anchor, re-measured every eight points,
+    so its own spread is known rather than assumed.
     """
     out = []
     for cp in L.CORPORA:
@@ -699,10 +700,23 @@ def _oracle_noise():
             continue
         out.append("%s %+.1f&nbsp;%%" % (CORPUS_NAME.get(cp, cp), (a - b) / float(b) * 100))
     if not out:
-        return ("the commit has not been measured against its neighbour yet.")
-    return ("against the commit after it, which shares its preparation path, "
-            "preparation differs by %s &mdash; the run-to-run spread, not a cost."
-            % "; ".join(out))
+        return "the commit has not been measured against its neighbour yet."
+    txt = ("against the commit after it, which shares its preparation path, "
+           "preparation differs by %s." % "; ".join(out))
+    # The anchor cell is this commit on the chain, so its spread is measured.
+    b = sweep.get("_line_boot", {}).get(("ffi", "prep"))
+    a = sorted(sweep.get("_anchors", {}).get(b, []))
+    nb = _cell("ffi", ORACLE_NEXT).get("prep")
+    if len(a) >= 2 and isinstance(nb, int):
+        inside = a[0] <= nb <= a[-1]
+        txt += (" The chain figure has a control the others do not: this commit on "
+                "the chain <em>is</em> the campaign&rsquo;s drift anchor, re-measured "
+                "%d times at %.1f&ndash;%.1f&nbsp;s, and the neighbour&rsquo;s "
+                "%.1f&nbsp;s falls %s that range &mdash; so what separates them is "
+                "the machine, not the <code>getenv</code>."
+                % (len(a), a[0] / 1000.0, a[-1] / 1000.0, nb / 1000.0,
+                   "inside" if inside else "outside"))
+    return txt
 
 
 def _fill(txt):
