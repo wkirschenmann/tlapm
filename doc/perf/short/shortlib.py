@@ -270,6 +270,30 @@ def load_iteration_latency(path=None, boot=None):
     return out, boot
 
 
+def _keystroke_boot(vals, boot=None):
+    """The boot a keystroke figure should be read from.
+
+    Shared deliberately.  This ranking lived twice -- once in load_keystroke and once
+    in keystroke_ranges -- and the two drifted apart, so the chart and its own caption
+    were reading different boots and the caption quoted numbers absent from the chart.
+
+    Ranked by COMMITS covered, not rows written: a pass that has covered five commits
+    must not outrank a finished one covering eighteen, or the figure becomes a
+    fragment halfway through a re-measurement.  Rows break a tie, and the newer boot
+    breaks an exact one, so a completed re-measurement replaces the series it repeats
+    and an unfinished one does not.
+    """
+    if boot:
+        return boot
+    boots = {b for b, _, _ in vals}
+    if not boots:
+        return None
+    def rank(b):
+        return (len({pt for bb, pt, _ in vals if bb == b}),
+                sum(1 for k in vals if k[0] == b), b)
+    return max(boots, key=rank)
+
+
 def load_keystroke(path=None, boot=None):
     """{point: (median_s, spread, n)} -- didChange to publishDiagnostics.
 
@@ -289,15 +313,7 @@ def load_keystroke(path=None, boot=None):
             vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
     if not boots:
         return {}, None
-    # Count COMMITS, not rows.  Counting rows lets a pass that has covered five
-    # commits so far outrank a finished one covering eighteen, so the figure would
-    # shrink to a fragment halfway through a re-measurement and grow back at the end.
-    # On a tie the newer boot wins, which is what makes a completed re-measurement
-    # actually replace the series it repeats.
-    def rank(b):
-        return (len({pt for bb, pt, _ in vals if bb == b}),
-                sum(1 for k in vals if k[0] == b), b)
-    boot = boot or max(boots, key=rank)
+    boot = _keystroke_boot(vals, boot)
     best = {}
     for (b, pt, n), v in vals.items():
         if b != boot:
@@ -326,7 +342,7 @@ def keystroke_ranges(path=None, boot=None):
             vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
     if not boots:
         return {}
-    boot = boot or max(boots, key=lambda b: sum(1 for k in vals if k[0] == b))
+    boot = _keystroke_boot(vals, boot)
     best = {}
     for (b, pt, n), v in vals.items():
         if b == boot and (pt not in best or n > best[pt][0]):
