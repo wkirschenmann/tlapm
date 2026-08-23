@@ -735,6 +735,53 @@ def _wall_sentence():
     return txt
 
 
+ITER_STEP = 1.10       # a move worth naming, well clear of the run-to-run spread
+
+
+def _iter_caption():
+    """Which commits actually move the warm loop, read off the measurement.
+
+    This caption used to name a count.  The count went stale the moment the chain
+    was re-measured, and a caption contradicting the chart above it is worse than no
+    caption, so it is derived now.
+    """
+    steps, worse = [], []
+    for cp in ("synth300", "ffi"):
+        d, prev = iters(cp), None
+        for pt in L.POINTS:
+            v = d[pt]
+            if isinstance(v, float) and isinstance(prev, float):
+                r = prev / v
+                if r >= ITER_STEP:
+                    steps.append((cp, pt, r))
+                elif r <= 1 / ITER_STEP:
+                    worse.append((cp, pt, 1 / r))
+            if isinstance(v, float):
+                prev = v
+    def phrase(rows):
+        return "; ".join("%s on the %s, &times;%.2f"
+                         % (C.LABELS[pt][0], "1&nbsp;800-obligation corpus"
+                            if cp == "synth300" else "refinement chain", r)
+                         for cp, pt, r in rows)
+    if not steps:
+        return ("No commit moves this metric clear of the run-to-run spread on either "
+                "corpus &mdash; on this campaign the warm loop is where it started.")
+    txt = ("%d step%s in the series move the warm loop clear of the run-to-run spread: "
+           "%s. Every one of them does less work <em>per obligation</em> rather than "
+           "less work overall, which is what a warm cache leaves to do: the file is "
+           "still re-parsed, re-elaborated and re-fingerprinted in full, and only the "
+           "one changed obligation is proved."
+           % (len(steps), "" if len(steps) == 1 else "s", phrase(steps)))
+    if worse:
+        txt += (" One place moves the wrong way &mdash; %s &mdash; and it stays at that "
+                "position because what it buys is that nothing after it can run out of "
+                "memory." % phrase(worse))
+    else:
+        txt += (" No commit in the series makes this metric worse by more than the "
+                "spread, the memory pull request included.")
+    return txt
+
+
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
 ORACLE, ORACLE_NEXT = "p14", "p15"
 
@@ -935,12 +982,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "private refinement chain, logarithmic axis.",
     {"synth300": iters("synth300"), "ffi": iters("ffi")}, "s",
     lambda v: "%.1f s" % v if v < 100 else "%.0f s" % v,
-    "Only two changes move this metric across a threshold, and both are about doing less "
-    "work per obligation rather than less work overall. The memory pull request is the one "
-    "place in the series where this metric moves the wrong way, by about two per cent "
-    "&mdash; inside the run-to-run spread, and small enough that the mechanism is not "
-    "worth asserting. It stays at that position because what it buys is that nothing "
-    "after it can run out of memory.",
+    _iter_caption(),
     series=[("public synthetic, 1 800", "synth300", C.PUB, None),
             ("private refinement chain", "ffi", C.PRIV, "5 3")]))
 
