@@ -289,7 +289,15 @@ def load_keystroke(path=None, boot=None):
             vals[(r["boot"], r["point"], int(r.get("n", 0) or 0))].append(float(r["seconds"]))
     if not boots:
         return {}, None
-    boot = boot or max(boots, key=lambda b: sum(1 for k in vals if k[0] == b))
+    # Count COMMITS, not rows.  Counting rows lets a pass that has covered five
+    # commits so far outrank a finished one covering eighteen, so the figure would
+    # shrink to a fragment halfway through a re-measurement and grow back at the end.
+    # On a tie the newer boot wins, which is what makes a completed re-measurement
+    # actually replace the series it repeats.
+    def rank(b):
+        return (len({pt for bb, pt, _ in vals if bb == b}),
+                sum(1 for k in vals if k[0] == b), b)
+    boot = boot or max(boots, key=rank)
     best = {}
     for (b, pt, n), v in vals.items():
         if b != boot:
