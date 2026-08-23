@@ -152,6 +152,49 @@ of change for each:</p>
     <p class="mdl">PR6</p></div>
 </div>
 
+<h4>The mechanism, in seven small modules</h4>
+<p><code>doc/perf/short/instance_demo/</code> is the mechanism with nothing else in
+it: a three-level refinement stack shaped like the private one. Levels&nbsp;0
+and&nbsp;1 each get the same three modules &mdash; a state module holding the
+parameters and the standing assumptions, a specification, and a theorems module that
+declares results without proving them &mdash; and each reaches the level below by
+<code>EXTENDS</code> and instantiates its theorems by <code>INSTANCE</code>.
+Level&nbsp;2 is the citing module and does nothing else. The largest of the seven is 14
+lines.</p>
+<p><code>INSTANCE</code> does not share; it <em>copies</em>. When level&nbsp;2
+instantiates level&nbsp;1, level&nbsp;1's body already contains a copy of level&nbsp;0
+&mdash; renamed once when level&nbsp;1 instantiated it &mdash; so level&nbsp;2 gets
+level&nbsp;0 a second time, renamed twice. The nesting is flattened at elaboration
+time: by the time an obligation exists there is no indirection left to follow, only
+copies. The <code>Ladder</code><em>n</em> modules make that countable. Each has one
+obligation and differs from the next only in how many times it instantiates the same
+theorems module.</p><div class="tw"><table><thead><tr><th><code>INSTANCE</code> declarations</th><th class="n">definitions in the obligation</th><th class="n">hypotheses in the obligation</th></tr></thead><tbody><tr><td>1</td><td class="n">94</td><td class="n">109</td></tr><tr><td>2</td><td class="n">161</td><td class="n">182</td></tr><tr><td>3</td><td class="n">228</td><td class="n">255</td></tr><tr><td>4</td><td class="n">295</td><td class="n">328</td></tr></tbody></table></div><p>Exactly linear: 67 definitions and 73 hypotheses per
+<code>INSTANCE</code>, on a stack whose whole source is a few dozen lines. And 33 of
+those 67 definitions &mdash; 49&nbsp;% &mdash; are the copy of level&nbsp;0 that
+arrived two renamings deep, inside the copy of level&nbsp;1. Nothing in the source is
+duplicated; the duplication is what instantiation is.</p>
+<p>This is why the two private specifications in this campaign behave the way they do,
+and why the two pruning changes bite hardest on exactly these stacks: the great
+majority of what those copies contribute is hidden and unreachable from the goal, and
+it is carried to the prover regardless. The consequence in wall-clock and in bytes is
+what the rest of this document measures &mdash; on real specifications, because at
+this scale the fixed cost of starting tlapm swamps it.</p><p>The same copying has a consequence that costs proof engineers
+time, and it is in <code>instance_demo/CiteTrap.tla</code>. That stack contains one
+<code>IsFiniteSet</code> &mdash; the standard one, <code>EXTENDS</code>ed once at the
+bottom. Level&nbsp;2 nonetheless sees three symbols with that body:
+<code>IsFiniteSet</code> reached by <code>EXTENDS</code>, which prefixes nothing;
+<code>L1!IsFiniteSet</code>, one <code>INSTANCE</code> hop; and
+<code>L1!L0!IsFiniteSet</code>, two. The prefix counts <code>INSTANCE</code> hops, not
+<code>EXTENDS</code> hops &mdash; so an assumption that travelled up by
+<code>EXTENDS</code> and was then instantiated once is <code>L1!IsFiniteSet</code>,
+and naming the two-hop copy instead is well formed, means the same thing, and does not
+match. Both are opaque one-argument operators, so neither can be refuted. In
+<code>CiteTrap</code> the prover settles it and answers &ldquo;no proof&rdquo;; on a
+module carrying a few hundred instantiated hypotheses the identical mistake comes back
+as a <em>timeout</em>, which reads as a prover too weak for the goal rather than as a
+name. Dumping the obligation shows the supplied hypothesis and the required
+<code>ASSUME</code> one above the other, and the prefix difference is then immediate
+&mdash; which is the cheapest diagnostic available and is invisible in the source.</p>
 <p style="margin-top:16px">Two changes sit outside that mechanism. One is the editor's
 proof-step tree, which scanned the obligation map once per step and had nothing to do
 with contexts. The other is the set of correctness fixes, which are here because

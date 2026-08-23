@@ -473,6 +473,81 @@ def sec_problem():
     return "".join(c)
 
 
+def _instance_demo():
+    """The nested-INSTANCE ladder, generated from instance_demo.csv so the
+    counts in the prose cannot drift from the table beside them."""
+    rows = L.load_instance_demo()
+    one = rows[0]
+    steps = [rows[i]["defn_per_obl"] - rows[i - 1]["defn_per_obl"]
+             for i in range(1, len(rows))]
+    step = steps[0] if len(set(steps)) == 1 else None
+    hstep = rows[1]["hyps_per_obl"] - rows[0]["hyps_per_obl"]
+    two_hop = one["frag_j1l0"]
+    share = 100.0 * two_hop / one["frag_j1"]
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance_demo")
+    stack = ["L0State", "L0", "L0Theorems", "L1State", "L1", "L1Theorems", "L2"]
+    widest = max(sum(1 for _ in open(os.path.join(here, m + ".tla")))
+                 for m in stack)
+    words = {5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+    count = words.get(len(stack), str(len(stack)))
+    body = ["""<h4>The mechanism, in %s small modules</h4>
+<p><code>doc/perf/short/instance_demo/</code> is the mechanism with nothing else in
+it: a three-level refinement stack shaped like the private one. Levels&nbsp;0
+and&nbsp;1 each get the same three modules &mdash; a state module holding the
+parameters and the standing assumptions, a specification, and a theorems module that
+declares results without proving them &mdash; and each reaches the level below by
+<code>EXTENDS</code> and instantiates its theorems by <code>INSTANCE</code>.
+Level&nbsp;2 is the citing module and does nothing else. The largest of the %s is %d
+lines.</p>""" % (count, count, widest) + """
+<p><code>INSTANCE</code> does not share; it <em>copies</em>. When level&nbsp;2
+instantiates level&nbsp;1, level&nbsp;1's body already contains a copy of level&nbsp;0
+&mdash; renamed once when level&nbsp;1 instantiated it &mdash; so level&nbsp;2 gets
+level&nbsp;0 a second time, renamed twice. The nesting is flattened at elaboration
+time: by the time an obligation exists there is no indirection left to follow, only
+copies. The <code>Ladder</code><em>n</em> modules make that countable. Each has one
+obligation and differs from the next only in how many times it instantiates the same
+theorems module.</p>"""]
+    body.append('<div class="tw"><table><thead><tr><th><code>INSTANCE</code> '
+                'declarations</th><th class="n">definitions in the '
+                'obligation</th><th class="n">hypotheses in the '
+                'obligation</th></tr></thead><tbody>')
+    for r in rows:
+        body.append('<tr><td>%d</td><td class="n">%d</td><td class="n">%d</td></tr>'
+                    % (r["instances"], r["defn_per_obl"], r["hyps_per_obl"]))
+    body.append("</tbody></table></div>")
+    body.append("""<p>Exactly linear: %s definitions and %d hypotheses per
+<code>INSTANCE</code>, on a stack whose whole source is a few dozen lines. And %d of
+those %d definitions &mdash; %s&nbsp;%% &mdash; are the copy of level&nbsp;0 that
+arrived two renamings deep, inside the copy of level&nbsp;1. Nothing in the source is
+duplicated; the duplication is what instantiation is.</p>
+<p>This is why the two private specifications in this campaign behave the way they do,
+and why the two pruning changes bite hardest on exactly these stacks: the great
+majority of what those copies contribute is hidden and unreachable from the goal, and
+it is carried to the prover regardless. The consequence in wall-clock and in bytes is
+what the rest of this document measures &mdash; on real specifications, because at
+this scale the fixed cost of starting tlapm swamps it.</p>""" % (
+        "%d" % step if step else "a constant number of",
+        hstep, two_hop, one["frag_j1"], ("%.0f" % share)))
+    body.append("""<p>The same copying has a consequence that costs proof engineers
+time, and it is in <code>instance_demo/CiteTrap.tla</code>. That stack contains one
+<code>IsFiniteSet</code> &mdash; the standard one, <code>EXTENDS</code>ed once at the
+bottom. Level&nbsp;2 nonetheless sees three symbols with that body:
+<code>IsFiniteSet</code> reached by <code>EXTENDS</code>, which prefixes nothing;
+<code>L1!IsFiniteSet</code>, one <code>INSTANCE</code> hop; and
+<code>L1!L0!IsFiniteSet</code>, two. The prefix counts <code>INSTANCE</code> hops, not
+<code>EXTENDS</code> hops &mdash; so an assumption that travelled up by
+<code>EXTENDS</code> and was then instantiated once is <code>L1!IsFiniteSet</code>,
+and naming the two-hop copy instead is well formed, means the same thing, and does not
+match. Both are opaque one-argument operators, so neither can be refuted. In
+<code>CiteTrap</code> the prover settles it and answers &ldquo;no proof&rdquo;; on a
+module carrying a few hundred instantiated hypotheses the identical mistake comes back
+as a <em>timeout</em>, which reads as a prover too weak for the goal rather than as a
+name. Dumping the obligation shows the supplied hypothesis and the required
+<code>ASSUME</code> one above the other, and the prefix difference is then immediate
+&mdash; which is the cheapest diagnostic available and is invisible in the source.</p>""")
+    return "".join(body)
+
+
 def sec_mechanism():
     return """
 <p>One mechanism explains all of it. tlapm generates one obligation per proof leaf,
@@ -509,6 +584,7 @@ of change for each:</p>
     <p class="mdl">PR6</p></div>
 </div>
 
+""" + _instance_demo() + """
 <p style="margin-top:16px">Two changes sit outside that mechanism. One is the editor's
 proof-step tree, which scanned the obligation map once per step and had nothing to do
 with contexts. The other is the set of correctness fixes, which are here because

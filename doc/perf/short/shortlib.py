@@ -378,3 +378,17 @@ def ratio(a, b):
     if not isinstance(a, int) or not isinstance(b, int) or not b:
         return None
     return a / float(b)
+
+def load_instance_demo(path=None):
+    """The INSTANCE ladder: one row per module, one obligation each, only the
+    number of INSTANCE declarations varying.  Counts are deterministic, so
+    there is no boot column and nothing to select between."""
+    path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "instance_demo.csv")
+    out = []
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            out.append({k: (int(v) if k != "module" else v)
+                        for k, v in r.items()})
+    out.sort(key=lambda r: r["instances"])
+    return out
