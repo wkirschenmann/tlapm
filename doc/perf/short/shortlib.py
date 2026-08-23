@@ -192,16 +192,33 @@ def load_iteration_latency(path=None, boot=None):
     path = path or os.path.join(S, "short_iterlat.csv")
     if not os.path.exists(path):
         return {}, None
-    runs, boots = collections.defaultdict(list), set()
-    rep = {}
+    raw = []
     with open(path) as f:
         for r in csv.DictReader(f):
-            boots.add(r["boot"])
-            cp = ITER_CORPUS.get(r["corpus"], r["corpus"])
-            k = (r["boot"], cp, r["point"])
-            rc = int(r["rc"])
-            runs[k].append((int(r["ms"]), rc))
-            rep[k] = int(r["proved"]) + int(r["failed"]) + int(r["trivial"])
+            r["_cp"] = ITER_CORPUS.get(r["corpus"], r["corpus"])
+            r["_obl"] = int(r["proved"]) + int(r["failed"]) + int(r["trivial"])
+            raw.append(r)
+    if not raw:
+        return {}, None
+    # An interrupted run is indistinguishable from a fast one by its exit status:
+    # tlapm handles SIGTERM by shutting its provers down, printing the verdicts it
+    # already had and exiting 0.  A container restart or the OOM killer produces the
+    # same shape.  What gives it away is the obligation count -- a real run of a
+    # corpus reports the same number every time -- so a row that reports materially
+    # fewer than that corpus's usual count is dropped rather than averaged in.
+    usual = {}
+    for cp in {r["_cp"] for r in raw}:
+        counts = collections.Counter(r["_obl"] for r in raw if r["_cp"] == cp)
+        usual[cp] = max(counts, key=lambda n: (counts[n], n))
+    short = [r for r in raw if r["_obl"] < 0.9 * usual[r["_cp"]]]
+    raw = [r for r in raw if r not in short]
+    runs, boots = collections.defaultdict(list), set()
+    rep = {}
+    for r in raw:
+        boots.add(r["boot"])
+        k = (r["boot"], r["_cp"], r["point"])
+        runs[k].append((int(r["ms"]), int(r["rc"])))
+        rep[k] = r["_obl"]
     if not boots:
         return {}, None
     boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
