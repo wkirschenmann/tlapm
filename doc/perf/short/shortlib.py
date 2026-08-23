@@ -47,9 +47,15 @@ def _verdict(rc):
 def load_sweep(path=None, boot=None):
     """{(point, corpus): {gen, prep, peak}} with sentinels for failures.
 
-    gen and prep are milliseconds, peak is kB.  main is measured twice, as p00
-    at the start of the campaign and p00b at the end; the pair is kept apart so
-    the drift the campaign carries can be reported instead of hidden.
+    One chart line is one (metric, corpus) pair, and comparability only has to hold
+    WITHIN a line: a curve is read against itself, from main to the tip.  So the boot
+    is chosen per line, not once for the whole file -- the line with the most points
+    on a single boot wins, and that boot is recorded so the document can say which
+    machine each curve was measured on.
+
+    That is what makes a campaign survive a restart.  When this one was interrupted,
+    nine of its ten lines were already complete on one boot and the tenth had not
+    started; choosing globally would have thrown away either the nine or the tenth.
     """
     path = path or os.path.join(S, "short_sweep.csv")
     raw = []
@@ -58,102 +64,62 @@ def load_sweep(path=None, boot=None):
             raw.append(r)
     if not raw:
         return {}, None, {}
-    boots = {r["boot"] for r in raw}
-    boot = boot or max(boots, key=lambda b: sum(1 for r in raw if r["boot"] == b))
-    out = collections.defaultdict(dict)
     anchors = [r for r in raw if r["phase"].startswith("K")]
-    # phase L re-runs a ceiling with a longer clock.  A ceiling only answers "not
-    # within 900 s", which is the wrong answer for a point that needs 950, so an L
-    # row supersedes the ceiling it was run to resolve -- and is itself a ceiling
-    # if the longer clock also ran out.
-    longer = {(r["point"], r["corpus"]) for r in raw
-              if r["phase"] == "L" and r["boot"] == boot}
-    for r in raw:
-        if r["boot"] != boot or r["phase"].startswith("K"):
-            continue                      # phase K is the drift anchor, not a data point
+    data = [r for r in raw if not r["phase"].startswith("K")]
+
+    # per (corpus, field), the boot carrying the most measured points
+    def field_of(r):
+        return "gen" if int(r["gen_ms"]) != -2 else "prep"
+
+    tally = collections.Counter()
+    for r in data:
+        tally[(r["corpus"], field_of(r), r["boot"])] += 1
+    line_boot = {}
+    for (cp, fld, b), n in tally.items():
+        k = (cp, fld)
+        if k not in line_boot or n > tally[(cp, fld, line_boot[k])]:
+            line_boot[k] = b
+    # phase L supersedes a ceiling it was run to resolve, on the same line's boot
+    longer = {(r["point"], r["corpus"]) for r in data
+              if r["phase"] == "L" and r["boot"] == line_boot.get((r["corpus"], "prep"))}
+
+    out = collections.defaultdict(dict)
+    for r in data:
+        fld = field_of(r)
+        if r["boot"] != line_boot.get((r["corpus"], fld)):
+            continue
         if r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
-                and int(r["prep_rc"]) == 124:
-            continue                      # superseded by the longer run
+                and fld == "prep" and int(r["prep_rc"]) == 124:
+            continue
         k = (r["point"], r["corpus"])
         out[k]["sha"] = r["sha"]
         g, grc = int(r["gen_ms"]), int(r["gen_rc"])
-        p, prc = int(r["prep_ms"]), int(r["prep_rc"])
+        p_, prc = int(r["prep_ms"]), int(r["prep_rc"])
         if g != -2:
             out[k]["gen"] = _verdict(grc) or g
             out[k]["gen_raw"] = g
-        if p != -2:
+        if p_ != -2:
             v = _verdict(prc)
-            out[k]["prep"] = v or p
+            out[k]["prep"] = v or p_
             out[k]["peak"] = v or int(r["peak_kb"])
-            # a failed run still has coordinates: the wall clock it died at, and --
-            # for a memory abort -- the resident set it reached.  A timeout has no
-            # memory reading at all, because /usr/bin/time is killed with the process.
-            out[k]["prep_raw"] = p
+            out[k]["prep_raw"] = p_
             out[k]["peak_raw"] = int(r["peak_kb"]) or None
     out = dict(out)
-    # the two main measurements, and the drift between them
+    out["_line_boot"] = line_boot
+
     drift = {}
-    for cp in CORPORA:
-        a, b = out.get(("p00", cp)), out.get(("p00b", cp))
-        if not a or not b:
-            continue
-        for f in ("gen", "prep", "peak"):
-            if isinstance(a.get(f), int) and isinstance(b.get(f), int):
-                lo, hi = min(a[f], b[f]), max(a[f], b[f])
-                drift[(cp, f)] = (hi - lo) / float(hi) if hi else 0.0
-    # the anchor is one fixed cell re-measured through the campaign: its spread is
-    # the drift the run carries, and if a restart split the campaign the anchors on
-    # either side say by how much the halves differ instead of leaving them
-    # incomparable.
     by_boot = collections.defaultdict(list)
     for r in anchors:
         v = int(r["prep_ms"])
         if v > 0 and int(r["prep_rc"]) == 0:
             by_boot[r["boot"]].append(v)
     out["_anchors"] = dict(by_boot)
+    boots = collections.Counter(line_boot.values())
+    boot = boots.most_common(1)[0][0] if boots else None
     if len(by_boot.get(boot, [])) > 1:
         a = by_boot[boot]
         drift[("anchor", "prep")] = (max(a) - min(a)) / float(max(a))
     return out, boot, drift
-
-
-def apply_reps(sweep, path=None, boot=None):
-    """Replace single-run values by the median of a repeated pass where one exists.
-
-    A run of tens of milliseconds is dominated by process start-up and page-cache
-    state, so one sample cannot separate two commits: the control corpus showed a
-    10 % step at a commit that only changes a kill signal, and re-measuring the two
-    ends back to back put them within 1 ms of each other.  Where a repeated,
-    point-interleaved pass exists, its median replaces the sample.
-    """
-    path = path or os.path.join(S, "short_reps.csv")
-    if not os.path.exists(path):
-        return sweep, {}
-    runs, boots = collections.defaultdict(list), set()
-    with open(path) as f:
-        for r in csv.DictReader(f):
-            if int(r["rc"]) != 0:
-                continue
-            boots.add(r["boot"])
-            runs[(r["boot"], r["corpus"], r["metric"], r["point"])].append(
-                (int(r["ms"]), int(r["peak_kb"])))
-    if not boots:
-        return sweep, {}
-    boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
-    used = {}
-    for (b, cp, mt, pt), v in runs.items():
-        if b != boot or len(v) < 3:
-            continue
-        ms = sorted(m for m, _ in v)
-        med = ms[len(ms) // 2]
-        rec = sweep.setdefault((pt, cp), {})
-        rec["gen" if mt == "gen" else "prep"] = med
-        if mt == "prep":
-            pk = sorted(k for _, k in v if k)
-            if pk:
-                rec["peak"] = pk[len(pk) // 2]
-        used[(cp, mt)] = len(v)
-    return sweep, used
 
 
 def main_point(sweep, corpus, field):
