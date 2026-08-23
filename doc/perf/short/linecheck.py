@@ -49,9 +49,45 @@ def check(sweep):
     return out
 
 
+def check_inconclusive(page="/home/user/tlapm/doc/perf/SHORT_PROPOSAL.html"):
+    """The page claims no inconclusive cell is quoted as a figure.  Hold it to that.
+
+    A protocol timeout still has a memory reading -- the run did occupy that much
+    before we stopped it -- and the temptation is to use the number anyway.  The
+    charts refuse to, by drawing a ring; this refuses to in prose, by looking for
+    that reading in the rendered page in the shapes the document formats memory in.
+    Its elapsed time is not checked: that is the ceiling by construction.
+    """
+    import io, os
+    if not os.path.exists(page):
+        return []
+    import mkshort as M
+    h = io.open(page, encoding="utf-8").read()
+    out = []
+    for cp in L.CORPORA:
+        for pt, v in M.peak(cp).items():
+            if not (isinstance(v, dict) and v.get("pending")):
+                continue
+            c = M._cell(cp, pt)
+            # Only the memory reading is checked.  The elapsed time of a protocol
+            # timeout IS the ceiling by construction, so it carries no information
+            # and matching it would just find the ceiling in the machine table.
+            for field, raw in (("peak", c.get("peak_raw")),):
+                if not raw:
+                    continue
+                shapes = [L.fmt_kb(raw), "%.2f GB" % (raw / 1048576.0),
+                          "%d MB" % round(raw / 1024.0)]
+                for sh in set(shapes):
+                    if sh and sh in h:
+                        out.append("QUOTED %s/%s %s reads \"%s\" in the page, but that "
+                                   "cell is an inconclusive protocol timeout"
+                                   % (cp, pt, field, sh))
+    return out
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
-    msgs = check(sweep)
+    msgs = check(sweep) + check_inconclusive()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:
