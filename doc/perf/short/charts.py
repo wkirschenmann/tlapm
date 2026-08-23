@@ -19,10 +19,22 @@ FAIL = "var(--fail)"
 END_LABEL_GAP = 11.5   # px; below this two end labels collide
 VIOLET, TEAL = "var(--lbl-286)", "var(--lbl-keep)"
 
-# hue = public or private, dash = size inside the family
+# Hue says whether the corpus can be published; dash separates members inside
+# each hue.  Dash is NOT rank: the three flat synthetics happen to run
+# solid/medium/dotted from large to small, but the refinement stack -- added
+# later, and larger than synth300 -- takes its own long dash rather than
+# claiming solid and pushing every other public series onto a different one.
+# A reader comparing two versions of this page must not find a series wearing
+# somebody else's line.
+#
+# Two hues is the whole palette (validated: worst adjacent CVD delta-E 14.3),
+# so a sixth corpus does not need a sixth colour, and a corpus with no
+# measurements never reaches the legend -- _series_for filters this list by
+# what actually has points.
 SERIES = [("public synthetic, 1 800", "synth300", PUB,  None),
           ("public synthetic, 600",   "synth100", PUB,  "5 3"),
           ("public synthetic, 71",    "tiny",     PUB,  "1 3"),
+          ("public refinement stack", "idemo",    PUB,  "9 3"),
           ("private 30k monolith",    "mono",     PRIV, None),
           ("private refinement chain","ffi",      PRIV, "5 3")]
 
@@ -74,12 +86,29 @@ def _tick(v):
     return "%g" % v
 
 
+def series_for(values):
+    """Whichever of the standard series this data actually has points for.
+
+    The one place that decides it.  The default legend of every chart comes
+    from here, and so does any caller that needs the same list for a caption --
+    a legend and its caption disagreeing is a real failure this document has
+    already had."""
+    return [t for t in SERIES
+            if any(v is not None for v in (values.get(t[1]) or {}).values())]
+
+
 def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
     """values: {corpus: {point: number | {"kind","at"} | sentinel | None}}
 
     rule: (value, label) drawn as a labelled horizontal reference line -- the cap a
-    failing run hit, so a cross sitting on it reads as "this is where it stopped"."""
-    series = series or SERIES
+    failing run hit, so a cross sitting on it reads as "this is where it stopped".
+
+    Passing no series means "whichever of the standard ones this data has": the
+    default USED to be the whole list, so adding a sixth corpus to SERIES put a
+    legend entry for it on every chart that had not been measured yet -- a line
+    in the key pointing at nothing drawn.  Filtering here makes the legend a
+    consequence of the data rather than of the constant."""
+    series = series or series_for(values)
     ends = []            # end labels, placed after every series is drawn
     points = points or L.POINTS
     n = len(points)

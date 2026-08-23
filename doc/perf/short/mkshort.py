@@ -271,14 +271,12 @@ def iters(cp):
 def _series_for(values):
     """The chart's legend, derived from the data it was handed.
 
-    Hardcoding it is how a chart comes to lag behind its own measurements: the
-    keystroke figure listed one corpus because that is all there had ever been, so
-    measuring a second would have changed the CSV and nothing on the page.  Filtering
-    the standard series order by what actually has points keeps the two in step, and
-    keeps hue and dash meaning the same thing on every chart.
+    This is now exactly what charts.chart does when handed no series at all --
+    the rule lives there, and this delegates rather than restating it.  Two
+    copies of one rule is how the legend and its caption came to read different
+    boots earlier in this campaign: one copy got fixed.
     """
-    return [t for t in C.SERIES
-            if any(v is not None for v in (values.get(t[1]) or {}).values())]
+    return C.series_for(values)
 
 
 def keyser():
