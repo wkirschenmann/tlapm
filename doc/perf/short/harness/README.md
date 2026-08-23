@@ -1,6 +1,6 @@
 # The harness that produced the campaign
 
-Five scripts and one LSP client. Each is resumable, stamps every row with
+Six scripts and one LSP client. Each is resumable, stamps every row with
 `/proc/stat btime`, and reports a run that did not complete as a return code
 rather than as a number.
 
@@ -26,6 +26,7 @@ run time, so adding or removing a commit does not need an edit here.
 | `short_keystroke.sh` | a spec, a line number inside a proof body, and `lsp_keystroke_client.py` |
 | `short_longtail.sh` | a sweep CSV with stopped runs in it; re-uses the binaries `short_sweep.sh` cached |
 | `short_refresh.sh` | the CSVs; merges them into the repository, regenerates the page, commits the data |
+| `short_mono.sh` | one corpus, a point list, and the CSV; picks each point's clock from what the CSV already holds |
 
 The warm-cache fixtures are the one part that cannot simply be re-run: each is a
 `.tlacache` directory produced by proving the specification once to completion,
@@ -56,6 +57,19 @@ Inside a line the commits run **tip-first**. If the pass is cut short, the
 points that survive are the ones nearest the completing end, which are the
 informative ones: a curve that stops before reaching `main` still shows the
 step, whereas one that stops before reaching the tip shows nothing.
+
+## What the ceiling is for, and what it is not for
+
+`short_sweep.sh` bounds every run at 900 s. That is worth paying on a **first** pass
+over a line whose shape is unknown: one point that never finishes would otherwise
+consume the campaign. It is worth nothing on a point whose ceiling reading is already
+in the CSV -- re-running it at the same ceiling before escalating costs 900 s to learn
+what the longer run says anyway, and this campaign paid that bill once before noticing.
+
+So choose the clock from what the CSV holds, not from the script's defaults: a point
+already stopped at the ceiling starts at the long clock, and so does every point below
+it on the same line, since a slower commit cannot be a quicker one. Only a point with
+no history pays the cheap pass first.
 
 ## The extended clock
 

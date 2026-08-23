@@ -724,11 +724,21 @@ def _extended_clock():
     """Which stopped runs were re-run on an hour's clock, and how well the rule that
     picked them held up once the answer was known."""
     return """<h4>Which stopped runs got a longer clock</h4>
-<p>A run the fifteen-minute clock stopped is not yet a fact about the commit, so some
-of them are re-run on an hour&rsquo;s. Not all of them: an hour spent confirming a
-failure we already know is an hour not spent measuring something. The rule is two
-questions asked of the stopped run, and it runs only if <em>either</em> answer lands
-inside the budget. <em>When would it finish?</em> &mdash; taken from the ratio between
+<p>The fifteen-minute ceiling earns its keep in exactly one place: the
+<em>first</em> pass over a line whose shape is unknown, where it stops one hanging
+point from consuming the campaign. Everywhere else it is fifteen minutes thrown away,
+and this campaign paid that bill before noticing &mdash; one monolith point already had
+its ceiling reading and was re-run at the same ceiling before being escalated, so it
+cost 900&nbsp;s <em>plus</em> an hour to learn what the hour alone would have said. The
+clock is therefore chosen from what the data already holds: a point already stopped at
+the ceiling starts at the hour, and so does every point below it on the same line,
+since a slower commit cannot be a quicker one. Only a point with no history pays the
+cheap pass.</p>
+<p>Which stopped runs are worth an hour at all is a separate question, and a run
+already stopped is not yet a fact about the commit, so some are re-run and some are
+not: an hour spent confirming a failure we already know is an hour not spent measuring
+something. The rule is two questions asked of the stopped run, and it runs only if
+<em>either</em> answer lands inside the budget. <em>When would it finish?</em> &mdash; taken from the ratio between
 this commit and the same commit on the public 1&nbsp;800-obligation corpus, which
 does complete. <em>When would it abort?</em> &mdash; taken from extrapolating its own
 memory growth to the 12&nbsp;GB cap. If the sooner of the two is past 90&nbsp;%% of the
