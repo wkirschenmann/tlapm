@@ -665,6 +665,19 @@ figure in &sect;5 and &sect;6 comes from a run that finished or from a cap that
 stopped one.</p>"""
 
 
+def _inferred_sentence():
+    """How many crosses are still inferred, counted rather than asserted."""
+    n = sum(1 for cp in L.CORPORA for v in peak(cp).values()
+            if isinstance(v, dict) and v.get("inferred"))
+    if not n:
+        return ("No cross on this chart is inferred any more: the extended-clock pass "
+                "ran every one of them to its real end.")
+    return ("%d such %s left on this chart, and %s being re-run on an hour&rsquo;s "
+            "clock, which turns each inference into a measurement."
+            % (n, "cross is" if n == 1 else "crosses are",
+               "it is" if n == 1 else "they are"))
+
+
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
 
 
@@ -783,8 +796,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "A <strong>dashed</strong> cross on the cap line is inferred rather than "
     "measured: the clock stopped that run while it already held a large share of "
     "the cap and was still climbing, so its recorded figure is a fact about when "
-    "we stopped looking, not about the commit. Those points are being re-run with "
-    "an hour&rsquo;s clock, which turns each inference into a measurement. A cross "
+    "we stopped looking, not about the commit. " + _inferred_sentence() + " A cross "
     "<em>below</em> the cap is neither: a run that was simply slow, sitting at a "
     "few hundred megabytes when the clock ran out, and there its reading is its "
     "peak. The distinction is the whole point of the pull request in the middle: "
