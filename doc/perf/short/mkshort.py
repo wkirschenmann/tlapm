@@ -1401,6 +1401,12 @@ def sec_perpr():
     return "".join(c)
 
 
+SHORT_CP = {"tiny": "small", "synth100": "600", "synth300": "1 800",
+            "ffi": "chain", "mono": "monolith"}
+LONG_CP = {"tiny": "small", "synth100": "600", "synth300": "1 800",
+           "ffi": "chain, 9 967", "mono": "monolith, 29 965"}
+
+
 def _cm_table(cm):
     """what this commit measured, on every corpus where both sides are numbers"""
     i = L.POINTS.index(cm)
@@ -1414,22 +1420,33 @@ def _cm_table(cm):
             continue
         rows.append('<tr><td class="num">%s</td><td class="num">%s &rarr; %s %s</td>'
                     '<td class="num">%s &rarr; %s %s</td><td class="num">%s &rarr; %s %s</td></tr>'
-                    % ({"tiny": "small", "synth100": "600", "synth300": "1 800",
-                        "ffi": "chain, 9 967", "mono": "monolith, 29 965"}[cp],
+                    % (LONG_CP[cp],
                        L.fmt_ms(ga), L.fmt_ms(gb), fmt_x(ga, gb),
                        L.fmt_ms(a), L.fmt_ms(b), fmt_x(a, b),
                        L.fmt_kb(pa), L.fmt_kb(pb), fmt_x(pa, pb)))
+    # Both warm metrics, on every corpus measured.  This used to read two hardcoded
+    # corpora for iteration latency and one unkeyed lookup for the keystroke -- and
+    # when the keystroke reader became per-corpus the unkeyed lookup silently returned
+    # nothing, so seventeen commit blocks lost their keystroke figure without any of
+    # them going blank.  Deriving both from the data is what stops that recurring.
+    def pair(a, b):
+        """one 'before -> after' cell, ratio only when both sides are numbers"""
+        fa = L.fmt_ms(a) if not isinstance(a, float) else fmt_secs(a)
+        fb = L.fmt_ms(b) if not isinstance(b, float) else fmt_secs(b)
+        r = ""
+        if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b:
+            r = ' <span class="r">&times;%.2f</span>' % (float(a) / float(b))
+        return "%s &rarr; %s%s" % (fa, fb, r)
+
     warm = []
-    for cp, nm in (("synth300", "1 800"), ("ffi", "chain")):
+    for cp in L.CORPORA:
         ra, rb = iterlat.get((cp, prev)), iterlat.get((cp, cm))
         if ra and rb:
-            warm.append("%s %s &rarr; %s %s" % (nm, L.fmt_ms(ra[0]), L.fmt_ms(rb[0]),
-                                                fmt_x(ra[0] if isinstance(ra[0], int) else 0,
-                                                      rb[0] if isinstance(rb[0], int) else 0)))
-    ka, kb = keys.get(prev), keys.get(cm)
-    if ka and kb:
-        warm.append("keystroke %.1f&nbsp;s &rarr; %.1f&nbsp;s <span class=\"r\">&times;%.2f</span>"
-                    % (ka[0], kb[0], ka[0] / kb[0]))
+            warm.append("iteration, %s: %s" % (SHORT_CP[cp], pair(ra[0], rb[0])))
+    for cp in L.CORPORA:
+        ka, kb = keys.get((cp, prev)), keys.get((cp, cm))
+        if ka and kb:
+            warm.append("keystroke, %s: %s" % (SHORT_CP[cp], pair(ka[0], kb[0])))
     out = ""
     if rows:
         out += ('<div class="scroller"><table><thead><tr><th>corpus</th><th class="num">generate</th>'
