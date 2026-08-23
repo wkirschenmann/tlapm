@@ -65,6 +65,63 @@ def _cell(cp, pt):
     return sweep.get((pt, cp), {})
 
 
+WALL_SPREAD = 0.02     # refusals this close together are one wall
+CEIL_MARGIN = 0.10     # how far a stopped run may read from the refused ones' range
+
+
+def _wall_attribution():
+    """Which stopped runs belong to a wall that other runs of the same corpus hit.
+
+    Two runs of the refinement chain were taken to their end on the longer clock and
+    both were refused an allocation at 11.19 GB, the same reading as the two the
+    campaign had already refused.  At the fifteen-minute ceiling those two read 5.78
+    and 6.02 GB; the five stopped runs that were not taken further read 5.75 to
+    5.87 GB at that same ceiling -- inside the range of the runs that went on to be
+    refused, on the same code path, with no pruning and no streaming.
+
+    So they are attributed to that wall and drawn as crosses, without each being
+    measured to its end: an hour spent watching a fifth run climb the same slope to
+    the same refusal buys a cross we can already justify.  The criterion is checkable
+    rather than rhetorical -- a stopped run qualifies only if the corpus HAS a wall
+    (its measured refusals agree to within WALL_SPREAD) and if its own ceiling
+    reading falls inside the ceiling readings of the runs refused there.  A run that
+    was stopped holding a few hundred megabytes is nowhere near that range and stays
+    a ring, which is what keeps the rule from swallowing every timeout.
+
+    Returns {corpus: (wall_gb, {points attributed})}.
+    """
+    import csv as _csv
+    rows = list(_csv.DictReader(open(os.path.join(HERE, "short_sweep.csv"))))
+    out = {}
+    for cp in L.CORPORA:
+        mine = [r for r in rows if r["corpus"] == cp and int(r["prep_ms"]) != -2
+                and not r["phase"].startswith("K")]
+        ap = {r["point"]: r for r in mine if r["phase"] != "L"}
+        lg = {r["point"]: r for r in mine if r["phase"] == "L"}
+        refused = [pt for pt, r in lg.items()
+                   if L._verdict(int(r["prep_rc"])) == L.ABORT]
+        walls = [int(lg[pt]["peak_kb"]) / 1048576.0 for pt in refused]
+        walls += [int(ap[pt]["peak_kb"]) / 1048576.0 for pt in ap
+                  if pt not in lg and L._verdict(int(ap[pt]["prep_rc"])) == L.ABORT]
+        if len(walls) < 2 or (max(walls) - min(walls)) / max(walls) > WALL_SPREAD:
+            continue
+        # the ceiling readings of the runs that were later refused
+        ref = [int(ap[pt]["peak_kb"]) / 1048576.0 for pt in refused
+               if pt in ap and int(ap[pt]["prep_rc"]) == 124]
+        if not ref:
+            continue
+        lo, hi = min(ref) * (1 - CEIL_MARGIN), max(ref) * (1 + CEIL_MARGIN)
+        att = {pt for pt, r in ap.items()
+               if pt not in lg and int(r["prep_rc"]) == 124
+               and lo <= int(r["peak_kb"]) / 1048576.0 <= hi}
+        if att:
+            out[cp] = (max(walls), att, sorted(refused), (min(ref), max(ref)))
+    return out
+
+
+WALL = _wall_attribution()
+
+
 def _pending(cp, pt):
     """True when the only reading for this cell comes from the ordinary ceiling.
 
@@ -89,7 +146,10 @@ def thr(cp):
         if v is None or v == L.DNC:
             d[pt] = None                       # not measured: absent, not failed
         elif v in L.FAILED:
-            d[pt] = {"kind": v, "at": None, "pending": _pending(cp, pt)}
+            w = WALL.get(cp)
+            att = bool(w and pt in w[1] and v == L.CEIL)
+            d[pt] = {"kind": L.ABORT if att else v, "at": None,
+                     "pending": False if att else _pending(cp, pt)}
         else:
             d[pt] = L.OBL[cp] * 1000.0 / v
     return d
@@ -122,11 +182,11 @@ def peak(cp):
             d[pt] = {"kind": "OOM", "at": (raw / 1048576.0) if raw else CAP_GB}
         elif v == L.CEIL:
             gb = (raw / 1048576.0) if raw else None
-            pend = _pending(cp, pt)
-            if gb and gb > HEADING_FOR_CAP * CAP_GB:
-                d[pt] = {"kind": "OOM?", "at": CAP_GB, "pending": pend}
+            w = WALL.get(cp)
+            if w and pt in w[1]:
+                d[pt] = {"kind": "OOM", "at": w[0], "attributed": True}
             else:
-                d[pt] = {"kind": "CEIL", "at": gb, "pending": pend}
+                d[pt] = {"kind": "CEIL", "at": gb, "pending": _pending(cp, pt)}
         else:
             d[pt] = v / 1048576.0
     return d
@@ -844,12 +904,11 @@ def _estimator_record():
 
 
 def _same_wall():
-    """Do the aborts land at one resident set, or at several?
+    """Do the aborts land at one resident set, and which crosses were measured?
 
-    It is the difference between a wall and a slope, and the chart cannot show it --
-    every cross sits on the cap line by construction.  So say it: if the refusals
-    happen at the same reading each time, the binding constraint is the cap and the
-    failure is one failure, not a family of them.
+    The chart cannot show either: every cross sits on the cap line by construction,
+    so the reader can see neither that the refusals agree nor which of them were run
+    to their end.  Both belong in the caption, counted from the data.
     """
     best = None
     for cp in L.CORPORA:
@@ -863,19 +922,35 @@ def _same_wall():
     lo, hi = min(at), max(at)
     spread = (hi - lo) / hi * 100
     where = CORPUS_NAME.get(cp, cp)
-    if spread > 2.0:
+    if spread > WALL_SPREAD * 100:
         return (" The %d refusals on the %s land between %.2f and %.2f&nbsp;GB, so the "
                 "commits differ in how much they hold when the cap stops them."
                 % (len(at), where, lo, hi))
-    return (" The crosses carry one more fact the chart cannot show, because every "
-            "cross sits on the cap line by construction: the %d refusals on the %s "
-            "happen at the <strong>same</strong> resident set, %.2f&nbsp;GB, within "
-            "%.2f&nbsp;%%. The cap is on address space and the reading is the resident "
-            "set, which is why it is a little under 12&nbsp;GB; that it is the same "
-            "figure every time is the point. These commits do not fail at four "
-            "different memory profiles &mdash; they fail at one wall, and what "
-            "separates them is only how long they take to reach it."
-            % (len(at), where, hi, spread))
+    txt = (" The crosses carry one more fact the chart cannot show, because every "
+           "cross sits on the cap line by construction: the refusals on the %s all "
+           "happen at the <strong>same</strong> resident set, %.2f&nbsp;GB, within "
+           "%.2f&nbsp;%%. The cap is on address space and the reading is the resident "
+           "set, which is why it is a little under 12&nbsp;GB; that it is the same "
+           "figure every time is the point. These commits do not fail at several "
+           "different memory profiles &mdash; they fail at one wall, and what "
+           "separates them is only how long they take to reach it."
+           % (where, hi, spread))
+    w = WALL.get(cp)
+    if w:
+        _, att, refused, (rlo, rhi) = w
+        n_meas = len(at) - len(att)
+        txt += (" %d of those %d crosses are runs taken to their refusal; the other %d "
+                "are <strong>attributed</strong> to that wall rather than measured to "
+                "it, and the ground is stated so a reader can reject it: at the "
+                "fifteen-minute ceiling the runs that <em>were</em> taken further read "
+                "%.2f&ndash;%.2f&nbsp;GB, and each attributed run read inside that "
+                "range at the same ceiling, on the same code path, with neither the "
+                "pruning nor the streaming that removes the wall. A run stopped "
+                "holding a few hundred megabytes is nowhere near that range and stays "
+                "a ring, which is what keeps the attribution from swallowing every "
+                "timeout."
+                % (n_meas, len(at), len(att), rlo, rhi))
+    return txt
 
 
 CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
