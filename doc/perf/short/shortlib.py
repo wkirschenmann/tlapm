@@ -315,6 +315,31 @@ def load_iteration_latency(path=None, boot=None):
     return out, boot
 
 
+def load_phases(path=None):
+    """{(corpus, clock): median seconds} from a --timing run, plus the corpora seen.
+
+    One boot, chosen the way every other reader chooses it: the one carrying the
+    most rows.  The clocks are the stock ones -- no probe -- so this table is
+    reproducible by anyone with the branch.
+    """
+    path = path or os.path.join(S, "short_phases.csv")
+    if not os.path.exists(path):
+        return {}, [], None
+    rows = list(csv.DictReader(open(path)))
+    if not rows:
+        return {}, [], None
+    boot = collections.Counter(r["boot"] for r in rows).most_common(1)[0][0]
+    point = collections.Counter(r["point"] for r in rows if r["boot"] == boot
+                                ).most_common(1)[0][0]
+    acc = collections.defaultdict(list)
+    for r in rows:
+        if r["boot"] == boot and r["point"] == point:
+            acc[(r["corpus"], r["clock"])].append(float(r["seconds"]))
+    out = {k: statistics.median(v) for k, v in acc.items()}
+    cps = [c for c in CORPUS_ORDER if any(k[0] == c for k in out)]
+    return out, cps, point
+
+
 def _keystroke_boot(vals, boot=None):
     """The boot a keystroke figure should be read from.
 

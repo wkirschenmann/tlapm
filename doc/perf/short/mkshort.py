@@ -4,7 +4,7 @@
 Every number in the document comes from the CSVs next to this file.  Nothing is
 typed in by hand: a cell that was not measured renders as a dash and says so.
 """
-import os, sys, subprocess, collections
+import os, re, sys, subprocess, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import shortlib as L
 import charts as C
@@ -38,14 +38,14 @@ CORPUS_META = {
     "synth300": ("public synthetic, large",
                  "a 1&nbsp;800-obligation synthetic module", "1 800",
                  "the flat public corpus large enough to show the growth, and the"
-                 " one every ratio in &sect;6 is quoted on"),
+                 " one every ratio in &sect;{perpr} is quoted on"),
     "idemo": ("public refinement stack",
               "a public three-level refinement stack", "stack",
               "the public corpus that reaches the regime the private two are here"
               " for: a nested-INSTANCE stack whose 3&nbsp;239-line proof costs"
               " <code>main</code> 80&nbsp;s and 1.6&nbsp;GB. It is in this"
               " repository, so every number on its line can be re-run and"
-              " disputed &mdash; see &sect;2"),
+              " disputed &mdash; see &sect;{mechanism}"),
     "ffi": ("private refinement chain",
             "a private refinement chain", "chain",
             "a real INSTANCE-heavy refinement chain: the shape this series is"
@@ -721,7 +721,7 @@ that only reported the ratios that flatter it would not be worth reading.</p>"""
                     tp["gen_ms"] / 1000.0, mn["gen_ms"] / 1000.0,
                     (mn["prep_ms"] - tp["prep_ms"]) / 1000.0))
     c.append("""<p>What it does not reproduce is scale &mdash; %s obligations against
-the %s of the private monolith &mdash; which is why two of the corpora in &sect;5 are a
+the %s of the private monolith &mdash; which is why two of the corpora in &sect;{method} are a
 customer's. This one is the part anyone can run.</p>""" % (
         "{:,}".format(pr["obligations"]).replace(",", "&nbsp;"),
         "{:,}".format(L.OBL["mono"]).replace(",", "&nbsp;")))
@@ -732,6 +732,60 @@ cost hours when they happen on a real one, because the prefix counts
 <code>instance_demo/CiteTrap.tla</code> exhibits the first and is expected to report
 one failed obligation; <code>instance_demo/README.md</code> has both, and the
 diagnostic for either.</p>""")
+    return "".join(c)
+
+
+FRONT = ["parsing", "analysis", "generation"]
+FPCLK = ["fp_compute", "fp_saving", "fp_loading"]
+CLOCK_NAME = {"parsing": "read the source", "analysis": "elaborate the modules",
+              "generation": "generate the obligations",
+              "fp_compute": "compute fingerprints", "fp_saving": "write fingerprints",
+              "fp_loading": "read fingerprints", "interaction": "prepare and ship",
+              "simplification": "simplify", "formatting": "format",
+              "checking": "check", "other": "unattributed"}
+
+
+def sec_where():
+    """Where a solver-free run spends itself, from the stock clocks."""
+    ph, cps, pt = L.load_phases()
+    if not ph:
+        return ""
+    clocks = [c for c in list(CLOCK_NAME) if any((cp, c) in ph for cp in cps)]
+    def pct(cp, keys):
+        tot = ph.get((cp, "total")) or sum(ph.get((cp, c), 0.0) for c in clocks)
+        return 100.0 * sum(ph.get((cp, c), 0.0) for c in keys) / tot if tot else 0.0
+    lead = cps[-1]
+    c = ["<p>One solver-free run per corpus, <code>tlapm --noproving --nofp "
+         "--timing</code>, taken at <code>%s</code> &mdash; the first commit whose "
+         "clocks add up, and otherwise the base commit&rsquo;s behaviour. Reading the "
+         "source, elaborating the modules and generating the obligations are "
+         "<strong>%.1f&nbsp;%%</strong> of the run on the %s; the other "
+         "<strong>%.1f&nbsp;%%</strong> is the per-obligation loop, single-threaded, "
+         "and that loop is what the rest of this series is about.</p>"
+         % (C.LABELS[pt][0], pct(lead, FRONT), CORPUS_NAME.get(lead, lead),
+            100.0 - pct(lead, FRONT))]
+    c.append('<div class="scroller"><table><thead><tr><th>clock</th>%s</tr></thead>'
+             '<tbody>' % "".join('<th class="num">%s</th>' % CORPUS_NAME.get(cp, cp)
+                                 for cp in cps))
+    for cl in clocks:
+        cells = "".join('<td class="num">%s</td>'
+                        % ("&mdash;" if (cp, cl) not in ph else
+                           "%.2f&nbsp;s <span class=\"r\">%.0f&nbsp;%%</span>"
+                           % (ph[(cp, cl)], pct(cp, [cl])))
+                        for cp in cps)
+        c.append("<tr><td>%s <span style=\"color:var(--ink-3)\"><code>%s</code></span>"
+                 "</td>%s</tr>" % (CLOCK_NAME[cl], cl, cells))
+    c.append('<tr><td><strong>total</strong></td>%s</tr>'
+             % "".join('<td class="num"><strong>%.2f&nbsp;s</strong></td>'
+                       % ph.get((cp, "total"), 0.0) for cp in cps))
+    c.append("</tbody></table></div>")
+    c.append("<p style=\"margin-top:12px\">Which stage <em>inside</em> that loop "
+             "dominates is not something the stock clocks can say &mdash; splitting it "
+             "needs instrumentation this branch deliberately does not carry. An "
+             "instrumented run recorded in <code>doc/perf/ANALYSIS.md</code> put "
+             "expanding definitions at 57&nbsp;%% of a solver-free run of the private "
+             "chain, which is what PR3 addresses; read that as a proportion of a "
+             "different run, not as a value comparable with the tables below.</p>")
     return "".join(c)
 
 
@@ -783,7 +837,7 @@ without them the measurements that justify the rest are not available.</p>
 def sec_proposal():
     c = ["<p>%s pull requests, %s commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
          "Each commit is one subject, states its own invariant, and passes the gate in "
-         "&sect;4 on its own.</p>"
+         "&sect;{method} on its own.</p>"
          % (numword(N_PR).capitalize(), numword(N_CM),
             TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
     c.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>pull request</th>'
@@ -944,10 +998,10 @@ def _noise_sentence():
             "the command-line preparation path across it cannot differ &mdash; whatever "
             "the campaign measures there <em>is</em> the run-to-run spread, on a pair "
             "whose true answer is known to be zero. It measures: %s. That is the floor "
-            "any ratio in &sect;6 has to clear, and it is why a commit is only credited "
+            "any ratio in &sect;{perpr} has to clear, and it is why a commit is only credited "
             "with an effect when it is a sustained step rather than a single large "
             "ratio. Read it per corpus: the floor is widest where the run is shortest, "
-            "which is one reason the ratios in &sect;6 are quoted on the "
+            "which is one reason the ratios in &sect;{perpr} are quoted on the "
             "1&nbsp;800-obligation corpus and the two private specifications rather "
             "than on the small ones.</p>" % ", ".join(parts))
 
@@ -965,7 +1019,7 @@ def _completeness():
                    "(commit, corpus) pairs the design calls for: all %d commits and "
                    "<code>main</code> on the three public corpora, and the nine "
                    "pull-request endpoints on the two private ones. There are no "
-                   "missing cells, so nothing in &sect;5 or &sect;6 rests on an "
+                   "missing cells, so nothing in &sect;{curves} or &sect;{perpr} rests on an "
                    "absent measurement.</p>" % (tot, len(L.POINTS) - 1))
     else:
         by = collections.Counter(cp for _, cp in miss)
@@ -1049,7 +1103,7 @@ def _wall_sentence():
     if oom:
         where = " and ".join(CORPUS_NAME.get(cp, cp) for cp in oom)
         txt += (" The wall itself is not in doubt: on the %s the cap refuses an "
-                "allocation outright at the commits marked with a cross in &sect;5, "
+                "allocation outright at the commits marked with a cross in &sect;{curves}, "
                 "and there is no number there to make faster." % where)
     return txt
 
@@ -1475,7 +1529,7 @@ hour and still did not finish. A <strong>ring</strong> is a
 ceiling this measurement protocol sets, not by anything in the commit, so it says where
 we stopped looking and nothing about where the commit ends up. It is not a slower
 version of a cross; it is the absence of an answer, and the count of outstanding rings
-is stated rather than left to be inferred. The tables in &sect;6 say which of the two
+is stated rather than left to be inferred. The tables in &sect;{perpr} say which of the two
 ways a real failure failed, because the difference matters &mdash; a change that speeds
 preparation up reaches the memory wall <em>sooner</em>, turning a ceiling into an abort
 without being a regression. Public and private corpora share each chart: hue separates
@@ -1816,7 +1870,7 @@ reason worth stating plainly, because it looks like inflation and is not.</p>
 commit. Splitting that batch one subject per commit is the whole point of the
 exercise &mdash; each becomes reviewable on its own, and each becomes
 <em>measurable</em> on its own. Measuring them separately is what showed that five of
-the seven move nothing, so they are in &sect;7 rather than here. Two survive: the
+the seven move nothing, so they are in &sect;{not} rather than here. Two survive: the
 deque lookups and the scheduler reaper. Add the single-pass expansion, the two
 prunes, and the linear <code>ENABLED</code> scan, and that is the six.</p>
 <p>The other eleven commits are new. Three are the timing defects, two more are
@@ -1840,26 +1894,38 @@ def build():
              '<span>base <code>%s</code></span></div></header>'
              % (BRANCH, TOTAL_FILES, TOTAL_ADD, TOTAL_DEL,
                 subprocess.check_output(["git", "rev-parse", "--short", "main"]).decode().strip())]
-    secs = [("01", "What breaks, and where", sec_problem),
-            ("02", "One mechanism, four consequences", sec_mechanism),
-            ("03", "What is proposed", sec_proposal),
-            ("04", "How it was measured", sec_method),
-            ("05", "Commit by commit", sec_curves),
-            ("06", "Each pull request", sec_perpr),
-            ("07", "Relation to issue #286", sec_286),
-            ("08", "What is deliberately not here", sec_not)]
-    for n, title, fn in secs:
-        parts.append('<section><div class="sec-head"><span class="n">%s</span><h2>%s</h2></div>%s</section>'
-                     % (n, title, fn()))
+    # Sections are referred to by NAME in the prose and numbered here.  Fourteen
+    # references were written as "&sect;5", two of them were already pointing at the
+    # wrong section, and inserting one section invalidates every one of them at once.
+    secs = [("problem",   "What breaks, and where",           sec_problem),
+            ("where",     "Where the time goes",              sec_where),
+            ("mechanism", "One mechanism, four consequences", sec_mechanism),
+            ("proposal",  "What is proposed",                 sec_proposal),
+            ("method",    "How it was measured",              sec_method),
+            ("curves",    "Commit by commit",                 sec_curves),
+            ("perpr",     "Each pull request",                sec_perpr),
+            ("286",       "Relation to issue #286",           sec_286),
+            ("not",       "What is deliberately not here",    sec_not)]
+    # numbered by position, and a section with nothing measured behind it does not
+    # take a number: the phase table exists only once its campaign row does
+    n, num = 0, {}
+    for key, title, fn in secs:
+        body = fn()
+        if not body:
+            continue
+        n += 1
+        num[key] = n
+        parts.append('<section><div class="sec-head"><span class="n">%02d</span>'
+                     '<h2>%s</h2></div>%s</section>' % (n, title, body))
     parts.append("""<footer>
-<p>Every figure in &sect;1 and &sect;4&ndash;&sect;6 &mdash; every point on every
+<p>Every figure in &sect;{problem} and &sect;{method}&ndash;&sect;{perpr} &mdash; every point on every
 chart, every cell of every table, and the counts and ratios quoted in the prose around
 them &mdash; is produced by <code>doc/perf/short/mkshort.py</code> from the campaign
-CSVs beside it, and the figures in &sect;2 that carry a version come from
+CSVs beside it, and the figures in &sect;{mechanism} that carry a version come from
 <code>instance_demo.csv</code> the same way. Two things are transcribed rather than
-generated, and both say so where they appear: &sect;8's nine ranges, which come from a
+generated, and both say so where they appear: &sect;{not}'s nine ranges, which come from a
 separate and larger campaign on a different machine whose data is not in this
-directory, and the sharing figure in &sect;2's fourth card, which comes from a
+directory, and the sharing figure in &sect;{mechanism}'s fourth card, which comes from a
 <code>TLAPM_PREP_SHARE</code> probe run on the private monolith and has no CSV here to
 be regenerated from. Where a claim about a measurement had to be
 written by hand it has been turned into a slot the generator fills, because in the
@@ -1873,6 +1939,11 @@ Sonnet&nbsp;5). Every commit was reviewed against its diff, and every number her
 from a run that was executed rather than estimated.</p>
 </footer></div>""")
     html = head() + "".join(parts)
+    for key, v in num.items():
+        html = html.replace("&sect;{%s}" % key, "&sect;%d" % v)
+    missing = sorted(set(re.findall(r"&sect;\{([a-z0-9]+)\}", html)))
+    assert not missing, ("the page refers to sections that did not render: %s"
+                         % ", ".join(missing))
     with open(OUT, "w") as f:
         f.write(html)
     return OUT, len(html)

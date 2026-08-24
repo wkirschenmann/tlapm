@@ -201,7 +201,7 @@ memory. Every obligation is proved on both sides and the generated obligation st
 compared): the subset invariant, checked exactly on a corpus small enough for it.
 <code>harness/instance_demo.sh</code> refuses to write the CSV behind these tables if
 either check fails.</p><p>What it does not reproduce is scale &mdash; 2&nbsp;703 obligations against
-the 29&nbsp;965 of the private monolith &mdash; which is why two of the corpora in &sect;5 are a
+the 29&nbsp;965 of the private monolith &mdash; which is why two of the corpora in &sect;4 are a
 customer's. This one is the part anyone can run.</p><p>Two hop-depth mistakes are easy to make in a stack like this and
 cost hours when they happen on a real one, because the prefix counts
 <code>INSTANCE</code> hops and not <code>EXTENDS</code> hops.
@@ -275,7 +275,7 @@ reason worth stating plainly, because it looks like inflation and is not.</p>
 commit. Splitting that batch one subject per commit is the whole point of the
 exercise &mdash; each becomes reviewable on its own, and each becomes
 <em>measurable</em> on its own. Measuring them separately is what showed that five of
-the seven move nothing, so they are in &sect;7 rather than here. Two survive: the
+the seven move nothing, so they are in &sect;8 rather than here. Two survive: the
 deque lookups and the scheduler reaper. Add the single-pass expansion, the two
 prunes, and the linear <code>ENABLED</code> scan, and that is the six.</p>
 <p>The other eleven commits are new. Three are the timing defects, two more are
