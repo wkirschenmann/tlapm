@@ -799,12 +799,11 @@ def sec_where():
 
 def sec_mechanism():
     return """
-<p>One mechanism explains all of it. tlapm generates one obligation per proof leaf,
-and each obligation carries its <em>whole context</em>: the module scope, every
-definition in scope, and the statement of every theorem proved before it. The
-context therefore grows with the file, and the per-obligation work is a function of
-the context. Work per obligation grows with file size, and total work grows faster
-than the number of obligations.</p>
+<p>tlapm generates one obligation per proof node, and each obligation carries its
+<em>whole context</em>: the module scope, every definition in scope, and the statement
+of every theorem proved before it. The context therefore grows with the file, and the
+per-obligation work is a function of the context. Generating all of them is therefore
+O(<em>n</em>&sup2;).</p>
 
 <p>That single fact has four distinct consequences, and this series has one family
 of change for each:</p>
