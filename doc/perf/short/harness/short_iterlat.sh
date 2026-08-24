@@ -13,6 +13,16 @@ W=$S/shortwt; BINS=$S/shortbin; OUT=$S/short_iterlat.csv
 export PATH=/opt/isabelle/bin:$PATH
 eval $(opam env --switch=5.1.0 --set-switch) 2>/dev/null
 BOOT=$(awk '/btime/{print $2}' /proc/stat)
+
+# The "already measured" skip has to be keyed on THIS boot.  It was not, and the
+# consequence was quiet: p00 had two rows from an earlier boot, so the loop skipped
+# it, and the line ended up with no baseline on its own boot while every other
+# point had one.  The reader then dropped p00 -- correctly, a time from another
+# boot is not comparable -- and the curve simply had no main point, which is the
+# right outcome reached by luck rather than by the harness.
+done_here () {  # $1 corpus  $2 point  $3 sha  $4 runs wanted
+  [ "$(grep -c "^$BOOT,$1,$2,$3," $OUT 2>/dev/null)" -ge "$4" ]
+}
 mkdir -p $BINS
 ALL="p00:$(git rev-parse main) $(i=0; for s in $(git rev-list --reverse main..tlapm-perf-short); do i=$((i+1)); printf 'p%02d:%s ' $i $s; done)"
 CHAIN_PTS="p00 p05 p06 p07 p08 p09 p10 p11 p12 p13 p14 p15 p16 p17"
@@ -32,10 +42,10 @@ binfor () { local n=$1 sha=$2
 # --- synthetic, 1800 obligations, 3 runs, 900 s ceiling
 for p in $ALL; do
   n=${p%%:*}; sha=${p##*:}
-  grep -q ",synth300,$n,$sha,3," $OUT && continue
+  done_here synth300 "$n" "$sha" 3 && continue
   b=$(binfor $n $sha) || { echo "$n build failed"; continue; }
   for r in 1 2 3; do
-    grep -q ",synth300,$n,$sha,$r," $OUT && continue
+    grep -q "^$BOOT,synth300,$n,$sha,$r," $OUT && continue
     d=$(mktemp -d); cp -r $S/iter/cache $d/c; cp $S/iter/edited.tla $d/Synth_L300_S5_D50_C3.tla
     cd $d; t0=$(date +%s%N)
     timeout 900 $b --toolbox 0 0 --threads 4 --cache-dir $d/c Synth_L300_S5_D50_C3.tla > $d/o 2>&1; rc=$?
@@ -57,11 +67,11 @@ echo ITER_SYNTH_DONE
 # the opposite.
 for q in $CHAIN_PTS; do
   for p in $ALL; do [ "${p%%:*}" = "$q" ] && { n=$q; sha=${p##*:}; }; done
-  grep -q ",chain,$n,$sha,2," $OUT && continue
-  grep -qE ",chain,$n,$sha,1,[0-9]+,124," $OUT && continue
+  done_here chain "$n" "$sha" 2 && continue
+  grep -qE "^$BOOT,chain,$n,$sha,1,[0-9]+,124," $OUT && continue
   b=$(binfor $n $sha) || { echo "$n build failed"; continue; }
   for r in 1 2; do
-    grep -q ",chain,$n,$sha,$r," $OUT && continue
+    grep -q "^$BOOT,chain,$n,$sha,$r," $OUT && continue
     d=$(mktemp -d); cp -r $S/iterchain/cache $d/c
     for f in $S/iterchain/*.tla; do case $(basename $f) in orig.tla|edited.tla) ;; *) cp $f $d/;; esac; done
     cp $S/iterchain/edited.tla $d/FfiGrpcTheorems_proofs.tla
