@@ -1701,6 +1701,19 @@ def build():
              '<span>base <code>%s</code></span></div></header>'
              % (BRANCH, TOTAL_FILES, TOTAL_ADD, TOTAL_DEL,
                 subprocess.check_output(["git", "rev-parse", "--short", "main"]).decode().strip())]
+    parts.append("""<section>
+<p>Machine assistance has made it realistic to <em>generate</em> TLA+ proofs rather
+than write them by hand. What comes out is markedly more verbose than what a person
+writes, and much longer: specifications carrying ten or twenty thousand obligations are
+no longer unusual.</p>
+<p>tlapm was proven on proofs of a different size. It is comfortable on small ones and
+does not scale to these: the cost of an obligation grows with the file it sits in, so
+the work grows faster than the proof does.</p>
+<p>We went looking for where that growth comes from. It is localised &mdash; a handful
+of places where a non-linear cost sits inside a loop over the context &mdash; which is
+why what follows is %s pull requests against the existing design rather than a
+different one.</p>
+</section>""" % numword(N_PR))
     # Sections are referred to by NAME in the prose and numbered here.  Fourteen
     # references were written as "&sect;5", two of them were already pointing at the
     # wrong section, and inserting one section invalidates every one of them at once.
