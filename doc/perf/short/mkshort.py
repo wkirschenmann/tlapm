@@ -521,7 +521,15 @@ def sec_problem():
     ks_cp = _worst_keystroke()
     ks_main = keys.get((ks_cp, "p00"), (None,))[0] if ks_cp else None
     ks_tip = keys.get((ks_cp, TIP), (None,))[0] if ks_cp else None
-    it_main = iterlat.get(("ffi", "p00"), (None,))[0]
+    # main's own reading where there is one, and otherwise the leftmost commit that
+    # has one, named.  The chain's warm loop costs three quarters of an hour a point
+    # at that end, so a container restart can leave the reference point unmeasured
+    # while the rest of the line stands; quoting the neighbour and saying which it is
+    # beats dropping the paragraph, which is what happened here.
+    it_at = "p00"
+    if not iterlat.get(("ffi", "p00")):
+        it_at = next((pt for pt in L.POINTS if iterlat.get(("ffi", pt))), "p00")
+    it_main = iterlat.get(("ffi", it_at), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
              "boundary is not gradual. The %s specifications below are the same tool on "
@@ -545,9 +553,12 @@ def sec_problem():
     if isinstance(it_main, str) or it_main:
         c.append("<p>The same wall stands in the editor. Re-checking the refinement chain "
                  "after a single edit, with every fingerprint already in the cache, "
-                 "%s on <code>main</code> and takes %s after this series.</p>"
+                 "%s %s, and %s after this series.</p>"
                  % ("has never finished" if it_main in L.FAILED
                     else "takes " + L.fmt_ms(it_main),
+                    "on <code>main</code>" if it_at == "p00"
+                    else ("at <code>%s</code>, the first commit of the series and one "
+                          "that cannot move this metric" % C.LABELS[it_at][0]),
                     L.fmt_ms(it_tip) if it_tip is not None else "&mdash;"))
     if ks_main and ks_tip:
         c.append("<p>And at the keystroke, on the %s: from <code>didChange</code> to "
@@ -1343,6 +1354,8 @@ def fmt_secs(v):
         return "%d ms" % round(v * 1000)
     if v < 100:
         return "%.1f s" % v
+    if v >= 600:
+        return "%.0f min" % (v / 60.0)
     return "%d s" % round(v)
 
 

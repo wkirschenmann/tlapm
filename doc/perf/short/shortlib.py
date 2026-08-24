@@ -433,6 +433,10 @@ def fmt_ms(v, unit="s"):
         return {DNC: "&mdash;", CEIL: "did not finish", ABORT: "OOM"}[v]
     if unit == "ms" or v < 1000:
         return "%d ms" % v
+    # Above ten minutes, minutes.  "2665 s" against "40.5 s" makes the reader do the
+    # division, and the division is the point of the row.
+    if v >= 600000:
+        return "%.0f min" % (v / 60000.0)
     return ("%.1f s" if v < 100000 else "%d s") % (v / 1000.0)
 
 
