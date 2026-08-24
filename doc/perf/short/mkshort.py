@@ -564,7 +564,6 @@ def sec_problem():
              '<th class="num">prepare</th><th class="num">peak</th>'
              '<th class="num">iteration</th><th class="num">keystroke</th>'
              '</tr></thead><tbody>')
-    carried = []
     for cp in L.CORPORA:
         cells = [L.fmt_ms(L.main_point(sweep, cp, "gen")),
                  L.fmt_ms(L.main_point(sweep, cp, "prep")),
@@ -575,11 +574,7 @@ def sec_problem():
         elif isinstance(r[0], str):
             cells.append(L.fmt_ms(r[0]))
         else:
-            # a value carried from the neighbouring commit is flagged where it is
-            # printed, not only where it is drawn
-            cells.append(L.fmt_ms(r[0]) + ("" if r[2] else "&thinsp;&dagger;"))
-            if not r[2]:
-                carried.append(cp)
+            cells.append(L.fmt_ms(r[0]))
         k = keys.get((cp, "p00"))
         cells.append(fmt_secs(k[0]) if k else "&mdash;")
         c.append("<tr><td>%s</td><td class=\"num\">%s</td>%s</tr>"
@@ -587,11 +582,6 @@ def sec_problem():
                     "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"),
                     "".join('<td class="num">%s</td>' % x for x in cells)))
     c.append("</tbody></table></div>")
-    if carried:
-        c.append('<p class="pr-meta">&dagger; <code>main</code> itself was not measured '
-                 'here; the cell carries the reading of the commit after it, which '
-                 'differs from <code>main</code> only by timing instrumentation that is '
-                 'inert unless <code>--timing</code> is passed.</p>')
     return "".join(c)
 
 
