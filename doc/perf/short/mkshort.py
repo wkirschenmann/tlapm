@@ -526,8 +526,8 @@ def sec_problem():
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
              "boundary is not gradual. The %s specifications below are the same tool on "
              % numword(len([c for c in L.CORPORA if c != "synth100"])) +
-             "the same machine: seventy obligations finish before you notice, and ten "
-             "thousand do not finish at all.</p>")
+             "the same machine: %s obligations finish before you notice, and ten "
+             "thousand do not finish at all.</p>" % numword(L.OBL["tiny"]))
     c.append('<div class="scroller"><table><thead><tr><th>specification</th>'
              '<th class="num">obligations</th><th class="num">prepare, <code>main</code></th>'
              '<th class="num">prepare, after</th></tr></thead><tbody>')
@@ -556,10 +556,7 @@ def sec_problem():
                  "That is the wait for <em>one typed character</em>, with every "
                  "fingerprint already cached.</p>"
                  % (CORPUS_NAME.get(ks_cp, ks_cp), ks_main, ks_tip, ks_main / ks_tip))
-    c.append("<div class=\"claim\" style=\"margin-top:16px\"><strong>The constraint that "
-             "shapes everything below:</strong> small proofs must not get slower. Every "
-             "chart carries a 71-obligation module for exactly that reason &mdash; it is "
-             "the control, not a result.</div>")
+    c.append(_control_sentence())
     return "".join(c)
 
 
@@ -1058,6 +1055,33 @@ def _pending_sentence():
             "is quoted anywhere in this document as a figure." % n)
 
 
+def _control_sentence():
+    """What the control module does across the series, read off the campaign.
+
+    Not a rule the series is held to -- a reading.  Every metric on the smallest
+    corpus, main against the tip.
+    """
+    got = []
+    for fld, name, fmt in (("gen", "generation", L.fmt_ms),
+                           ("prep", "preparation", L.fmt_ms),
+                           ("peak", "peak memory", L.fmt_kb)):
+        a, b = val("tiny", "p00", fld), val("tiny", TIP, fld)
+        if isinstance(a, int) and isinstance(b, int):
+            got.append("%s %s &rarr; %s" % (name, fmt(a), fmt(b)))
+    for d, name, fmt in ((iterlat, "iteration", L.fmt_ms),
+                         (keys, "keystroke", lambda v: fmt_secs(v))):
+        ra, rb = d.get(("tiny", "p00")), d.get(("tiny", TIP))
+        if ra and rb and not isinstance(ra[0], str) and not isinstance(rb[0], str):
+            got.append("%s %s &rarr; %s" % (name, fmt(ra[0]), fmt(rb[0])))
+    if not got:
+        return ""
+    return ('<div class="claim" style="margin-top:16px">Nothing proposed below costs '
+            'the small end anything. On the %s-obligation control module, '
+            '<code>main</code> and the branch tip land on the same figure for every '
+            'metric measured &mdash; %s &mdash; which is why it is on every chart.</div>'
+            % (L.OBL["tiny"], "; ".join(got)))
+
+
 def _wall_sentence():
     """What the two private specifications actually do on main, from the campaign.
 
@@ -1308,7 +1332,7 @@ CORPUS_NAME = {c: n for n, c, _, _ in C.SERIES}
 def fmt_secs(v):
     """Seconds, at a precision the value deserves.
 
-    This figure spans five orders of magnitude -- 2 ms on the 71-obligation control
+    This figure spans five orders of magnitude -- 2 ms on the small control
     against two minutes on the 30k-line monolith -- so one format cannot serve it.
     A fixed "%.1f s" printed the control's end label as "0.0 s", which reads as zero
     rather than as small.

@@ -212,13 +212,51 @@ def check_marked_points():
     return bad
 
 
+def check_obligation_counts():
+    """The obligation count of a corpus is measurable; check it is the measured one.
+
+    "71 obligations" was published for a module that has twenty -- in a table, in the
+    opening sentence and in the control paragraph -- because the count was typed once
+    and never read back.  Three of the corpora are proved end to end by the iteration
+    harness, which reports what the tool saw, so those three can be checked directly.
+    The public stack is checked against its own CSV instead: its iteration fixture
+    cites an extra theorem on twenty-six steps, so the fixture legitimately carries
+    twenty-six obligations the file does not.  The two private corpora are measured
+    over a line range and have no full count here to check against.
+    """
+    import csv as _csv
+    import collections as _c
+    bad = []
+    path = os.path.join(L.S, "short_iterlat.csv")
+    if os.path.exists(path):
+        seen = _c.defaultdict(_c.Counter)
+        for r in _csv.DictReader(open(path)):
+            if int(r["rc"]) == 0:
+                seen[r["corpus"]][int(r["proved"]) + int(r["trivial"])] += 1
+        for cp in ("tiny", "synth100", "synth300"):
+            if not seen.get(cp):
+                continue
+            n = seen[cp].most_common(1)[0][0]
+            if n != L.OBL.get(cp):
+                bad.append("%s is published as %s obligations and the harness proves %d "
+                           "of them" % (cp, L.OBL.get(cp), n))
+    demo = os.path.join(L.S, "instance_demo.csv")
+    if os.path.exists(demo):
+        for r in _csv.reader(open(demo)):
+            if len(r) == 3 and r[0] == "proofs" and r[1] == "obligations":
+                if int(r[2]) != L.OBL.get("idemo"):
+                    bad.append("the public stack is published as %s obligations and "
+                               "instance_demo.csv says %s" % (L.OBL.get("idemo"), r[2]))
+    return bad
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:

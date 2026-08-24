@@ -32,7 +32,7 @@ PRS = [
 ]
 ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS]
 
-OBL = {"tiny": 71, "synth100": 600, "synth300": 1800, "idemo": 2703,
+OBL = {"tiny": 20, "synth100": 600, "synth300": 1800, "idemo": 2703,
        "ffi": 9967, "mono": 29965}
 
 # Every corpus this campaign knows how to measure, smallest first.  Which of
