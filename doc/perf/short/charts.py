@@ -101,7 +101,8 @@ def series_for(values):
             if any(v is not None for v in (values.get(t[1]) or {}).values())]
 
 
-def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
+def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
+          better=None):
     """values: {corpus: {point: number | {"kind","at"} | sentinel | None}}
 
     rule: (value, label) drawn as a labelled horizontal reference line -- the cap a
@@ -134,6 +135,12 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
         (isinstance(v, dict) and not v.get("at")) or (not isinstance(v, dict) and v in L.FAILED)
         for cp in values for v in values[cp].values() if v is not None)
     zone = ZONE if needs_band else 0
+    # Which SIDE the band sits on is a property of the metric, not of the layout.
+    # On a lower-is-better axis the bottom of the chart is the best possible
+    # place to be, so a run that never finished, parked down there, reads as the
+    # best result on the chart.  It is the worst one.  The band goes above the
+    # plot for those metrics and below it for higher-is-better.
+    band_top = (better == "lower")
     # The legend is laid out before the plot, because how many rows it needs
     # decides where the plot can start.  Row 1 used to be drawn at PADT + 2 --
     # two pixels INSIDE the plot area -- and a third row was not handled at
@@ -147,8 +154,11 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
         if lx + w > W - PADR and rows[-1]:
             rows.append([]); lx = PADL
         rows[-1].append((lx, t)); lx += w
-    top = PADT + LEG_ROW * (len(rows) - 1)
-    bot = H - PADB - zone
+    leg_base = PADT + LEG_ROW * (len(rows) - 1)   # where the legend ends
+    top = leg_base + (zone if band_top else 0)    # where the plot starts
+    bot = H - PADB - (0 if band_top else zone)
+    band_y = (top - zone / 2.0) if band_top else (bot + zone / 2.0)
+    band_rule = top if band_top else bot
     y = lambda v: bot - (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo)) * (bot - top)
     o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W, H, aria)]
     o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="currentColor" stroke-width="1" '
@@ -156,7 +166,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
     if needs_band:
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
                  'stroke-width="0.8" stroke-dasharray="2 3" opacity=".3"/>'
-                 % (PADL, bot, W - PADR, bot))
+                 % (PADL, band_rule, W - PADR, band_rule))
     for v in ticks:
         yy = y(v)
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
@@ -165,11 +175,11 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                  'font-size="10" fill="currentColor" opacity=".65">%s</text>'
                  % (PADL - 8, yy + 3.5, _tick(v)))
     o.append('<text x="%d" y="%d" text-anchor="end" font-family="IBM Plex Mono, monospace" '
-             'font-size="9.5" fill="currentColor" opacity=".55">%s</text>' % (PADL - 8, top - 10, unit))
+             'font-size="9.5" fill="currentColor" opacity=".55">%s</text>' % (PADL - 8, top + (14 if band_top else -10), unit))
     if needs_band:
         o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Mono, '
                  'monospace" font-size="9" fill="currentColor" opacity=".55">none</text>'
-                 % (PADL - 8, bot + zone / 2 + 3))
+                 % (PADL - 8, band_y + 3))
     # a faint rule at each pull-request boundary, so the eye can group the commits
     for i, pt in enumerate(points):
         if pt in PR_END and pt != points[-1]:
@@ -200,9 +210,9 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                 pts.append(None)
             elif isinstance(v, dict):
                 at = v.get("at")
-                pts.append((y(at) if at else bot + zone / 2, False))
+                pts.append((y(at) if at else band_y, False))
             elif v in L.FAILED:
-                pts.append((bot + zone / 2, False))
+                pts.append((band_y, False))
             else:
                 pts.append((y(v), True))
         for i in range(len(pts) - 1):
@@ -222,10 +232,14 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
             if isinstance(v, dict) or v in L.FAILED:
                 cy = pts[i][0]
                 r = 4.0
-                if isinstance(v, dict) and v.get("pending"):
-                    # A protocol timeout: the ceiling that stopped this run is ours,
-                    # not the commit's, so the cell is inconclusive.  A ring says "no
-                    # answer" where a cross would claim there is one.
+                in_band = abs(cy - band_y) < 0.01
+                if isinstance(v, dict) and v.get("pending") and not in_band:
+                    # A protocol timeout placed AT a coordinate: the ceiling that
+                    # stopped this run is ours, not the commit's, so the reading is
+                    # inconclusive and a ring says "no answer" where a cross would
+                    # claim there is one.  In the band there is no coordinate and
+                    # nothing to be inconclusive about -- the row is labelled
+                    # "none", and every mark in it is a cross.
                     o.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" '
                              'stroke="%s" stroke-width="2"/>'
                              % (xs(i), cy, r - 0.4, FAIL))
@@ -268,7 +282,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None):
                  % (xs(i), H - PADB + 15, col, op, wt, xs(i), H - PADB + 15, lab))
     o.append('<g font-family="IBM Plex Sans, sans-serif" font-size="11">')
     for r, entries in enumerate(rows):
-        ly = top - 14 - LEG_ROW * (len(rows) - 1 - r)
+        ly = leg_base - 14 - LEG_ROW * (len(rows) - 1 - r)
         for lx, (lab, cp, col, dash) in entries:
             da = ' stroke-dasharray="%s"' % dash if dash else ""
             o.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" '
