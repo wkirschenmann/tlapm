@@ -951,8 +951,7 @@ def _switches():
                    '<td style="font-size:14px">%s</td></tr>' % (pid, sha, subj, off))
     out.append("</tbody></table></div>")
     out.append("<p style=\"margin-top:12px\">Every measurement here is taken with the "
-               "features on and every switch unset, checked against the running "
-               "processes rather than assumed.</p>")
+               "features on and every switch unset.</p>")
     return "".join(out)
 
 
@@ -1062,9 +1061,8 @@ def _pending_sentence():
 def _wall_sentence():
     """What the two private specifications actually do on main, from the campaign.
 
-    The point of the paragraph is that the failure is categorical rather than slow,
-    so it must not overstate which category: a run the cap refused and a run our own
-    ceiling stopped are different claims, and one of them is not a claim at all.
+    Two sentences, and no argument around them: a run the cap refused and a run the
+    clock stopped are different facts, and the ones that hold get stated.
     """
     out = []
     for cp, name in (("mono", "the monolith"), ("ffi", "the refinement chain")):
@@ -1080,19 +1078,7 @@ def _wall_sentence():
         else:
             out.append("on %s <code>main</code> has not been measured on this "
                        "campaign" % name)
-    txt = ("On %s, and %s." % (out[0], out[1])).replace("On on ", "On ")
-    # The claim the paragraph is making is that the failure is categorical.  Only a
-    # refused allocation demonstrates that; a ceiling of our own does not.  So say it
-    # only where the campaign has a refused allocation to point at.
-    oom = sorted({cp for cp in ("ffi", "mono")
-                  for pt in L.POINTS
-                  if _cell(cp, pt).get("prep") == L.ABORT})
-    if oom:
-        where = " and ".join(CORPUS_NAME.get(cp, cp) for cp in oom)
-        txt += (" The wall itself is not in doubt: on the %s the cap refuses an "
-                "allocation outright at the commits marked with a cross in &sect;{curves}, "
-                "and there is no number there to make faster." % where)
-    return txt
+    return ("On %s, and %s." % (out[0], out[1])).replace("On on ", "On ")
 
 
 ITER_STEP = 1.10       # the FLOOR; iter_threshold() raises it per corpus
@@ -1305,7 +1291,7 @@ def _same_wall():
         rhi = max(WALL[cp][3][1] for cp in WALL if cp in per)
         txt += (" %d of those %d crosses are runs taken to their refusal; the other %d "
                 "are <strong>attributed</strong> to that wall rather than measured to "
-                "it, and the ground is stated so a reader can reject it: at the "
+                "it, on this ground: at the "
                 "point where they were stopped, the runs that <em>were</em> taken further "
                 "read %.2f&ndash;%.2f&nbsp;GB, and each attributed run read inside that "
                 "range at that same point, on the same code path, with neither the "
@@ -1465,8 +1451,7 @@ hour and still did not finish. A <strong>ring</strong> is a
 <strong>protocol timeout &mdash; inconclusive</strong>: this protocol&rsquo;s clock
 stopped the run, not anything in the commit, so it says where we stopped looking and
 nothing about where the commit ends up. It is not a slower
-version of a cross; it is the absence of an answer, and the count of outstanding rings
-is stated rather than left to be inferred. The tables in &sect;{perpr} say which of the two
+version of a cross; it is the absence of an answer. The tables in &sect;{perpr} say which of the two
 ways a real failure failed, because the difference matters &mdash; a change that speeds
 preparation up reaches the memory wall <em>sooner</em>, turning a run we stopped into a
 run the cap refused, without being a regression. Public and private corpora share each chart: hue separates
@@ -1766,9 +1751,7 @@ DROPPED = [
 def sec_not():
     c = ["""<p>Nine further commits were written, measured, and are <strong>not</strong>
 proposed. Each is correct and each removes real work; none of them moves a metric a
-user can observe. They are listed because the reason they are absent is a result, and
-because a reviewer asking &ldquo;why not also&hellip;&rdquo; deserves the answer
-rather than silence.</p>"""]
+user can observe. They are listed because the reason they are absent is a result.</p>"""]
     c.append('<div class="scroller"><table><thead><tr><th>area</th><th>change</th>'
              '<th class="num">measured</th><th>why it is out</th></tr></thead><tbody>')
     for area, what, meas, why in DROPPED:
@@ -1801,8 +1784,7 @@ def sec_286():
     n286 = sum(1 for v in C.LABELS.values() if v[1])
     return """<p>""" + numword(n286).capitalize() + """ of these """ + numword(N_CM) + """ commits credit <a
 href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>, and the
-issue itself describes four families of optimisation. The counts differ for a
-reason worth stating plainly, because it looks like inflation and is not.</p>
+issue itself describes four families of optimisation. The counts differ, and here is why.</p>
 <p>The reference patchset put seven independent micro-optimisations in a single
 commit. Splitting that batch one subject per commit is the whole point of the
 exercise &mdash; each becomes reviewable on its own, and each becomes
