@@ -28,31 +28,16 @@ keys, kboot = L.load_keystroke()
 # (kind, the name used in the narrative table of §1, the short name used in
 # the dense per-commit tables, why it is on the curves at all)
 CORPUS_META = {
-    "tiny": ("public synthetic, small", "a small module", "small",
-             "the control: it must not get slower, and it is on every chart to"
-             " show that it does not"),
+    "tiny": ("public synthetic, small", "a small module", "small"),
     "synth100": ("public synthetic, medium", "a 600-obligation synthetic module",
-                 "600",
-                 "the small end of the growth curve, where <code>main</code> is"
-                 " still comfortable"),
+                 "600"),
     "synth300": ("public synthetic, large",
-                 "a 1&nbsp;800-obligation synthetic module", "1 800",
-                 "the flat public corpus large enough to show the growth, and the"
-                 " one every ratio in &sect;{perpr} is quoted on"),
+                 "a 1&nbsp;800-obligation synthetic module", "1 800"),
     "idemo": ("public refinement stack",
-              "a public three-level refinement stack", "stack",
-              "the public corpus that reaches the regime the private two are here"
-              " for: a nested-INSTANCE stack whose 3&nbsp;239-line proof costs"
-              " <code>main</code> 80&nbsp;s and 1.6&nbsp;GB. It is in this"
-              " repository, under <code>doc/perf/short/instance_demo/</code>, so"
-              " every number on its line can be re-run and disputed"),
+              "a public three-level refinement stack", "stack"),
     "ffi": ("private refinement chain",
-            "a private refinement chain", "chain",
-            "a real INSTANCE-heavy refinement chain: the shape this series is"
-            " aimed at"),
-    "mono": ("private monolith", "a private 30k-line monolith", "monolith",
-             "a real 30k-line monolith: the specification <code>main</code>"
-             " cannot prepare at all"),
+            "a private refinement chain", "chain"),
+    "mono": ("private monolith", "a private 30k-line monolith", "monolith"),
 }
 NUMWORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
            7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven",
@@ -657,22 +642,7 @@ def sec_proposal():
 
 
 def sec_method():
-    c = ["<h4>Corpora</h4><p>%s, and every chart carries all of them. "
-         "Everything marked public is in this repository; the two private "
-         "specifications are a customer's and are not published &mdash; only "
-         "these numbers are.</p>"
-         % numword(len(L.CORPORA)).capitalize()]
-    c.append('<div class="scroller"><table><thead><tr><th>corpus</th>'
-             '<th class="num">obligations</th><th>why it is here</th></tr></thead><tbody>')
-    for cp in L.CORPORA:
-        kind, _, _short, why = CORPUS_META[cp]
-        c.append('<tr><td class="num">%s</td><td class="num">%s</td>'
-                 '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
-                 % (kind,
-                    "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"), why))
-    c.append("</tbody></table></div>")
-
-    c.append("""<h4>The correctness gate every commit passes</h4>
+    c = ["""<h4>The correctness gate every commit passes</h4>
 <p>Not a benchmark gate &mdash; a soundness one. For each of the """ + numword(N_CM) + """ commits,
 in sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green,
 and the <code>test/fast</code> suite run against the full prover stack &mdash;
@@ -680,7 +650,7 @@ Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built from this
 repository's <code>isabelle/</code> sources. The gate is fail-set
 <em>identity</em> with <code>main</code>, not a pass count: a newly failing test is
 a regression even where the count would still look healthy.</p>
-""")
+"""]
     c.append("""<p>Two invariants hold across the whole series. <strong>The provers receive a subset
 of what they receive today</strong>, never more, and no obligation is created that
 does not exist today. <strong>Fingerprints do not move</strong>: the digest is
