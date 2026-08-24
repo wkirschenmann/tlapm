@@ -155,13 +155,12 @@ def check_sixth_corpus():
 
 
 def check_iter_threshold():
-    """ITER_STEP has to clear the noise it claims to clear.
+    """No corpus may name a move a result that its own noise could produce.
 
-    The constant carried a comment saying it was "well clear of the run-to-run
-    spread" and nothing measured it.  The three clock commits cannot have moved
-    iteration latency -- they are inert without --timing, which the harness does
-    not pass -- so their spread is that noise, and the threshold is now
-    accountable to it rather than to a comment.
+    This started as a check on one global constant and immediately earned its
+    keep: 1.10 named a 10 % move a result on the public stack, whose band is
+    12 %. The threshold is per corpus now, so the check guards the structure --
+    it fails if anyone reintroduces a shared constant that sits under a band.
     """
     import mkshort as M
     bad = []
@@ -169,14 +168,13 @@ def check_iter_threshold():
         b = M.iter_band(cp)
         if not b:
             continue
-        spread, ncm, nrun, within = b
-        worst = max(spread, within)
-        if (M.ITER_STEP - 1.0) * 100.0 <= worst:
-            bad.append("ITER_STEP %.2f names a %.1f%% move a result on %s, where the "
-                       "commits that cannot have moved it spread %.1f%% "
-                       "(%.1f%% between commits, %.1f%% within one)"
-                       % (M.ITER_STEP, (M.ITER_STEP - 1) * 100, cp, worst,
-                          spread, within))
+        worst = max(b[0], b[3])
+        thr = (M.iter_threshold(cp) - 1.0) * 100.0
+        if thr <= worst:
+            bad.append("the iteration threshold on %s is %.1f%%, at or under its own "
+                       "noise band of %.1f%% (%.1f%% between commits, %.1f%% within "
+                       "one) -- a move that size could be the machine"
+                       % (cp, thr, worst, b[0], b[3]))
     return bad
 
 

@@ -1116,7 +1116,7 @@ def _wall_sentence():
     return txt
 
 
-ITER_STEP = 1.10       # a move worth naming; iter_band() below says what it clears
+ITER_STEP = 1.10       # the FLOOR; iter_threshold() raises it per corpus
 
 # Three commits in the series cannot change iteration latency: p01, p02 and p03
 # make clock accounting nestable, host the named pipeline clocks, and attribute
@@ -1145,6 +1145,24 @@ def iter_band(cp):
     return ((max(vals) - min(vals)) / max(vals) * 100.0, len(got), runs, within)
 
 
+def iter_threshold(cp):
+    """The ratio a move has to beat on THIS corpus to be called a result.
+
+    One global threshold was wrong, and the checker said so: 1.10 on the public
+    stack named a 10 % move a result where the commits that cannot have moved it
+    spread 12 %.  The reason is scale rather than sloppiness -- that corpus
+    iterates in about a hundred milliseconds, where process startup jitter is a
+    large fraction, while the monolith iterates in eighteen minutes and its band
+    is 3.9 %.  A relative threshold cannot be shared between the two.
+
+    So: whichever is larger of the floor and the corpus's own measured spread.
+    The floor stays because a corpus whose band comes out implausibly tight
+    should not start naming one-percent moves as results.
+    """
+    b = iter_band(cp)
+    return ITER_STEP if not b else max(ITER_STEP, 1.0 + max(b[0], b[3]) / 100.0)
+
+
 def _iter_caption():
     """Which commits actually move the warm loop, read off the measurement.
 
@@ -1159,9 +1177,10 @@ def _iter_caption():
             v = d[pt]
             if isinstance(v, float) and isinstance(prev, float):
                 r = prev / v
-                if r >= ITER_STEP:
+                thr = iter_threshold(cp)
+                if r >= thr:
                     steps.append((cp, pt, r))
-                elif r <= 1 / ITER_STEP:
+                elif r <= 1 / thr:
                     worse.append((cp, pt, 1 / r))
             if isinstance(v, float):
                 prev = v
@@ -1172,14 +1191,14 @@ def _iter_caption():
                          for cp, pt, r in rows)
     # What the threshold clears, measured rather than asserted.
     bands = []
-    for cp in ("synth300", "ffi", "mono"):
-        b = iter_band(cp)
+    for cp in L.CORPORA:          # not a hardcoded three: the sixth corpus has a
+        b = iter_band(cp)         # band of its own, and a much larger one
         if b:
             spread, ncm, nrun, within = b
-            bands.append("%s %.1f&nbsp;%% across %s commits and %s runs, against "
-                         "%.1f&nbsp;%% between repeats of one commit"
+            bands.append("%s %.1f&nbsp;%% across %s commits and %s runs against "
+                         "%.1f&nbsp;%% between repeats of one, so &times;%.2f"
                          % (CORPUS_NAME.get(cp, cp), spread, numword(ncm),
-                            numword(nrun), within))
+                            numword(nrun), within, iter_threshold(cp)))
     band_txt = ""
     if bands:
         band_txt = (" <em>What counts as clear:</em> %s the series cannot have moved "
@@ -1191,8 +1210,12 @@ def _iter_caption():
                     "alone: repeats within one commit run back to back and share warmed "
                     "state, which on the monolith understates the scatter several-fold, "
                     "while on the small corpus the run-to-run jitter is the larger term "
-                    "and the commit-to-commit means are tight. The threshold above, "
-                    "&times;%.2f, clears the worse of the two on every corpus."
+                    "and the commit-to-commit means are tight. What counts as a step is "
+                    "therefore decided per corpus &mdash; whichever is larger of a "
+                    "&times;%.2f floor and that corpus&rsquo;s own band &mdash; because "
+                    "a relative threshold cannot be shared between a corpus that "
+                    "iterates in a tenth of a second and one that takes eighteen "
+                    "minutes."
                     % (numword(len(NO_SURFACE)).capitalize() + " commits in",
                        "; ".join(bands), ITER_STEP))
     if not steps:
