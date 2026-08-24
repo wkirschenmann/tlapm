@@ -794,13 +794,6 @@ def sec_where():
              % "".join('<td class="num"><strong>%.2f&nbsp;s</strong></td>'
                        % ph.get((cp, "total"), 0.0) for cp in cps))
     c.append("</tbody></table></div>")
-    c.append("<p style=\"margin-top:12px\">Which stage <em>inside</em> that loop "
-             "dominates is not something the stock clocks can say &mdash; splitting it "
-             "needs instrumentation this branch deliberately does not carry. An "
-             "instrumented run recorded in <code>doc/perf/ANALYSIS.md</code> put "
-             "expanding definitions at 57&nbsp;%% of a solver-free run of the private "
-             "chain, which is what PR3 addresses; read that as a proportion of a "
-             "different run, not as a value comparable with the tables below.</p>")
     return "".join(c)
 
 
