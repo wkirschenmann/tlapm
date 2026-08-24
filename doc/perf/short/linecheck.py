@@ -170,8 +170,13 @@ def check_iter_threshold():
             continue
         worst = max(b[0], b[3])
         thr = (M.iter_threshold(cp) - 1.0) * 100.0
-        if thr <= worst:
-            bad.append("the iteration threshold on %s is %.1f%%, at or under its own "
+        # Strictly under, not "at or under".  The threshold is now DERIVED from the
+        # band, so equality is the intended construction -- a move has to beat the
+        # band, and one exactly its size does not count as a step.  With `<=` the
+        # check fired on every corpus whose band exceeds the floor, which is the
+        # normal case and not a defect.
+        if thr + 1e-9 < worst:
+            bad.append("the iteration threshold on %s is %.1f%%, under its own "
                        "noise band of %.1f%% (%.1f%% between commits, %.1f%% within "
                        "one) -- a move that size could be the machine"
                        % (cp, thr, worst, b[0], b[3]))

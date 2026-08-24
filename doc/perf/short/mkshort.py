@@ -1157,7 +1157,17 @@ def iter_band(cp):
         return None
     vals = [v[0] / 1000.0 for v in got]
     runs = sum(v[2] for v in got)
-    within = max(v[1] for v in got) * 100.0
+    # The within-commit term is the worst spread over EVERY measured commit, not
+    # just the three inert ones.  Each of those groups is the same binary on the
+    # same input, so any spread inside one is noise by construction, and three
+    # groups is too small a sample to bound it: on the control corpus the three
+    # inert commits happened to agree to 8.9 % while another commit's own repeats
+    # spread 17.6 %, which let two physically impossible steps -- a kill-signal
+    # change and a task-streaming change, both on a 350 ms warm run -- clear the
+    # threshold.  The worst of eighteen is a deliberately conservative estimate;
+    # a threshold whose job is to refuse noise-sized claims should err that way.
+    within = max([v[1] for (c, _), v in d.items()
+                  if c == cp and isinstance(v[0], int) and v[2] >= 2] or [0.0]) * 100.0
     return ((max(vals) - min(vals)) / max(vals) * 100.0, len(got), runs, within)
 
 
@@ -1214,7 +1224,8 @@ def _iter_caption():
         if b:
             spread, ncm, nrun, within = b
             bands.append("%s %.1f&nbsp;%% across %s commits and %s runs against "
-                         "%.1f&nbsp;%% between repeats of one, so &times;%.2f"
+                         "%.1f&nbsp;%% between repeats of one commit, the worst "
+                         "of the series, so &times;%.2f"
                          % (CORPUS_NAME.get(cp, cp), spread, numword(ncm),
                             numword(nrun), within, iter_threshold(cp)))
     band_txt = ""
