@@ -232,14 +232,13 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
             if isinstance(v, dict) or v in L.FAILED:
                 cy = pts[i][0]
                 r = 4.0
-                in_band = abs(cy - band_y) < 0.01
-                if isinstance(v, dict) and v.get("pending") and not in_band:
-                    # A protocol timeout placed AT a coordinate: the ceiling that
-                    # stopped this run is ours, not the commit's, so the reading is
-                    # inconclusive and a ring says "no answer" where a cross would
-                    # claim there is one.  In the band there is no coordinate and
-                    # nothing to be inconclusive about -- the row is labelled
-                    # "none", and every mark in it is a cross.
+                if isinstance(v, dict) and v.get("pending"):
+                    # A ring is a run given a full hour and still unfinished: the
+                    # clock is ours, so what is established is "not practical",
+                    # not a number.  A cross is the cap refusing an allocation --
+                    # settled, and nothing more to learn by waiting.  Both sit in
+                    # the "none" row because neither has a coordinate on the axis;
+                    # the shape is what separates them.
                     o.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="none" '
                              'stroke="%s" stroke-width="2"/>'
                              % (xs(i), cy, r - 0.4, FAIL))
