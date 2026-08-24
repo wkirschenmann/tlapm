@@ -38,7 +38,7 @@ for entry in $CORPORA; do
       grep -aviE '^\(\*|^$|^@!!' $d/o | head -2 | sed 's/^/    /'
       rm -rf $d; continue
     fi
-    n=$(sed -n 's/^(\* *\([a-z_]*\) *| *\([0-9.]*\).*$/\1,\2/p' $d/o | tee $d/cl | wc -l)
+    n=$(sed -n 's/^(\* *\([a-z_]*\) *| *\([0-9][0-9.]*\).*$/\1,\2/p' $d/o | tee $d/cl | wc -l)
     [ "$n" -lt 5 ] && { echo "  [phases] $cp run$r: no clock table in the output"; rm -rf $d; continue; }
     while IFS=, read -r clock secs; do
       echo "$BOOT,$PT,$sha,$cp,$r,$clock,$secs" >> $OUT

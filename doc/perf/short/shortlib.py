@@ -340,8 +340,17 @@ def load_phases(path=None):
                                 ).most_common(1)[0][0]
     acc = collections.defaultdict(list)
     for r in rows:
-        if r["boot"] == boot and r["point"] == point:
-            acc[(r["corpus"], r["clock"])].append(float(r["seconds"]))
+        if r["boot"] != boot or r["point"] != point:
+            continue
+        try:
+            v = float(r["seconds"])
+        except ValueError:
+            # The clock table's own header line matches the row shape with an empty
+            # value.  Convert BEFORE indexing acc: indexing it first creates the key
+            # with an empty list, and the median of that is an exception thrown from
+            # a completely different place.
+            continue
+        acc[(r["corpus"], r["clock"])].append(v)
     out = {k: statistics.median(v) for k, v in acc.items()}
     cps = [c for c in CORPUS_ORDER if any(k[0] == c for k in out)]
     return out, cps, point
