@@ -585,53 +585,6 @@ def sec_problem():
     return "".join(c)
 
 
-FRONT = ["parsing", "analysis", "generation"]
-FPCLK = ["fp_compute", "fp_saving", "fp_loading"]
-CLOCK_NAME = {"parsing": "read the source", "analysis": "elaborate the modules",
-              "generation": "generate the obligations",
-              "fp_compute": "compute fingerprints", "fp_saving": "write fingerprints",
-              "fp_loading": "read fingerprints", "interaction": "prepare and ship",
-              "simplification": "simplify", "formatting": "format",
-              "checking": "check", "other": "unattributed"}
-
-
-def sec_where():
-    """Where a solver-free run spends itself, from the stock clocks."""
-    ph, cps, pt = L.load_phases()
-    if not ph:
-        return ""
-    clocks = [c for c in list(CLOCK_NAME) if any((cp, c) in ph for cp in cps)]
-    def pct(cp, keys):
-        tot = ph.get((cp, "total")) or sum(ph.get((cp, c), 0.0) for c in clocks)
-        return 100.0 * sum(ph.get((cp, c), 0.0) for c in keys) / tot if tot else 0.0
-    lead = cps[-1]
-    c = ["<p>One solver-free run per corpus, <code>tlapm --noproving --nofp "
-         "--timing</code>, taken at <code>%s</code> &mdash; the first commit whose "
-         "clocks add up, and otherwise the base commit&rsquo;s behaviour. Reading the "
-         "source, elaborating the modules and generating the obligations are "
-         "<strong>%.1f&nbsp;%%</strong> of the run on the %s; the other "
-         "<strong>%.1f&nbsp;%%</strong> is the per-obligation loop, single-threaded, "
-         "and that loop is what the rest of this series is about.</p>"
-         % (C.LABELS[pt][0], pct(lead, FRONT), CORPUS_NAME.get(lead, lead),
-            100.0 - pct(lead, FRONT))]
-    c.append('<div class="scroller"><table><thead><tr><th>clock</th>%s</tr></thead>'
-             '<tbody>' % "".join('<th class="num">%s</th>' % CORPUS_NAME.get(cp, cp)
-                                 for cp in cps))
-    for cl in clocks:
-        cells = "".join('<td class="num">%s</td>'
-                        % ("&mdash;" if (cp, cl) not in ph else
-                           "%.2f&nbsp;s <span class=\"r\">%.0f&nbsp;%%</span>"
-                           % (ph[(cp, cl)], pct(cp, [cl])))
-                        for cp in cps)
-        c.append("<tr><td>%s <span style=\"color:var(--ink-3)\"><code>%s</code></span>"
-                 "</td>%s</tr>" % (CLOCK_NAME[cl], cl, cells))
-    c.append('<tr><td><strong>total</strong></td>%s</tr>'
-             % "".join('<td class="num"><strong>%.2f&nbsp;s</strong></td>'
-                       % ph.get((cp, "total"), 0.0) for cp in cps))
-    c.append("</tbody></table></div>")
-    return "".join(c)
-
-
 def sec_mechanism():
     return """
 <p>tlapm generates one obligation per proof node, and each obligation carries its
@@ -1660,7 +1613,6 @@ different one.</p>
     # references were written as "&sect;5", two of them were already pointing at the
     # wrong section, and inserting one section invalidates every one of them at once.
     secs = [("problem",   "What breaks, and where",           sec_problem),
-            ("where",     "Where the time goes",              sec_where),
             ("mechanism", "One mechanism, four consequences", sec_mechanism),
             ("proposal",  "What is proposed",                 sec_proposal),
             ("method",    "How it was measured",              sec_method),
