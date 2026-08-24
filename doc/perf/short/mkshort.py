@@ -640,24 +640,20 @@ of change for each:</p>
   <div class="card"><h3>Repeated passes over the context</h3>
     <p>Expanding <em>k</em> definitions walked the context <em>k</em> times; detecting
     <code>ENABLED</code> axioms compared every axiom against every hypothesis; every
-    hypothesis lookup walked a deque. Each is a factor of context size that need not
-    be there.</p>
+    hypothesis lookup walked a deque.</p>
     <p class="mdl">PR2, PR3, PR7</p></div>
   <div class="card"><h3>Contexts kept alive</h3>
-    <p>Every obligation of the run was materialised before the first prover started,
-    and a process-lifetime memo table pinned one context per obligation prepared.
-    Peak memory grew with the file, so a big enough file cannot run at any speed.</p>
+    <p>Every obligation was materialised before the first prover started, and a memo
+    table pinned one context per obligation. Peak memory grew with the file.</p>
     <p class="mdl">PR4</p></div>
   <div class="card"><h3>Context that no longer matters</h3>
-    <p>After expansion, the hidden definitions and the instantiated statements of
-    earlier theorems are unreachable from the goal &mdash; and are most of the weight
-    shipped to the prover. Dropping them sends strictly less than today.</p>
+    <p>After expansion, hidden definitions and the statements of earlier theorems are
+    unreachable from the goal, and are most of the weight shipped to the prover.</p>
     <p class="mdl">PR5</p></div>
   <div class="card"><h3>Context recomputed from scratch</h3>
-    <p>Consecutive obligations share almost all of their context &mdash; on a 30k
-    module, 699 of 743 hypotheses are the physically same objects as in the previous
-    one, measured on the private monolith with the <code>TLAPM_PREP_SHARE</code>
-    probe &mdash; and all three preparation passes recomputed the whole thing.</p>
+    <p>Consecutive obligations share almost all of their context &mdash; on the 30k
+    monolith, 699 of 743 hypotheses are the physically same objects as in the previous
+    one &mdash; and all three preparation passes recomputed the whole thing.</p>
     <p class="mdl">PR6</p></div>
 </div>
 
