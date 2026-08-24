@@ -38,6 +38,11 @@ for spec in $CORPORA; do
     ln -s /opt/isabelle $bd/Isabelle 2>/dev/null
     out=$(timeout 2400 python3 $(dirname "$0")/lsp_keystroke_client.py $W/_build/default/lsp/bin/tlapm_lsp.exe \
             $SPEC $LINE $NRUN 2>/dev/null)
+    case "$out" in *UNRESOLVED:*)
+      echo "  $CP UNRESOLVED -- the server cannot resolve this workspace's modules,"
+      echo "  so it answers with an error instead of doing the work; no rows written."
+      echo "$out" | grep -a UNRESOLVED | head -1 | sed 's/^/    /'
+      break;; esac
     o=$(echo "$out" | sed -n 's/^open->markers: \([0-9.]*\)s/\1/p')
     [ -n "$o" ] && echo "$BOOT,$CP,$n,$sha,open,0,$o,$NRUN" >> $OUT
     echo "$out" | sed -n 's/^edit\([0-9]*\)->diag: \([0-9.]*\)s.*/\1 \2/p' | while read i v; do

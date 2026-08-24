@@ -82,5 +82,13 @@ for i in range(N_EDITS):
         "contentChanges": [{"text": "\n".join(lines)}]}, notify=True)
     dt, diags = pull_diags(ver)
     print(f"edit{i+1}->diag: {time.time()-t0:.4f}s (diags: {len(diags.get('diagnostics', []))})")
+    # A workspace whose modules do not resolve answers in a tenth of the time with a
+    # module-resolution error, and that reads exactly like a fast server.  The public
+    # refinement stack was measured that way for eighteen commits: 114 ms per keystroke
+    # against 790 ms once the standard library was in the workspace beside it.
+    for _d in diags.get("diagnostics", []):
+        if "Unknown module" in (_d.get("message") or ""):
+            print("UNRESOLVED: " + (_d["message"] or "").replace("\n", " ")[:120])
+            break
 
 proc.kill()
