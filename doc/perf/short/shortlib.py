@@ -262,11 +262,13 @@ def load_iteration_latency(path=None, boot=None):
     # downstream would have caught it, so it is caught here.
     raw = [r for r in raw if int(r["rc"]) in (0, 124, 134, 137, 2)]
     runs, boots = collections.defaultdict(list), set()
+    runs_of = collections.defaultdict(list)
     rep = {}
     for r in raw:
         boots.add(r["boot"])
         k = (r["boot"], r["_cp"], r["point"])
         runs[k].append((int(r["ms"]), int(r["rc"])))
+        runs_of[k].append(r["run"])
         rep[k] = r["_obl"]
     if not boots:
         return {}, None
@@ -311,7 +313,12 @@ def load_iteration_latency(path=None, boot=None):
         ms = [m for m, _ in v]
         med = int(statistics.median(ms))
         sp = (max(ms) - min(ms)) / float(max(ms)) if max(ms) else 0.0
-        out[(cp, pt)] = (med, sp, len(ms), rep[(b, cp, pt)], med)
+        # Run 0 is not a run.  A value written there is CARRIED from a neighbour --
+        # the campaign does that only where the neighbour provably cannot differ --
+        # and it reports zero runs, which is what tells the page to draw and name it
+        # apart from the measurements around it.
+        nrun = len([r for r in runs_of[(b, cp, pt)] if r != "0"])
+        out[(cp, pt)] = (med, sp, nrun, rep[(b, cp, pt)], med)
     return out, boot
 
 

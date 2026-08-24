@@ -307,6 +307,11 @@ def iters(cp):
             # "did not finish in an hour" and "was not run" are not the same claim.
             d[pt] = {"kind": r[0], "at": None, "pending": r[0] == L.CEIL,
                      "marked": r[0] == L.CEIL and r[2] == 0}
+        elif r[2] == 0:
+            # carried from a neighbour, not measured: a coordinate on the axis, a
+            # hollow mark, faint segments, and a sentence under the chart
+            d[pt] = {"kind": "CARRIED", "at": r[0] / 1000.0, "pending": False,
+                     "marked": False, "carried": True}
         else:
             d[pt] = r[0] / 1000.0
     # An unmeasured point stays unmeasured.  There was a bracketing inference here
@@ -526,9 +531,11 @@ def sec_problem():
     # at that end, so a container restart can leave the reference point unmeasured
     # while the rest of the line stands; quoting the neighbour and saying which it is
     # beats dropping the paragraph, which is what happened here.
-    it_at = "p00"
-    if not iterlat.get(("ffi", "p00")):
-        it_at = next((pt for pt in L.POINTS if iterlat.get(("ffi", pt))), "p00")
+    def _measured(pt):
+        r = iterlat.get(("ffi", pt))
+        return bool(r) and r[2] > 0          # runs > 0: not carried from a neighbour
+    it_at = "p00" if _measured("p00") else next(
+        (pt for pt in L.POINTS if _measured(pt)), "p00")
     it_main = iterlat.get(("ffi", it_at), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
     c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
@@ -1248,7 +1255,35 @@ def _iter_caption():
     else:
         txt += (" No commit in the series makes this metric worse by more than the "
                 "spread, the memory pull request included.")
-    return txt + band_txt + _marked_sentence()
+    return txt + band_txt + _marked_sentence() + _carried_sentence()
+
+
+def _carried_sentence():
+    """Points drawn from a neighbour rather than measured, named.
+
+    One exists, and it exists because the container restarted twelve minutes after
+    the neighbour landed and re-running that end of the line costs three quarters of
+    an hour a point.  It is drawn hollow, its segments are faint, and it is named
+    here; what it must never be is a filled dot like the ones either side of it.
+    """
+    out = []
+    for cp in L.CORPORA:
+        d = iters(cp)
+        for pt in L.POINTS:
+            v = d.get(pt)
+            if isinstance(v, dict) and v.get("carried"):
+                nb = L.POINTS[L.POINTS.index(pt) + 1]
+                out.append("%s on the %s carries %s&rsquo;s value"
+                           % (C.LABELS[pt][0], CORPUS_NAME.get(cp, cp),
+                              C.LABELS[nb][0]))
+    if not out:
+        return ""
+    return (" <em>One mark is not a measurement.</em> %s, and is drawn hollow with "
+            "faint segments either side. The two differ by nothing that can touch "
+            "this metric &mdash; the one commit that separates them makes clock accounting "
+            "nestable and is inert unless <code>--timing</code> is passed &mdash; but "
+            "a value taken from a neighbour is not a run, and the chart says so."
+            % "; ".join(out).capitalize())
 
 
 def _marked_sentence():

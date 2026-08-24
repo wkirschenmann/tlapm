@@ -16,6 +16,7 @@ ZONE = 18                              # the "did not complete" band above the b
 
 PUB, PRIV = "var(--s-pub)", "var(--s-priv)"
 FAIL = "var(--fail)"
+BG = "var(--card)"   # the surface a hollow mark is punched out of
 END_LABEL_GAP = 11.5   # px; below this two end labels collide
 VIOLET, TEAL = "var(--lbl-286)", "var(--lbl-keep)"
 
@@ -228,6 +229,13 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
                         "1" if solid else ".4"))
         for i, v in enumerate(vs):
             if v is None:
+                continue
+            if isinstance(v, dict) and v.get("carried"):
+                # Not a measurement: the same value as its neighbour, on a point the
+                # campaign could not re-run.  Hollow, in the series colour, with the
+                # segments either side already drawn faint.
+                o.append('<circle cx="%.1f" cy="%.1f" r="3.2" fill="%s" stroke="%s" '
+                         'stroke-width="1.6"/>' % (xs(i), pts[i][0], BG, col))
                 continue
             if isinstance(v, dict) or v in L.FAILED:
                 cy = pts[i][0]
