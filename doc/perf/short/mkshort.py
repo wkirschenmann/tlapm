@@ -1116,7 +1116,33 @@ def _wall_sentence():
     return txt
 
 
-ITER_STEP = 1.10       # a move worth naming, well clear of the run-to-run spread
+ITER_STEP = 1.10       # a move worth naming; iter_band() below says what it clears
+
+# Three commits in the series cannot change iteration latency: p01, p02 and p03
+# make clock accounting nestable, host the named pipeline clocks, and attribute
+# them -- all of it inert unless --timing is passed, which the iteration harness
+# does not pass.  Their measured spread is therefore this metric's noise, and it
+# is the right yardstick because repeats WITHIN one commit are run back to back
+# and share warmed state: they agree to a few tenths of a percent and understate
+# the real thing by an order of magnitude.
+#
+# p04 and p05 are in the same pull request but are excluded: reaping finished
+# provers early and handling SIGTERM both change when work happens.
+NO_SURFACE = ("p01", "p02", "p03")
+
+
+def iter_band(cp):
+    """(spread %, commits, runs, worst within-commit spread %) over the commits
+    that cannot have moved this metric, or None when fewer than two of them are
+    measured on this corpus."""
+    d = L.load_iteration_latency()[0]
+    got = [d[(cp, pt)] for pt in NO_SURFACE if (cp, pt) in d]
+    if len(got) < 2:
+        return None
+    vals = [v[0] / 1000.0 for v in got]
+    runs = sum(v[2] for v in got)
+    within = max(v[1] for v in got) * 100.0
+    return ((max(vals) - min(vals)) / max(vals) * 100.0, len(got), runs, within)
 
 
 def _iter_caption():
@@ -1144,9 +1170,35 @@ def _iter_caption():
                          % (C.LABELS[pt][0], "1&nbsp;800-obligation corpus"
                             if cp == "synth300" else "refinement chain", r)
                          for cp, pt, r in rows)
+    # What the threshold clears, measured rather than asserted.
+    bands = []
+    for cp in ("synth300", "ffi", "mono"):
+        b = iter_band(cp)
+        if b:
+            spread, ncm, nrun, within = b
+            bands.append("%s %.1f&nbsp;%% across %s commits and %s runs, against "
+                         "%.1f&nbsp;%% between repeats of one commit"
+                         % (CORPUS_NAME.get(cp, cp), spread, numword(ncm),
+                            numword(nrun), within))
+    band_txt = ""
+    if bands:
+        band_txt = (" <em>What counts as clear:</em> %s the series cannot have moved "
+                    "this metric &mdash; they make clock accounting nestable, host the "
+                    "named clocks and attribute them, all inert unless "
+                    "<code>--timing</code> is passed, which this harness does not pass. "
+                    "Their spread is therefore the noise: %s. The two readings do not "
+                    "agree about which term dominates, and neither is safe to use "
+                    "alone: repeats within one commit run back to back and share warmed "
+                    "state, which on the monolith understates the scatter several-fold, "
+                    "while on the small corpus the run-to-run jitter is the larger term "
+                    "and the commit-to-commit means are tight. The threshold above, "
+                    "&times;%.2f, clears the worse of the two on every corpus."
+                    % (numword(len(NO_SURFACE)).capitalize() + " commits in",
+                       "; ".join(bands), ITER_STEP))
     if not steps:
         return ("No commit moves this metric clear of the run-to-run spread on either "
-                "corpus &mdash; on this campaign the warm loop is where it started.")
+                "corpus &mdash; on this campaign the warm loop is where it started."
+                + band_txt)
     txt = ("%d step%s in the series move the warm loop clear of the run-to-run spread: "
            "%s. Every one of them does less work <em>per obligation</em> rather than "
            "less work overall, which is what a warm cache leaves to do: the file is "
@@ -1160,7 +1212,7 @@ def _iter_caption():
     else:
         txt += (" No commit in the series makes this metric worse by more than the "
                 "spread, the memory pull request included.")
-    return txt
+    return txt + band_txt
 
 
 def _estimator_record():
