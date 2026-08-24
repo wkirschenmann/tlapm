@@ -903,15 +903,8 @@ and the <code>test/fast</code> suite run against the full prover stack &mdash;
 Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built from this
 repository's <code>isabelle/</code> sources. The gate is fail-set
 <em>identity</em> with <code>main</code>, not a pass count: a newly failing test is
-a regression even where the count would still look healthy, and a suite that is not
-green to begin with still gates perfectly well as long as the comparison is honest.</p>
-<p>What that comparison reports, measured in this container on both sides in
-sequence with every <code>.tlacache</code> removed: <strong>48 of 48 on each side,
-with byte-identical fail sets</strong>. An earlier reading of 47 was a stale
-fingerprint cache rather than a failing test. One condition is easy to get wrong:
-putting <code>isabelle</code> on <code>PATH</code> is not enough &mdash; tlapm invokes
-it with a session root under its own backends directory, and without that link eight
-tests fail in a way that reads like a proof failure rather than a missing backend.</p>""")
+a regression even where the count would still look healthy.</p>
+""")
     c.append("""<p>Two invariants hold across the whole series. <strong>The provers receive a subset
 of what they receive today</strong>, never more, and no obligation is created that
 does not exist today. <strong>Fingerprints do not move</strong>: the digest is
@@ -924,12 +917,7 @@ than by testing.</p>""")
     c.append(_noise_sentence())
     c.append(_completeness())
     c.append(_extended_clock())
-    c.append("""<p>Absolute values are comparable only inside one campaign. Every
-measured row carries the machine's <code>/proc/stat btime</code> and every reader
-filters to a single boot, so a container restart mid-campaign appears as a missing
-cell rather than as a step averaged into a curve. <code>main</code> is measured once
-per curve, at the point each curve starts from; %s</p>%s""" % (
-        _drift_sentence(), _provenance()))
+
     return "".join(c)
 
 
@@ -1436,56 +1424,6 @@ def _fill(txt):
 
 
 
-def _provenance():
-    """Which curve was measured on which boot.
-
-    A chart line is one (metric, corpus) pair and comparability only has to hold
-    within a line, so a container restart costs the lines that were still missing,
-    not the ones already complete.  That is only honest if the document says which
-    line came from which boot, so it says so.
-    """
-    lb = sweep.get("_line_boot", {})
-    if len(set(lb.values())) < 2:
-        return ""
-    NAME = {"gen": "generation", "prep": "preparation"}
-    by = {}
-    for (cp, fld), b in sorted(lb.items()):
-        by.setdefault(b, []).append("%s %s" % (CORPUS_NAME.get(cp, cp), NAME.get(fld, fld)))
-    rows = "".join('<tr><td class="num">%s</td><td>%s</td></tr>'
-                   % (b, ", ".join(v)) for b, v in sorted(by.items()))
-    return ('<p style="margin-top:12px">The container restarted during the campaign, '
-            'so the curves do not all come from the same boot. One chart line is one '
-            '(metric, corpus) pair and comparability only has to hold <em>within</em> a '
-            'line, so each line is measured end to end on a single boot and the restart '
-            'costs the lines that were still missing rather than the ones already '
-            'complete. Both hosts report the same CPU model and clock; the split is '
-            'recorded here anyway, because a reader should not have to take that on '
-            'trust:</p>'
-            '<div class="scroller"><table><thead><tr><th>boot</th><th>curves measured on it</th>'
-            '</tr></thead><tbody>%s</tbody></table></div>' % rows)
-
-
-def _drift_sentence():
-    """The campaign no longer measures main twice; one fixed cell is re-measured
-    throughout instead, which bounds drift far better than two endpoints do."""
-    a = sweep.get("_anchors", {}).get(boot, [])
-    if len(a) < 2:
-        return ("the drift anchor has not been re-measured often enough yet to bound "
-                "the run's spread.")
-    lo, hi = min(a), max(a)
-    rng = (hi - lo) / float(hi) * 100
-    last = ""
-    if len(a) >= 4:
-        tail = a[-3:]
-        t = (max(tail) - min(tail)) / float(max(tail)) * 100
-        last = (" Over the last three it is %.2f&nbsp;%%, so the run settles rather "
-                "than drifting without bound." % t)
-    return ("one fixed cell is re-measured every eight, and its %d readings span "
-            "%.1f&nbsp;%% across the whole campaign &mdash; that is the drift every "
-            "curve carries, measured rather than assumed.%s" % (len(a), rng, last))
-
-
-
 def _better(direction):
     """Which way is good, as a mark rather than a sentence buried in the subtitle.
 
@@ -1918,25 +1856,16 @@ def build():
         parts.append('<section><div class="sec-head"><span class="n">%02d</span>'
                      '<h2>%s</h2></div>%s</section>' % (n, title, body))
     parts.append("""<footer>
-<p>Every figure in &sect;{problem} and &sect;{method}&ndash;&sect;{perpr} &mdash; every point on every
-chart, every cell of every table, and the counts and ratios quoted in the prose around
-them &mdash; is produced by <code>doc/perf/short/mkshort.py</code> from the campaign
-CSVs beside it, and the figures in &sect;{mechanism} that carry a version come from
-<code>instance_demo.csv</code> the same way. Two things are transcribed rather than
-generated, and both say so where they appear: &sect;{not}'s nine ranges, which come from a
-separate and larger campaign on a different machine whose data is not in this
-directory, and the sharing figure in &sect;{mechanism}'s fourth card, which comes from a
-<code>TLAPM_PREP_SHARE</code> probe run on the private monolith and has no CSV here to
-be regenerated from. Where a claim about a measurement had to be
-written by hand it has been turned into a slot the generator fills, because in the
-course of this campaign three such sentences went stale against the charts above them
-and one contradicted the table beside it.</p>
+<p>Every chart, table and ratio here is generated by
+<code>doc/perf/short/mkshort.py</code> from the CSVs beside it. Two figures are not, and
+say so where they appear: &sect;{not}'s nine ranges, from a larger campaign on another
+machine, and the sharing figure in &sect;{mechanism}, from a
+<code>TLAPM_PREP_SHARE</code> probe on the private monolith.</p>
 <p>The two private specifications are a customer's and are not published &mdash; only
 the measurements taken on them are.</p>
 <p>This work &mdash; the code, the measurement harness, and this document &mdash; was
 produced by a human working with Anthropic's Claude models (Opus&nbsp;5, Fable&nbsp;5,
-Sonnet&nbsp;5). Every commit was reviewed against its diff, and every number here comes
-from a run that was executed rather than estimated.</p>
+Sonnet&nbsp;5).</p>
 </footer></div>""")
     html = head() + "".join(parts)
     for key, v in num.items():
