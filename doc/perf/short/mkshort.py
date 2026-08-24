@@ -299,7 +299,14 @@ def iters(cp):
             # chart that also parks it just under the fastest real point, which
             # reads as nearly-good.  It goes in the "none" row instead, with the
             # crosses, above every measured value.
-            d[pt] = {"kind": r[0], "at": None, "pending": r[0] == L.CEIL}
+            # r[2] is the number of runs behind the verdict.  A stop with zero runs
+            # is a point MARKED from a stop measured to its right: the series is a
+            # chain, so a point further left is the same tool with one optimisation
+            # removed and cannot be faster.  It is drawn like the stop it was marked
+            # from -- same row, same ring -- and named apart in the caption, because
+            # "did not finish in an hour" and "was not run" are not the same claim.
+            d[pt] = {"kind": r[0], "at": None, "pending": r[0] == L.CEIL,
+                     "marked": r[0] == L.CEIL and r[2] == 0}
         else:
             d[pt] = r[0] / 1000.0
     # An unmeasured point stays unmeasured.  There was a bracketing inference here
@@ -1244,7 +1251,39 @@ def _iter_caption():
     else:
         txt += (" No commit in the series makes this metric worse by more than the "
                 "spread, the memory pull request included.")
-    return txt + band_txt
+    return txt + band_txt + _marked_sentence()
+
+
+def _marked_sentence():
+    """Which stopped points were marked from a measurement instead of being run.
+
+    Counted, not asserted, and named: a reader who sees eight rings on one line is
+    entitled to know that one of them cost an hour and the other seven cost nothing.
+    """
+    out = []
+    for cp in L.CORPORA:
+        d = iters(cp)
+        marked = [pt for pt in L.POINTS
+                  if isinstance(d.get(pt), dict) and d[pt].get("marked")]
+        ran = [pt for pt in L.POINTS
+               if isinstance(d.get(pt), dict) and d[pt].get("kind") == L.CEIL
+               and not d[pt].get("marked")]
+        if not marked:
+            continue
+        out.append("on the %s, %s spent the whole hour without finishing and the %s "
+                   "point%s to its left %s marked from it rather than run"
+                   % (CORPUS_NAME.get(cp, cp),
+                      C.LABELS[max(ran)][0] if ran else "the leftmost measured point",
+                      numword(len(marked)), "" if len(marked) == 1 else "s",
+                      "is" if len(marked) == 1 else "are"))
+    if not out:
+        return ""
+    return (" <em>Measured from the right.</em> The series is walked from the tip "
+            "towards the base, so the budget goes to the points that still complete "
+            "and the wall is reached last: %s. Each is the same tool with one "
+            "optimisation removed, so it cannot be faster than the stop it is marked "
+            "from; a marked point is a ring like that stop, and no figure in this "
+            "document is read from one." % "; ".join(out))
 
 
 def _estimator_record():

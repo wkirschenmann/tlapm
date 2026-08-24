@@ -253,6 +253,14 @@ def load_iteration_latency(path=None, boot=None):
         return (int(r["rc"]) == 0 and r["_cp"] in usual
                 and r["_obl"] < 0.9 * usual[r["_cp"]])
     raw = [r for r in raw if not truncated(r)]
+    # A run whose status is neither success nor one of the two stops measured
+    # nothing at all, and it does not look like it: tlapm exits 3 on a file it
+    # cannot check, in 133 ms, which lands in the same column as a very fast
+    # iteration.  A harness whose edit named a backend the synthetic corpora do
+    # not extend wrote one hundred and eight such rows, and the median of
+    # eighteen parse failures is a perfectly plausible-looking figure.  Nothing
+    # downstream would have caught it, so it is caught here.
+    raw = [r for r in raw if int(r["rc"]) in (0, 124, 134, 137, 2)]
     runs, boots = collections.defaultdict(list), set()
     rep = {}
     for r in raw:
@@ -280,10 +288,22 @@ def load_iteration_latency(path=None, boot=None):
     for (b, cp, pt), v in runs.items():
         if b != line_boot.get(cp):
             continue
+        if any(rc in (134, 137, 2) for _, rc in v):
+            # the address-space cap refused an allocation: settled, and not a time
+            out[(cp, pt)] = (ABORT, 0.0, len([m for m, _ in v if m >= 0]),
+                             rep[(b, cp, pt)], max(m for m, _ in v))
+            continue
         if any(rc == 124 for _, rc in v):
-            # keep the wall clock the ceiling was hit at, so the point can be drawn
-            out[(cp, pt)] = (CEIL, 0.0, len(v), rep[(b, cp, pt)],
-                             max(m for m, _ in v))
+            # Stopped by the clock.  Two ways to get here, and the reader must be
+            # able to tell them apart: a run that spent the whole clock and did not
+            # finish, and a point MARKED from a stop measured to its right -- the
+            # series is a chain, so a point further left is the same tool with one
+            # optimisation removed and cannot be faster.  A marked point is written
+            # with run 0 and ms -1, which no clock produces; it reports zero runs
+            # here, and that is what says "inferred, not measured".
+            real = [m for m, _ in v if m >= 0]
+            out[(cp, pt)] = (CEIL, 0.0, len(real), rep[(b, cp, pt)],
+                             max(real) if real else -1)
             continue
         ms = [m for m, _ in v]
         med = int(statistics.median(ms))

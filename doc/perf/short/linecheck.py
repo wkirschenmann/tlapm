@@ -178,13 +178,42 @@ def check_iter_threshold():
     return bad
 
 
+def check_marked_points():
+    """A point marked from a neighbour must never reach the page as a duration.
+
+    The chain's left end is settled by walking the series from the right and marking
+    everything left of the first hour-long stop.  Those rows carry ms -1, which no
+    clock can produce, precisely so that a loader treating them as times is caught
+    here rather than by a reader.
+    """
+    import csv as _csv
+    import mkshort as M
+    bad = []
+    path = os.path.join(L.S, "short_iterlat.csv")
+    if not os.path.exists(path):
+        return bad
+    rows = list(_csv.DictReader(open(path)))
+    marked = {(L.ITER_CORPUS.get(r["corpus"], r["corpus"]), r["point"])
+              for r in rows if int(r["ms"]) < 0}
+    real = {(L.ITER_CORPUS.get(r["corpus"], r["corpus"]), r["point"])
+            for r in rows if int(r["ms"]) >= 0 and int(r["rc"]) == 0}
+    for cp, pt in sorted(marked - real):
+        v = M.iters(cp).get(pt)
+        if v is None:
+            continue
+        if not (isinstance(v, dict) and v.get("marked")):
+            bad.append("%s %s was marked from a neighbour, never run, and the document "
+                       "reads it as %r" % (cp, pt, v))
+    return bad
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:
