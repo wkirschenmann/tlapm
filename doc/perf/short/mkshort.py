@@ -57,7 +57,8 @@ CORPUS_META = {
 NUMWORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
            7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven",
            12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
-           16: "sixteen", 17: "seventeen", 18: "eighteen"}
+           16: "sixteen", 17: "seventeen", 18: "eighteen", 19: "nineteen",
+           20: "twenty"}
 
 
 N_PR = len(L.PRS)
@@ -491,32 +492,46 @@ if N_CM != len(CT.CM):
 
 METRICS = [
     ("preparation time", "<code>tlapm --noproving --nofp</code>",
-     "the whole per-obligation pipeline with no prover launched: find the method, "
-     "annotate constants, fingerprint, expand, normalise, test for triviality, "
-     "prune, encode. Prover-independent, so it reproduces without solvers installed."),
+     "the per-obligation pipeline with no prover launched &mdash; find the method, "
+     "annotate constants, fingerprint, expand, normalise, prune, encode &mdash; so it "
+     "reproduces without solvers installed."),
     ("peak memory", "maximum resident set of that run",
-     "what decides whether a large specification runs at all. Every run is capped at "
-     "12&nbsp;GB of address space, and a run that hits the cap is reported as an "
-     "abort, never as a large number."),
+     "what decides whether a large specification runs at all. Runs are capped at "
+     "12&nbsp;GB of address space; one that hits the cap is an abort, never a large "
+     "number."),
     ("generation time", "<code>tlapm -N --nofp</code>",
      "parse, elaborate, generate obligations, stop. The floor under every editor "
-     "interaction and the fixed per-worker cost of any parallel scheme."),
+     "interaction."),
     ("iteration latency", "<code>tlapm --toolbox L H</code> on a warm cache",
-     "the wait after editing one proof step in a file whose fingerprints are all "
-     "present: everything is re-parsed, re-elaborated and re-fingerprinted, and only "
-     "the one changed obligation is proved. This is the loop a user actually sits in."),
+     "the wait after editing one proof step with every fingerprint already cached: "
+     "everything is re-parsed, re-elaborated and re-fingerprinted, and only the "
+     "changed obligation is proved."),
     ("keystroke &rarr; diagnostics", "the LSP protocol boundary",
      "<code>didChange</code> sent, <code>publishDiagnostics</code> received, measured "
-     "by a client that speaks the protocol. Nothing inside the server is "
-     "instrumented, so the figure is what the editor waits."),
+     "by a client speaking the protocol &mdash; what the editor waits."),
 ]
 
 
 TIP = L.POINTS[-1]
 
 
+def _metrics_table():
+    """The five metrics, defined where the reader first meets their numbers."""
+    c = ["<p>Five metrics, and every one is something a user can time from outside "
+         "tlapm with stock flags on a stock build &mdash; no probe, no patched "
+         "binary, nothing this series introduces.</p>",
+         '<div class="scroller"><table><thead><tr><th>metric</th><th>how</th>'
+         '<th>what it is</th></tr></thead><tbody>']
+    for name, how, what in METRICS:
+        c.append('<tr><td><strong>%s</strong></td><td class="num">%s</td>'
+                 '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
+                 % (name, how, what))
+    c.append("</tbody></table></div>")
+    return "".join(c)
+
+
 def sec_problem():
-    c = []
+    c = [_metrics_table()]
     mono_main = L.main_point(sweep, "mono", "prep")
     ffi_main = L.main_point(sweep, "ffi", "prep")
     tiny_main = L.main_point(sweep, "tiny", "prep")
@@ -697,21 +712,11 @@ def sec_proposal():
 
 
 def sec_method():
-    c = ["<p>Five metrics. Every one of them is something a user can time from outside "
-         "tlapm with stock flags on a stock build &mdash; no probe, no patched binary, "
-         "nothing this series introduces.</p>"]
-    c.append('<div class="scroller"><table><thead><tr><th>metric</th><th>how</th>'
-             '<th>what it is</th></tr></thead><tbody>')
-    for name, how, what in METRICS:
-        c.append('<tr><td><strong>%s</strong></td><td class="num">%s</td>'
-                 '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>' % (name, how, what))
-    c.append("</tbody></table></div>")
-
-    c.append("<h4>Corpora</h4><p>%s, and every chart carries all of them. "
-             "Everything marked public is in this repository; the two private "
-             "specifications are a customer's and are not published &mdash; only "
-             "these numbers are.</p>"
-             % numword(len(L.CORPORA)).capitalize())
+    c = ["<h4>Corpora</h4><p>%s, and every chart carries all of them. "
+         "Everything marked public is in this repository; the two private "
+         "specifications are a customer's and are not published &mdash; only "
+         "these numbers are.</p>"
+         % numword(len(L.CORPORA)).capitalize()]
     c.append('<div class="scroller"><table><thead><tr><th>corpus</th>'
              '<th class="num">obligations</th><th>why it is here</th></tr></thead><tbody>')
     for cp in L.CORPORA:
