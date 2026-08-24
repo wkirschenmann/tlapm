@@ -44,8 +44,8 @@ CORPUS_META = {
               "the public corpus that reaches the regime the private two are here"
               " for: a nested-INSTANCE stack whose 3&nbsp;239-line proof costs"
               " <code>main</code> 80&nbsp;s and 1.6&nbsp;GB. It is in this"
-              " repository, so every number on its line can be re-run and"
-              " disputed &mdash; see &sect;{mechanism}"),
+              " repository, under <code>doc/perf/short/instance_demo/</code>, so"
+              " every number on its line can be re-run and disputed"),
     "ffi": ("private refinement chain",
             "a private refinement chain", "chain",
             "a real INSTANCE-heavy refinement chain: the shape this series is"
@@ -578,178 +578,6 @@ def sec_problem():
     return "".join(c)
 
 
-def _instance_demo():
-    """The INSTANCE demo section.  Every count and every timing comes from
-    instance_demo.csv, so the prose cannot drift from the tables beside it."""
-    d = L.load_instance_demo()
-    lad, ldf = d["ladder"], d["ladder_defn"]
-    ks = sorted(lad, key=int)
-    dsteps = [ldf[ks[i]] - ldf[ks[i - 1]] for i in range(1, len(ks))]
-    hsteps = [lad[ks[i]] - lad[ks[i - 1]] for i in range(1, len(ks))]
-    dstep = dsteps[0] if len(set(dsteps)) == 1 else None
-    hstep = hsteps[0] if len(set(hsteps)) == 1 else None
-    one = d["ladder_frag_one_hop"]["1"]
-    two = d["ladder_frag_two_hop"]["1"]
-    pr = d["proofs"]
-    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance_demo")
-    stack = ["L0State", "L0", "L0Theorems", "L1State", "L1", "L1Theorems", "L2"]
-    widest = max(sum(1 for _ in open(os.path.join(here, m + ".tla")))
-                 for m in stack)
-    words = {5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine"}
-    count = words.get(len(stack), str(len(stack)))
-    ab, mn, tp = d["ab"], d["main"], d["tip"]
-    per_obl = pr["total_ctx_hyps"] // pr["obligations"]
-    inst_obl = pr["frag_one_hop"] // pr["obligations"]
-    two_obl = pr["frag_two_hop"] // pr["obligations"]
-
-    c = ["""<h4>The mechanism, in %s small modules and one real proof</h4>
-<p><code>doc/perf/short/instance_demo/</code> is the mechanism with nothing else in
-it: a three-level refinement stack shaped like the private one. Levels&nbsp;0
-and&nbsp;1 each get the same three modules &mdash; a state module holding the
-parameters and the standing assumptions, a specification, and a theorems module that
-declares results without proving them &mdash; and each reaches the level below by
-<code>EXTENDS</code> and instantiates its theorems by <code>INSTANCE</code>. The
-largest of the %s stack modules is %d lines. On top of them sits
-<code>L2Proofs.tla</code>, a level-2 proof of %s lines that cites their instantiated
-theorems %d times: %d at one <code>INSTANCE</code> hop and %d at two.</p>
-<p><code>INSTANCE</code> does not share; it <em>copies</em>. When level&nbsp;2
-instantiates level&nbsp;1, level&nbsp;1's body already contains a copy of level&nbsp;0
-&mdash; renamed once when level&nbsp;1 instantiated it &mdash; so level&nbsp;2 gets
-level&nbsp;0 a second time, renamed twice. The nesting is flattened at elaboration
-time: by the time an obligation exists there is no indirection left to follow, only
-copies. The <code>Ladder</code><em>n</em> modules make that countable. Each has one
-obligation and differs from the next only in how many times it instantiates the same
-theorems module.</p>""" % (count, count, widest,
-                           "{:,}".format(pr["lines"]).replace(",", "&nbsp;"),
-                           pr["cite_one_hop"] + pr["cite_two_hop"],
-                           pr["cite_one_hop"], pr["cite_two_hop"])]
-    c.append('<div class="tw"><table><thead><tr><th><code>INSTANCE</code> '
-             'declarations</th><th class="n">definitions in the obligation</th>'
-             '<th class="n">hypotheses in the obligation</th></tr></thead><tbody>')
-    for k in ks:
-        c.append('<tr><td>%s</td><td class="n">%d</td><td class="n">%d</td></tr>'
-                 % (k, ldf[k], lad[k]))
-    c.append("</tbody></table></div>")
-    c.append("""<p>Exactly linear: %s definitions and %s hypotheses per
-<code>INSTANCE</code>, on a stack whose whole source is %d lines. And %d of
-those %d definitions &mdash; %.0f&nbsp;%% &mdash; are the copy of level&nbsp;0 that
-arrived two renamings deep, inside the copy of level&nbsp;1. Nothing in the source is
-duplicated; the duplication is what instantiation is.</p>""" % (
-        "%d" % dstep if dstep else "a constant number of",
-        "%d" % hstep if hstep else "a constant number of",
-        pr["stack_lines"], two, one, 100.0 * two / one))
-
-    c.append("""<h4>What that costs a proof that actually uses it</h4>
-<p>The ladder counts the copies; <code>L2Proofs.tla</code> shows what they cost once a
-proof cites them. It is %s lines over %d lemmas of two kinds, and the split matters
-because they stress different things. A <strong>Cite</strong> lemma (%d of them) keeps
-every operator opaque and chains instantiated theorems: what it exercises is the
-context, which carries every definition of both levels below whether or not the goal
-mentions it. An <strong>Open</strong> lemma (%d) names definitions in <code>DEF</code>
-&mdash; %d unfoldings in all &mdash; so the <em>bodies</em> of the invariants really
-enter the obligation, which is what a proof does when it opens an invariant to reach
-one conjunct and the only way a definition's weight reaches a prover at all.</p>
-<p>Both kinds are proof trees four or five levels deep &mdash; %d steps at
-depth&nbsp;four, %d at depth&nbsp;five &mdash; which matters because every step's
-statement joins the context of its later siblings and of everything nested beneath it.
-<code>harness/gen_l2proofs.py</code> generates the file from the lemma index with no
-randomness, so regenerating it is byte-identical.</p>
-""" % (
-        "{:,}".format(pr["lines"]).replace(",", "&nbsp;"), pr["lemmas"],
-        pr["lemmas_citing"], pr["lemmas_opening"], pr["def_unfoldings"],
-        pr["steps_depth4"], pr["steps_depth5"]))
-    rows = [("stack source, all %s modules" % count,
-             "%d lines" % pr["stack_lines"]),
-            ("proof", "{:,} lines".format(pr["lines"]).replace(",", "&nbsp;")),
-            ("obligations", "{:,}".format(pr["obligations"]).replace(",", "&nbsp;")),
-            ("hypotheses per obligation, mean",
-             "{:,}".format(per_obl).replace(",", "&nbsp;")),
-            ("hypotheses per obligation, worst",
-             "{:,}".format(pr["max_ctx_hyps"]).replace(",", "&nbsp;")),
-            ("of those, instantiated copies (one hop or two)",
-             "{:,}".format(inst_obl).replace(",", "&nbsp;")),
-            ("of those, arrived two hops deep",
-             "{:,}".format(two_obl).replace(",", "&nbsp;")),
-            ("context entries walked over the whole run",
-             "{:,}".format(pr["total_ctx_hyps"]).replace(",", "&nbsp;"))]
-    c.append('<div class="tw"><table><tbody>')
-    for k, v in rows:
-        c.append('<tr><td>%s</td><td class="n">%s</td></tr>' % (k, v))
-    c.append("</tbody></table></div>")
-    c.append("""<p>Those counts are a property of the corpus rather than of a version:
-they are read off the generated obligations, which this series does not change. The
-timings below do have a version &mdash; medians over %d interleaved rounds of the base
-commit against the branch tip, one machine, one boot.</p>""" % ab["reps"])
-    def _s(v):
-        # two decimals under ten seconds, one under a hundred, none above:
-        # "80.00 s" claims a precision three interleaved rounds do not have
-        return ("%.2f" if v < 10 else "%.1f" if v < 100 else "%.0f") % v + "&nbsp;s"
-    tr = [("generation", "gen_ms", 1000.0, _s),
-          ("preparation", "prep_ms", 1000.0, _s),
-          ("proving, four threads", "prove_ms", 1000.0, _s),
-          ("peak memory", "peak_kb", 1024.0,
-           lambda v: "%.0f&nbsp;MB" % v),
-          ("obligations", "obligations", 1.0,
-           lambda v: "{:,}".format(int(v)).replace(",", "&nbsp;"))]
-    c.append('<div class="tw"><table><thead><tr><th></th>'
-             '<th class="n">base commit</th><th class="n">branch tip</th>'
-             '<th class="n"></th></tr></thead><tbody>')
-    for label, key, div, fmt in tr:
-        a, b = mn[key] / div, tp[key] / div
-        if key == "obligations":
-            note = "identical" if mn[key] == tp[key] else "DIFFER"
-        elif b <= 0 or a <= 0:
-            note = "&mdash;"
-        elif b < a:
-            note = "&times;%.1f faster" % (a / b) if key != "peak_kb" \
-                   else "&divide;%.0f" % (a / b)
-        else:
-            note = "&times;%.2f slower" % (b / a)
-        c.append('<tr><td>%s</td><td class="n">%s</td><td class="n">%s</td>'
-                 '<td class="mdl">%s</td></tr>'
-                 % (label, fmt(a), fmt(b), note))
-    c.append("</tbody></table></div>")
-    gen_slower = tp["gen_ms"] > mn["gen_ms"]
-    c.append("""<p>This is the corpus earning its keep. A %s-line proof over a stack
-whose own source is %d lines takes <strong>%.0f&nbsp;s of preparation and
-%.1f&nbsp;GB of peak memory on the base commit</strong>, and %.1f&nbsp;s and
-%.0f&nbsp;MB at the tip &mdash; &times;%s on preparation and &divide;%s on
-memory. Every obligation is proved on both sides and the generated obligation stream is
-<strong>byte-identical</strong> between them (%s lines of <code>--printallobs</code>
-compared): the subset invariant, checked exactly on a corpus small enough for it.
-<code>harness/instance_demo.sh</code> refuses to write the CSV behind these tables if
-either check fails.</p>""" % (
-        "{:,}".format(pr["lines"]).replace(",", "&nbsp;"), pr["stack_lines"],
-        mn["prep_ms"] / 1000.0, mn["peak_kb"] / 1048576.0,
-        tp["prep_ms"] / 1000.0, tp["peak_kb"] / 1024.0,
-        "%.1f" % (mn["prep_ms"] / float(tp["prep_ms"])),
-        "%.0f" % (mn["peak_kb"] / float(tp["peak_kb"])),
-        "{:,}".format(ab["golden_lines"]).replace(",", "&nbsp;")))
-    if gen_slower:
-        c.append("""<p>One metric moves the wrong way, and it is left in rather than
-dropped: <strong>generation is %.0f&nbsp;%% slower at the tip</strong> on this corpus
-(%.2f&nbsp;s against %.2f). Generation is the cheapest of the three by an order of
-magnitude and the regression is a fraction of a second against %.0f&nbsp;s recovered
-in preparation, so it is a trade this series takes knowingly &mdash; but a document
-that only reported the ratios that flatter it would not be worth reading.</p>"""
-                 % (100.0 * (tp["gen_ms"] - mn["gen_ms"]) / mn["gen_ms"],
-                    tp["gen_ms"] / 1000.0, mn["gen_ms"] / 1000.0,
-                    (mn["prep_ms"] - tp["prep_ms"]) / 1000.0))
-    c.append("""<p>What it does not reproduce is scale &mdash; %s obligations against
-the %s of the private monolith &mdash; which is why two of the corpora in &sect;{method} are a
-customer's. This one is the part anyone can run.</p>""" % (
-        "{:,}".format(pr["obligations"]).replace(",", "&nbsp;"),
-        "{:,}".format(L.OBL["mono"]).replace(",", "&nbsp;")))
-
-    c.append("""<p>Two hop-depth mistakes are easy to make in a stack like this and
-cost hours when they happen on a real one, because the prefix counts
-<code>INSTANCE</code> hops and not <code>EXTENDS</code> hops.
-<code>instance_demo/CiteTrap.tla</code> exhibits the first and is expected to report
-one failed obligation; <code>instance_demo/README.md</code> has both, and the
-diagnostic for either.</p>""")
-    return "".join(c)
-
-
 FRONT = ["parsing", "analysis", "generation"]
 FPCLK = ["fp_compute", "fp_saving", "fp_loading"]
 CLOCK_NAME = {"parsing": "read the source", "analysis": "elaborate the modules",
@@ -833,11 +661,6 @@ of change for each:</p>
     <p class="mdl">PR6</p></div>
 </div>
 
-""" + _instance_demo() + """
-<p style="margin-top:16px">Two changes sit outside that mechanism. One is the editor's
-proof-step tree, which scanned the obligation map once per step and had nothing to do
-with contexts. The other is the set of correctness fixes, which are here because
-without them the measurements that justify the rest are not available.</p>
 """
 
 
