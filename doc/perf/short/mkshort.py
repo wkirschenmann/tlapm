@@ -1187,7 +1187,10 @@ def _iter_caption():
     caption, so it is derived now.
     """
     steps, worse = [], []
-    for cp in ("synth300", "ffi"):
+    # Every corpus with a line, not a hardcoded pair.  The pair was written when two
+    # corpora had one; a third and a fourth arrived and the caption went on claiming
+    # to have read "either corpus".
+    for cp in L.CORPORA:
         d, prev = iters(cp), None
         for pt in L.POINTS:
             v = d[pt]
@@ -1202,8 +1205,7 @@ def _iter_caption():
                 prev = v
     def phrase(rows):
         return "; ".join("%s on the %s, &times;%.2f"
-                         % (C.LABELS[pt][0], "1&nbsp;800-obligation corpus"
-                            if cp == "synth300" else "refinement chain", r)
+                         % (C.LABELS[pt][0], CORPUS_NAME.get(cp, cp), r)
                          for cp, pt, r in rows)
     # What the threshold clears, measured rather than asserted.
     bands = []

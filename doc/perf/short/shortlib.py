@@ -279,9 +279,12 @@ def load_iteration_latency(path=None, boot=None):
     else:
         tally = collections.Counter((cp, b) for b, cp, _ in runs)
         line_boot = {}
-        for (cp, b), n in tally.items():
-            if cp not in line_boot or n > tally[(cp, line_boot[cp])]:
-                line_boot[cp] = b
+        # More rows wins; on a tie the more recent boot wins.  Without the second
+        # term the choice is dict order, and a line being re-measured passes through
+        # a tie exactly when half of it is new -- so which protocol the chart drew
+        # would depend on when it was drawn.
+        for (cp, b), n in sorted(tally.items(), key=lambda kv: (kv[1], kv[0][1])):
+            line_boot[cp] = b
     boot = max(collections.Counter(line_boot.values()).items(),
                key=lambda kv: kv[1])[0] if line_boot else None
     out = {}
