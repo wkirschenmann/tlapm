@@ -642,152 +642,33 @@ def sec_proposal():
 
 
 def sec_method():
-    c = ["""<h4>The correctness gate every commit passes</h4>
-<p>Not a benchmark gate &mdash; a soundness one. For each of the """ + numword(N_CM) + """ commits,
-in sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code> green,
-and the <code>test/fast</code> suite run against the full prover stack &mdash;
+    return """<p>Every commit in sequence, on the six specifications of &sect;{problem}
+and the five metrics defined there. The campaign's rows are in
+<code>doc/perf/short/</code>, and every figure in this document is generated from
+them.</p>
+
+<h4>The correctness gate every commit passes</h4>
+<p>Not a benchmark gate &mdash; a soundness one. For each of the """ + numword(N_CM) + """
+commits, in sequence: <code>dune runtest src</code> and <code>dune runtest lsp</code>
+green, and the <code>test/fast</code> suite run against the full prover stack &mdash;
 Z3&nbsp;4.8.9, Zenon, and Isabelle&nbsp;2025 with the TLA+ heap built from this
-repository's <code>isabelle/</code> sources. The gate is fail-set
-<em>identity</em> with <code>main</code>, not a pass count: a newly failing test is
-a regression even where the count would still look healthy.</p>
-"""]
-    c.append("""<p>Two invariants hold across the whole series. <strong>The provers receive a subset
-of what they receive today</strong>, never more, and no obligation is created that
-does not exist today. <strong>Fingerprints do not move</strong>: the digest is
-computed on the const-annotated pre-expansion obligation, and every change that
-removes context runs after that point, on the backend path only &mdash; so
-<code>--printallobs</code> output and cache hits are unchanged by construction rather
-than by testing.</p>""")
+repository's <code>isabelle/</code> sources. The gate is fail-set <em>identity</em>
+with <code>main</code>, not a pass count: a newly failing test is a regression even
+where the count would still look healthy.</p>
 
-    c.append(_switches())
-    c.append(_noise_sentence())
-    c.append(_completeness())
-    c.append(_extended_clock())
+<h4>Two invariants</h4>
+<p><strong>The provers receive a subset of what they receive today</strong>, never
+more, and no obligation is created that does not exist today. <strong>Fingerprints do
+not move</strong>: the digest is computed on the const-annotated pre-expansion
+obligation, and every change that removes context runs after that point, on the
+backend path only &mdash; so <code>--printallobs</code> output and cache hits are
+unchanged by construction rather than by testing.</p>
 
-    return "".join(c)
-
-
-def _switches():
-    """What can be turned on or off, gathered from the per-commit blocks."""
-    rows = []
-    for pid, title, tag, cms, _ in CT.PRS:
-        for cm in cms:
-            off = _fill(CT.CM[cm]["off"])
-            if off.lower().startswith("no switch"):
-                continue
-            rows.append((pid, BY_LABEL[cm][1], BY_LABEL[cm][2], off))
-    n_none = sum(1 for c in CT.CM.values() if c["off"].lower().startswith("no switch"))
-    n_sw = len(rows)
-    assert n_sw + n_none == len(CT.CM), (
-        "switch tally disagrees with the commit list: %d with, %d without, %d total"
-        % (n_sw, n_none, len(CT.CM)))
-    out = ["<h4>What can be switched, and what cannot</h4>",
-           "<p>%s of the %s commits carry a switch; the other %s do not, and "
-           "deliberately so &mdash; they are output-preserving changes to a single code "
-           "path, so a flag would mean carrying two implementations of the same "
-           "function and testing neither of them properly. Where a switch does exist it "
-           "restores the <em>original</em> code rather than disabling a feature, which "
-           "is what makes it usable as a differential reference.</p>"
-           % (numword(n_sw).capitalize(), numword(len(CT.CM)), numword(n_none))]
-    out.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>commit</th>'
-               '<th>switch</th></tr></thead><tbody>')
-    for pid, sha, subj, off in rows:
-        out.append('<tr><td class="num">%s</td><td class="num"><code>%s</code><br>'
-                   '<span style="color:var(--ink-3);font-size:12.5px">%s</span></td>'
-                   '<td style="font-size:14px">%s</td></tr>' % (pid, sha, subj, off))
-    out.append("</tbody></table></div>")
-    out.append("<p style=\"margin-top:12px\">Every measurement here is taken with the "
-               "features on and every switch unset.</p>")
-    return "".join(out)
-
-
-def _noise_sentence():
-    """A known-zero pair: the editor pool touches only lsp/, so the preparation
-    path cannot change across it.  Whatever it measures is the noise."""
-    zero = None
-    for pid, title, tag, cms, _ in CT.PRS:
-        files = {f for cm in cms for f, _, _ in BY_LABEL[cm][3]}
-        if len(cms) == 1 and files and all(f.startswith("lsp/") for f in files):
-            zero = cms[0]
-    if zero is None:
-        return ""
-    i = L.POINTS.index(zero)
-    prev = L.POINTS[i - 1]
-    parts = []
-    for cp in L.CORPORA:
-        a, b = val(cp, prev, "prep"), val(cp, zero, "prep")
-        pa, pb = val(cp, prev, "peak"), val(cp, zero, "peak")
-        if isinstance(a, int) and isinstance(b, int) and a and b:
-            d = abs(a - b) / float(max(a, b)) * 100
-            e = (abs(pa - pb) / float(max(pa, pb)) * 100
-                 if isinstance(pa, int) and isinstance(pb, int) and max(pa, pb) else None)
-            parts.append("%s %.1f&nbsp;%%%s" % (
-                SHORT_CP[cp], d,
-                "" if e is None else " (memory %.2f&nbsp;%%)" % e))
-    if not parts:
-        return ""
-    return ("<p>One pair calibrates the noise better than the baseline repeat does. "
-            "The editor obligation pool changes only files under <code>lsp/</code>, so "
-            "the command-line preparation path across it cannot differ &mdash; whatever "
-            "the campaign measures there <em>is</em> the run-to-run spread, on a pair "
-            "whose true answer is known to be zero. It measures: %s. That is the floor "
-            "any ratio in &sect;{perpr} has to clear, and it is why a commit is only credited "
-            "with an effect when it is a sustained step rather than a single large "
-            "ratio. Read it per corpus: the floor is widest where the run is shortest, "
-            "which is one reason the ratios in &sect;{perpr} are quoted on the "
-            "1&nbsp;800-obligation corpus and the two private specifications rather "
-            "than on the small ones.</p>" % ", ".join(parts))
-
-
-def _completeness():
-    """What the campaign does not contain, counted rather than asserted."""
-    want = [(pt, cp) for pt in L.POINTS for cp in ("tiny", "synth100", "synth300")]
-    want += [(pt, cp) for pt in L.ENDPOINTS for cp in ("ffi", "mono")]
-    miss = [(pt, cp) for pt, cp in want
-            if not isinstance(sweep.get((pt, cp), {}).get("prep"), (int, str))]
-    tot = len(want)
-    out = ['<h4>What the campaign does not contain</h4>']
-    if not miss:
-        out.append("<p>Preparation and peak memory are measured at every one of the %d "
-                   "(commit, corpus) pairs the design calls for: all %d commits and "
-                   "<code>main</code> on the three public corpora, and the nine "
-                   "pull-request endpoints on the two private ones. There are no "
-                   "missing cells, so nothing in &sect;{curves} or &sect;{perpr} rests on an "
-                   "absent measurement.</p>" % (tot, len(L.POINTS) - 1))
-    else:
-        by = collections.Counter(cp for _, cp in miss)
-        out.append("<p><strong>%d of %d</strong> (commit, corpus) pairs are missing: %s. "
-                   "A missing cell is shown as a dash, never inferred, and no ratio is "
-                   "formed across one.</p>"
-                   % (len(miss), tot,
-                      ", ".join("%d on %s" % (n, cp) for cp, n in sorted(by.items()))))
-        out.append('<p class="pr-meta">%s</p>'
-                   % " &middot; ".join("%s/%s" % (pt, cp) for pt, cp in sorted(miss)))
-    out.append("<p>The two private corpora are measured at the pull-request endpoints "
-               "rather than at every commit. That is a deliberate bound, not an "
-               "omission: a single preparation pass on the monolith is minutes when it "
-               "completes and a quarter of an hour when it does not, and the question "
-               "those corpora answer &mdash; does this pull request make the "
-               "specification runnable &mdash; is a property of the pull request. Where "
-               "a commit inside a pull request needed separating from its neighbour, "
-               "the public 1&nbsp;800-obligation corpus is measured at every commit and "
-               "answers it.</p>")
-    return "".join(out)
-
-
-def _extended_clock():
-    """The two ways a run can end without a number, and how a line is walked."""
-    return """<h4>Runs that do not finish</h4>
-<p>A run gets an hour, and the machine caps address space at 12&nbsp;GB. A
-<strong>cross</strong> is the cap refusing an allocation: settled, and more time
-cannot change it. A <strong>ring</strong> is an hour spent without finishing &mdash;
-not a duration, only the statement that an edit-and-wait loop is not practical there.
-<p>Lines whose left end is expensive are walked from the tip towards the base, so the
-budget goes to the points that still complete. A point to the left of an hour-long
-stop is <em>marked</em> from it rather than run: it is the same tool with one
-optimisation removed and cannot be faster. A marked point is drawn as the ring it was
-marked from, is named as marked in the caption below the chart, and is never a
-figure.</p>"""
+<h4>Runs that do not finish</h4>
+<p>A run gets an hour, and address space is capped at 12&nbsp;GB. A
+<strong>cross</strong> on a chart is the cap refusing an allocation, which more time
+cannot change; a <strong>ring</strong> is an hour spent without finishing.</p>
+"""
 
 
 def _pending_sentence():
