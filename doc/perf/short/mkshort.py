@@ -588,29 +588,10 @@ def sec_problem():
                     "".join('<td class="num">%s</td>' % x for x in cells)))
     c.append("</tbody></table></div>")
     if carried:
-        c.append('<p class="pr-meta">&dagger; not measured on <code>main</code>: this '
-                 'cell carries the value of the next commit, which cannot move this '
-                 'metric.</p>')
-    c.append("<p style=\"margin-top:14px\">The failure is not slowness. %s</p>"
-             % _wall_sentence())
-    if isinstance(it_main, str) or it_main:
-        c.append("<p>The same wall stands in the editor. Re-checking the refinement chain "
-                 "after a single edit, with every fingerprint already in the cache, "
-                 "%s %s, and %s after this series.</p>"
-                 % ("has never finished" if it_main in L.FAILED
-                    else "takes " + L.fmt_ms(it_main),
-                    "on <code>main</code>" if it_at == "p00"
-                    else ("at <code>%s</code>, the first commit of the series and one "
-                          "that cannot move this metric" % C.LABELS[it_at][0]),
-                    L.fmt_ms(it_tip) if it_tip is not None else "&mdash;"))
-    if ks_main and ks_tip:
-        c.append("<p>And at the keystroke, on the %s: from <code>didChange</code> to "
-                 "<code>publishDiagnostics</code>, %.1f&nbsp;s on <code>main</code> "
-                 "against %.1f&nbsp;s after &mdash; <span class=\"r\">&times;%.1f</span>. "
-                 "That is the wait for <em>one typed character</em>, with every "
-                 "fingerprint already cached.</p>"
-                 % (CORPUS_NAME.get(ks_cp, ks_cp), ks_main, ks_tip, ks_main / ks_tip))
-    c.append(_control_sentence())
+        c.append('<p class="pr-meta">&dagger; <code>main</code> itself was not measured '
+                 'here; the cell carries the reading of the commit after it, which '
+                 'differs from <code>main</code> only by timing instrumentation that is '
+                 'inert unless <code>--timing</code> is passed.</p>')
     return "".join(c)
 
 
@@ -908,56 +889,6 @@ def _pending_sentence():
                 "not quoted anywhere in this document as a figure.")
     return ("%d marks are rings, so that many cells are inconclusive, and none of them "
             "is quoted anywhere in this document as a figure." % n)
-
-
-def _control_sentence():
-    """What the control module does across the series, read off the campaign.
-
-    Not a rule the series is held to -- a reading.  Every metric on the smallest
-    corpus, main against the tip.
-    """
-    got = []
-    for fld, name, fmt in (("gen", "generation", L.fmt_ms),
-                           ("prep", "preparation", L.fmt_ms),
-                           ("peak", "peak memory", L.fmt_kb)):
-        a, b = val("tiny", "p00", fld), val("tiny", TIP, fld)
-        if isinstance(a, int) and isinstance(b, int):
-            got.append("%s %s &rarr; %s" % (name, fmt(a), fmt(b)))
-    for d, name, fmt in ((iterlat, "iteration", L.fmt_ms),
-                         (keys, "keystroke", lambda v: fmt_secs(v))):
-        ra, rb = d.get(("tiny", "p00")), d.get(("tiny", TIP))
-        if ra and rb and not isinstance(ra[0], str) and not isinstance(rb[0], str):
-            got.append("%s %s &rarr; %s" % (name, fmt(ra[0]), fmt(rb[0])))
-    if not got:
-        return ""
-    return ('<div class="claim" style="margin-top:16px">Nothing proposed below costs '
-            'the small end anything. On the %s-obligation control module, '
-            '<code>main</code> and the branch tip land on the same figure for every '
-            'metric measured &mdash; %s &mdash; which is why it is on every chart.</div>'
-            % (L.OBL["tiny"], "; ".join(got)))
-
-
-def _wall_sentence():
-    """What the two private specifications actually do on main, from the campaign.
-
-    Two sentences, and no argument around them: a run the cap refused and a run the
-    clock stopped are different facts, and the ones that hold get stated.
-    """
-    out = []
-    for cp, name in (("mono", "the monolith"), ("ffi", "the refinement chain")):
-        v = L.main_point(sweep, cp, "prep")
-        if v == L.ABORT:
-            out.append("on %s <code>main</code> exhausts the 12&nbsp;GB address space "
-                       "before it finishes preparing" % name)
-        elif v == L.CEIL:
-            out.append("on %s no run of <code>main</code> has finished preparing"
-                       % name)
-        elif isinstance(v, int):
-            out.append("on %s <code>main</code> takes %s" % (name, L.fmt_ms(v)))
-        else:
-            out.append("on %s <code>main</code> has not been measured on this "
-                       "campaign" % name)
-    return ("On %s, and %s." % (out[0], out[1])).replace("On on ", "On ")
 
 
 ITER_STEP = 1.10       # the FLOOR; iter_threshold() raises it per corpus
