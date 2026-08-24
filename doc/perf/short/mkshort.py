@@ -298,6 +298,25 @@ def iters(cp):
                      "pending": r[0] == L.CEIL}
         else:
             d[pt] = r[0] / 1000.0
+    # A point that was never run, but sits BETWEEN two runs that both stopped at
+    # the ceiling, is itself at the ceiling: this series only ever makes the warm
+    # loop faster, so a commit bracketed by two stops cannot have slipped under
+    # the clock in between and back over it after.  It is drawn as a ring, not a
+    # cross -- what is established is that our own clock stopped it, not that
+    # memory refused it, and on this corpus the stops are timeouts at 5.8 GB of
+    # the 12 available rather than aborts.
+    #
+    # Bracketing, rather than "cannot be quicker than the one before", because
+    # bracketing is airtight and needs no assumption about which commit does what.
+    ceil = [i for i, pt in enumerate(L.POINTS)
+            if isinstance(d[pt], dict) and d[pt].get("kind") == L.CEIL]
+    if len(ceil) >= 2:
+        for i, pt in enumerate(L.POINTS):
+            if d[pt] is not None or not (ceil[0] < i < ceil[-1]):
+                continue
+            if any(c < i for c in ceil) and any(c > i for c in ceil):
+                d[pt] = {"kind": L.CEIL, "at": None, "pending": True,
+                         "inferred": True}
     return d
 
 
@@ -1235,6 +1254,19 @@ def _iter_caption():
     else:
         txt += (" No commit in the series makes this metric worse by more than the "
                 "spread, the memory pull request included.")
+    inf = [(cp, pt) for cp in L.CORPORA for pt, v in iters(cp).items()
+           if isinstance(v, dict) and v.get("inferred")]
+    if inf:
+        by = collections.Counter(cp for cp, _ in inf)
+        band_txt += (" %s of the rings were not run: %s, each sitting between two "
+                     "commits that did stop at the ceiling. This series only makes "
+                     "the warm loop faster, so a commit bracketed by two stops "
+                     "cannot have slipped under the clock in between and back over "
+                     "it after &mdash; the ring is what is established, and running "
+                     "them would cost hours to confirm it."
+                     % (numword(len(inf)).capitalize(),
+                        "; ".join("%s on the %s" % (numword(n), CORPUS_NAME.get(c, c))
+                                  for c, n in sorted(by.items()))))
     return txt + band_txt
 
 
