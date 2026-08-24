@@ -553,23 +553,44 @@ def sec_problem():
         (pt for pt in L.POINTS if _measured(pt)), "p00")
     it_main = iterlat.get(("ffi", it_at), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
-    c.append("<p>tlapm is fine on small proofs and unusable on large ones, and the "
-             "boundary is not gradual. The %s specifications below are the same tool on "
-             % numword(len([c for c in L.CORPORA if c != "synth100"])) +
-             "the same machine: %s obligations finish before you notice, and ten "
-             "thousand do not finish at all.</p>" % numword(L.OBL["tiny"]))
+    c.append("<p style=\"margin-top:18px\">tlapm is fine on small proofs and unusable "
+             "on large ones, and the boundary is not gradual. Here are the %s "
+             "specifications on <code>main</code>, one column per metric, same tool and "
+             "same machine throughout: %s obligations finish before you notice, and "
+             "ten thousand do not finish at all.</p>"
+             % (numword(len(L.CORPORA)), numword(L.OBL["tiny"])))
     c.append('<div class="scroller"><table><thead><tr><th>specification</th>'
-             '<th class="num">obligations</th><th class="num">prepare, <code>main</code></th>'
-             '<th class="num">prepare, after</th></tr></thead><tbody>')
-    for cp in [c for c in L.CORPORA if c != "synth100"]:
-        name = CORPUS_META[cp][1]
-        a = L.main_point(sweep, cp, "prep")
-        b = val(cp, TIP, "prep")
-        c.append("<tr><td>%s</td><td class=\"num\">%s</td><td class=\"num\">%s</td>"
-                 "<td class=\"num\">%s %s</td></tr>"
-                 % (name, "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"),
-                    L.fmt_ms(a), L.fmt_ms(b), fmt_x(a, b)))
+             '<th class="num">obligations</th><th class="num">generate</th>'
+             '<th class="num">prepare</th><th class="num">peak</th>'
+             '<th class="num">iteration</th><th class="num">keystroke</th>'
+             '</tr></thead><tbody>')
+    carried = []
+    for cp in L.CORPORA:
+        cells = [L.fmt_ms(L.main_point(sweep, cp, "gen")),
+                 L.fmt_ms(L.main_point(sweep, cp, "prep")),
+                 L.fmt_kb(L.main_point(sweep, cp, "peak"))]
+        r = iterlat.get((cp, "p00"))
+        if not r:
+            cells.append("&mdash;")
+        elif isinstance(r[0], str):
+            cells.append(L.fmt_ms(r[0]))
+        else:
+            # a value carried from the neighbouring commit is flagged where it is
+            # printed, not only where it is drawn
+            cells.append(L.fmt_ms(r[0]) + ("" if r[2] else "&thinsp;&dagger;"))
+            if not r[2]:
+                carried.append(cp)
+        k = keys.get((cp, "p00"))
+        cells.append(fmt_secs(k[0]) if k else "&mdash;")
+        c.append("<tr><td>%s</td><td class=\"num\">%s</td>%s</tr>"
+                 % (CORPUS_META[cp][1],
+                    "{:,}".format(L.OBL[cp]).replace(",", "&nbsp;"),
+                    "".join('<td class="num">%s</td>' % x for x in cells)))
     c.append("</tbody></table></div>")
+    if carried:
+        c.append('<p class="pr-meta">&dagger; not measured on <code>main</code>: this '
+                 'cell carries the value of the next commit, which cannot move this '
+                 'metric.</p>')
     c.append("<p style=\"margin-top:14px\">The failure is not slowness. %s</p>"
              % _wall_sentence())
     if isinstance(it_main, str) or it_main:
