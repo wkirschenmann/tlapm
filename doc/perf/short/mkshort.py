@@ -546,7 +546,7 @@ def sec_problem():
         c.append("<p>The same wall stands in the editor. Re-checking the refinement chain "
                  "after a single edit, with every fingerprint already in the cache, "
                  "%s on <code>main</code> and takes %s after this series.</p>"
-                 % ("does not finish inside the fifteen-minute ceiling" if it_main in L.FAILED
+                 % ("has never finished" if it_main in L.FAILED
                     else "takes " + L.fmt_ms(it_main),
                     L.fmt_ms(it_tip) if it_tip is not None else "&mdash;"))
     if ks_main and ks_tip:
@@ -1073,9 +1073,8 @@ def _wall_sentence():
             out.append("on %s <code>main</code> exhausts the 12&nbsp;GB address space "
                        "before it finishes preparing" % name)
         elif v == L.CEIL:
-            out.append("on %s it is still preparing when our fifteen-minute ceiling "
-                       "stops it &mdash; a protocol timeout, so how much longer it "
-                       "would need is not known" % name)
+            out.append("on %s no run of <code>main</code> has finished preparing"
+                       % name)
         elif isinstance(v, int):
             out.append("on %s <code>main</code> takes %s" % (name, L.fmt_ms(v)))
         else:
@@ -1307,9 +1306,9 @@ def _same_wall():
         txt += (" %d of those %d crosses are runs taken to their refusal; the other %d "
                 "are <strong>attributed</strong> to that wall rather than measured to "
                 "it, and the ground is stated so a reader can reject it: at the "
-                "fifteen-minute ceiling the runs that <em>were</em> taken further read "
-                "%.2f&ndash;%.2f&nbsp;GB, and each attributed run read inside that "
-                "range at the same ceiling, on the same code path, with neither the "
+                "point where they were stopped, the runs that <em>were</em> taken further "
+                "read %.2f&ndash;%.2f&nbsp;GB, and each attributed run read inside that "
+                "range at that same point, on the same code path, with neither the "
                 "pruning nor the streaming that removes the wall. A run stopped "
                 "holding a few hundred megabytes is nowhere near that range and stays "
                 "a ring, which is what keeps the attribution from swallowing every "
@@ -1463,14 +1462,14 @@ series is proposed in. A red mark instead of a point means the run
 <strong>did not complete</strong>, and its <em>shape</em> says whether that is a result.
 A <strong>cross</strong> is a result: the run was refused memory, or it was given a full
 hour and still did not finish. A <strong>ring</strong> is a
-<strong>protocol timeout &mdash; inconclusive</strong>: the run was stopped by the
-ceiling this measurement protocol sets, not by anything in the commit, so it says where
-we stopped looking and nothing about where the commit ends up. It is not a slower
+<strong>protocol timeout &mdash; inconclusive</strong>: this protocol&rsquo;s clock
+stopped the run, not anything in the commit, so it says where we stopped looking and
+nothing about where the commit ends up. It is not a slower
 version of a cross; it is the absence of an answer, and the count of outstanding rings
 is stated rather than left to be inferred. The tables in &sect;{perpr} say which of the two
 ways a real failure failed, because the difference matters &mdash; a change that speeds
-preparation up reaches the memory wall <em>sooner</em>, turning a ceiling into an abort
-without being a regression. Public and private corpora share each chart: hue separates
+preparation up reaches the memory wall <em>sooner</em>, turning a run we stopped into a
+run the cap refused, without being a regression. Public and private corpora share each chart: hue separates
 them, dash separates sizes.</p>
 <p>Commit labels are coloured by provenance: <span style="color:var(--lbl-286);font-weight:600">violet</span>
 is a commit whose message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>,
@@ -1515,8 +1514,8 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "result: the cap refused an allocation, and the reading is real &mdash; the "
     "resident set reached just before the refusal. More time cannot change it. A "
     "<strong>red ring</strong> is a <strong>protocol timeout, and therefore "
-    "inconclusive</strong>: the fifteen-minute ceiling this protocol sets stopped the "
-    "run, so the mark records our own cut-off and not the commit&rsquo;s behaviour. "
+    "inconclusive</strong>: this protocol&rsquo;s clock stopped the run, so the mark "
+    "records our own cut-off and not the commit&rsquo;s behaviour. "
     + _pending_sentence() + " Where a ring sits says what little is known: on the cap "
     "line it was holding a large share of the cap and still climbing, below the cap it "
     "was merely slow and sits at the peak it had reached. Neither is a figure to quote. "
