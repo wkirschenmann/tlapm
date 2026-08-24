@@ -16,6 +16,13 @@ eval $(opam env --switch=5.1.0 --set-switch) 2>/dev/null
 BOOT=$(awk '/btime/{print $2}' /proc/stat)
 P=$CORPUS
 GEN_T=600; PREP_T=900; CAP=12000000
+# The binaries are copied out of the worktree into $BINS, and a copied tlapm does
+# not find the standard library from there.  It never showed because the three
+# synthetic corpora EXTEND nothing at all: the first corpus in this campaign that
+# needs FiniteSets came back rc=3 on all eighteen points, in forty seconds, which
+# reads exactly like a fast run if the return code is not looked at.
+LIB=${TLAPM_LIB:-"$(git rev-parse --show-toplevel)/_build/default/library"}
+[ -d "$LIB" ] || { echo "no standard library at $LIB -- set TLAPM_LIB" >&2; exit 2; }
 mkdir -p $BINS
 
 SMALL="tiny:$P/Synth_L5_S3_D4_C2.tla synth100:$P/Synth_L100_S5_D50_C3.tla synth300:$P/Synth_L300_S5_D50_C3.tla"
@@ -66,13 +73,13 @@ measure () {  # $1 phase $2 gen|prep|both $3 points  $4.. corpora
       d=$(mktemp -d); gen=-2; grc=0; prep=-2; prc=0; peak=0
       if [ "$met" != prep ]; then
         t0=$(date +%s%N)
-        ( cd $(dirname $spec) && timeout $GEN_T $b -N --nofp --cache-dir $d/g $spec ) >/dev/null 2>&1; grc=$?
+        ( cd $(dirname $spec) && timeout $GEN_T $b -I $LIB -N --nofp --cache-dir $d/g $spec ) >/dev/null 2>&1; grc=$?
         gen=$(( ($(date +%s%N)-t0)/1000000 ))
       fi
       if [ "$met" != gen ]; then
         t0=$(date +%s%N)
         ( ulimit -v $CAP; cd $(dirname $spec) && timeout $PREP_T /usr/bin/time -f "%M" -o $d/r \
-            $b --noproving --nofp --cache-dir $d/p $spec ) >/dev/null 2>&1; prc=$?
+            $b -I $LIB --noproving --nofp --cache-dir $d/p $spec ) >/dev/null 2>&1; prc=$?
         prep=$(( ($(date +%s%N)-t0)/1000000 ))
         peak=$(tail -1 $d/r 2>/dev/null); case "${peak:-}" in ''|*[!0-9]*) peak=0;; esac
       fi
@@ -84,8 +91,15 @@ measure () {  # $1 phase $2 gen|prep|both $3 points  $4.. corpora
   echo "PHASE_${ph}_DONE"
 }
 
-measure A  both "$ALL"       $SMALL
-measure P  both "$ALL"       $PUBLIC
-measure B0 gen  "$ENDPOINTS" $LARGE
-measure B1 prep "$REV"       $LARGE
+# PHASES selects which of them to run, so one phase can be measured without
+# dragging the others along.  Without it, adding a corpus meant re-running the
+# two private specifications as well -- hours of prepare-until-the-cap on a
+# machine that was only wanted for twelve minutes of the new one.
+PHASES=${PHASES:-"A P B0 B1"}
+want () { case " $PHASES " in *" $1 "*) return 0;; *) return 1;; esac; }
+
+want A  && measure A  both "$ALL"       $SMALL
+want P  && measure P  both "$ALL"       $PUBLIC
+want B0 && measure B0 gen  "$ENDPOINTS" $LARGE
+want B1 && measure B1 prep "$REV"       $LARGE
 echo SHORT_SWEEP_DONE
