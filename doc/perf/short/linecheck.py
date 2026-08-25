@@ -271,13 +271,41 @@ def check_series_labels():
     return bad
 
 
+def check_vouched_rows():
+    """A deliberate re-measurement that no anchor can vouch for is invisible.
+
+    load_sweep admits an off-boot phase-L duration only when the campaign's anchor
+    cell has been re-measured on that boot and agrees with the line's host.  A row
+    measured on a boot with no anchor is therefore dropped in silence -- which is
+    how a sixteen-minute run came to sit in the CSV without reaching any chart.
+    """
+    import csv as _csv
+    import collections as _c
+    bad = []
+    rows = list(_csv.DictReader(open(os.path.join(L.S, "short_sweep.csv"))))
+    anch = {r["boot"] for r in rows
+            if r["phase"].startswith("K") and int(r["prep_rc"]) == 0}
+    sweep, _boot, _d = L.load_sweep()
+    line_boot = sweep.get("_line_boot", {})
+    for r in rows:
+        if r["phase"] != "L" or int(r["prep_ms"]) <= 0 or int(r["prep_rc"]) != 0:
+            continue
+        if r["boot"] == line_boot.get((r["corpus"], "prep")):
+            continue
+        if r["boot"] not in anch:
+            bad.append("%s/%s was measured on boot %s, which has no anchor run, so "
+                       "no chart can use it -- re-run the anchor on that boot"
+                       % (r["corpus"], r["point"], r["boot"]))
+    return bad
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels() + check_vouched_rows()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:

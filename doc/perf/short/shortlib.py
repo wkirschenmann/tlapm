@@ -17,6 +17,11 @@ S = os.environ.get("SHORT_DIR", os.path.dirname(os.path.abspath(__file__)))
 DNC, CEIL, ABORT = "DNC", "CEIL", "ABORT"
 FAILED = (DNC, CEIL, ABORT)
 
+# How far two hosts' readings of the anchor cell may differ and still count as the
+# same machine.  The campaign's nineteen anchor runs span 8 % between themselves,
+# so a threshold under that would reject a host for being ordinary.
+ANCHOR_TOL = 0.05
+
 # the 17 measured points, and the pull request each commit belongs to
 POINTS = ["p%02d" % i for i in range(18)]
 PRS = [
@@ -89,6 +94,25 @@ def load_sweep(path=None, boot=None):
     anchors = [r for r in raw if r["phase"].startswith("K")]
     data = [r for r in raw if not r["phase"].startswith("K")]
 
+    # The campaign re-measures one cell -- the chain's preparation at p14 -- over
+    # and over, for one purpose: to say whether two hosts are the same machine as
+    # far as this metric is concerned.  Two boots AGREE when both have re-measured
+    # it and their medians are within ANCHOR_TOL.  That is what lets a deliberate
+    # re-measurement taken today join a curve measured on a host that no longer
+    # exists; without it a duration is confined to its own boot, and a line with a
+    # hole in it can never be filled once the machine is gone.
+    anchor_ms = collections.defaultdict(list)
+    for r in anchors:
+        if int(r["prep_rc"]) == 0 and int(r["prep_ms"]) > 0:
+            anchor_ms[r["boot"]].append(int(r["prep_ms"]))
+
+    def hosts_agree(b1, b2):
+        a, b = anchor_ms.get(b1), anchor_ms.get(b2)
+        if not a or not b:
+            return False
+        m1, m2 = statistics.median(a), statistics.median(b)
+        return abs(m1 - m2) / float(max(m1, m2)) <= ANCHOR_TOL
+
     # per (corpus, field), the boot carrying the most measured points
     def field_of(r):
         return "gen" if int(r["gen_ms"]) != -2 else "prep"
@@ -118,8 +142,12 @@ def load_sweep(path=None, boot=None):
             # off-boot row.  This is what lets a stopped run be settled on whatever
             # machine happens to be available, without putting a foreign timing on a
             # curve.
-            if not (r["phase"] == "L" and fld == "prep"
-                    and _verdict(int(r["prep_rc"])) == ABORT):
+            settled = (r["phase"] == "L" and fld == "prep"
+                       and _verdict(int(r["prep_rc"])) == ABORT)
+            vouched = (r["phase"] == "L" and fld == "prep"
+                       and _verdict(int(r["prep_rc"])) is None
+                       and hosts_agree(r["boot"], line_boot.get((r["corpus"], fld))))
+            if not (settled or vouched):
                 continue
         if r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
                 and fld == "prep" and int(r["prep_rc"]) == 124:
