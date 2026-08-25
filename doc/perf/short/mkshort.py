@@ -1229,9 +1229,13 @@ def _first_edit_note(dirty):
 
 def sec_perpr():
     c = ["<p>Each pull request: why it exists, then each of its commits with what "
-         "changes, how to check it, how to switch it off, and what it measured. Ratios "
-         "are quoted on the corpus where the change is separable from its neighbours; "
-         "</p>"]
+         "changes, how it was validated, how to switch it off, and what it measured. "
+         "Ratios are quoted on the corpus where the change is separable from its "
+         "neighbours.</p>",
+         "<p>Same validation for every commit: dump the obligations with "
+         "<code>tlapm -N --toolbox 0 0 --printallobs --nofp FILE</code>, strip timings, "
+         "prover names and banner, diff against <code>main</code>. Empty diff, 82&thinsp;792 "
+         "lines on the public INSTANCE stack. Plus <code>make test</code>.</p>"]
     for pid, title, tag, cms, motive in CT.PRS:
         files = sorted({f for cm in cms for f, _, _ in BY_LABEL[cm][3]})
         c.append('<div class="pr"><div class="pr-head"><span class="pr-n">%s</span>'
