@@ -1231,7 +1231,8 @@ def sec_perpr():
     c = ["<p>Each pull request: why it exists, then each of its commits with what "
          "changes, how it was validated, how to switch it off, and what it measured. "
          "Ratios are quoted on the corpus where the change is separable from its "
-         "neighbours.</p>",
+         "neighbours; the warm line lists only the corpora where the metric moved "
+         "by more than 10\u2009%.</p>",
          "<p>Same validation for every commit: dump the obligations with "
          "<code>tlapm -N --toolbox 0 0 --printallobs --nofp FILE</code>, strip timings, "
          "prover names and banner, diff against <code>main</code>. Empty diff, 82&thinsp;792 "
@@ -1273,6 +1274,9 @@ LONG_CP = {cp: (n if n.replace(" ", "").isdigit()
            for cp, n in SHORT_CP.items()}
 
 
+WARM_FLOOR = 0.10
+
+
 def _cm_table(cm):
     """what this commit measured, on every corpus where both sides are numbers"""
     i = L.POINTS.index(cm)
@@ -1304,15 +1308,19 @@ def _cm_table(cm):
             r = ' <span class="r">&times;%.2f</span>' % (float(a) / float(b))
         return "%s &rarr; %s%s" % (fa, fb, r)
 
+    # Only the corpora where the metric actually moved.  A commit that leaves both
+    # warm metrics alone used to print twelve cells at 1.00, which says nothing.
+    def moved(a, b):
+        if not (isinstance(a, (int, float)) and isinstance(b, (int, float)) and b):
+            return False
+        return abs(float(a) / float(b) - 1.0) >= WARM_FLOOR
+
     warm = []
-    for cp in L.CORPORA:
-        ra, rb = iterlat.get((cp, prev)), iterlat.get((cp, cm))
-        if ra and rb:
-            warm.append("iteration, %s: %s" % (SHORT_CP[cp], pair(ra[0], rb[0])))
-    for cp in L.CORPORA:
-        ka, kb = keys.get((cp, prev)), keys.get((cp, cm))
-        if ka and kb:
-            warm.append("keystroke, %s: %s" % (SHORT_CP[cp], pair(ka[0], kb[0])))
+    for lab, src in (("iteration", iterlat), ("keystroke", keys)):
+        for cp in L.CORPORA:
+            ra, rb = src.get((cp, prev)), src.get((cp, cm))
+            if ra and rb and moved(ra[0], rb[0]):
+                warm.append("%s, %s: %s" % (lab, SHORT_CP[cp], pair(ra[0], rb[0])))
     out = ""
     if rows:
         out += ('<div class="scroller"><table><thead><tr><th>corpus</th><th class="num">generate</th>'
