@@ -1410,12 +1410,6 @@ different one.</p>
         parts.append('<section><div class="sec-head"><span class="n">%02d</span>'
                      '<h2>%s</h2></div>%s</section>' % (n, title, body))
     parts.append("""<footer>
-<p>Two figures here come from a different campaign:
-&sect;{not}'s nine ranges, from a larger campaign on another machine, and the sharing
-figure in &sect;{mechanism}, from a <code>TLAPM_PREP_SHARE</code> probe on the private
-monolith.</p>
-<p>The two private specifications are a customer's and are not published &mdash; only
-the measurements taken on them are.</p>
 <p>This work &mdash; the code, the measurement harness, and this document &mdash; was
 produced by a human working with Anthropic's Claude models (Opus&nbsp;5, Fable&nbsp;5,
 Sonnet&nbsp;5).</p>
