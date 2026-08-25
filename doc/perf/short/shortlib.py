@@ -106,12 +106,34 @@ def load_sweep(path=None, boot=None):
         if int(r["prep_rc"]) == 0 and int(r["prep_ms"]) > 0:
             anchor_ms[r["boot"]].append(int(r["prep_ms"]))
 
-    def hosts_agree(b1, b2):
+    # A cell measured on both boots can serve as the bridge when the designated
+    # anchor was never run on one of them -- provided it is long enough to be about
+    # the processor rather than about starting a process.  The two hosts here agree
+    # to 0.4 % on a 149 s run and differ by 2.8x on a 100 ms one, so a short cell
+    # would report a different machine for a difference in start-up cost.
+    BRIDGE_MIN_MS = 60000
+    bridge = collections.defaultdict(list)
+    for r in data:
+        if int(r["prep_ms"]) >= BRIDGE_MIN_MS and int(r["prep_rc"]) == 0:
+            bridge[(r["boot"], r["corpus"], r["point"])].append(int(r["prep_ms"]))
+
+    def hosts_agree(b1, b2, skip=None):
+        pairs = []
         a, b = anchor_ms.get(b1), anchor_ms.get(b2)
-        if not a or not b:
+        if a and b:
+            pairs.append((statistics.median(a), statistics.median(b)))
+        for (bb, cp, pt), v in bridge.items():
+            if bb != b1 or (cp, pt) == skip:
+                continue
+            w = bridge.get((b2, cp, pt))
+            if w:
+                pairs.append((statistics.median(v), statistics.median(w)))
+        if not pairs:
             return False
-        m1, m2 = statistics.median(a), statistics.median(b)
-        return abs(m1 - m2) / float(max(m1, m2)) <= ANCHOR_TOL
+        # every shared reading has to agree: one that does not is a host that is
+        # not the same machine for some part of this work
+        return all(abs(m1 - m2) / float(max(m1, m2)) <= ANCHOR_TOL
+                   for m1, m2 in pairs)
 
     # per (corpus, field), the boot carrying the most measured points
     def field_of(r):
@@ -146,7 +168,8 @@ def load_sweep(path=None, boot=None):
                        and _verdict(int(r["prep_rc"])) == ABORT)
             vouched = (r["phase"] == "L" and fld == "prep"
                        and _verdict(int(r["prep_rc"])) is None
-                       and hosts_agree(r["boot"], line_boot.get((r["corpus"], fld))))
+                       and hosts_agree(r["boot"], line_boot.get((r["corpus"], fld)),
+                                       skip=(r["corpus"], r["point"])))
             if not (settled or vouched):
                 continue
         if r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
