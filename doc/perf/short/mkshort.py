@@ -1361,16 +1361,29 @@ one is the editor's obligation pool and one memoizes the grammar &mdash; and the
 is in a component the issue does not touch at all.</p>""".replace("Six of these seventeen", "%s of these seventeen" % ("Six" if n286 == 6 else str(n286)))
 
 
+def _best_ratio(get):
+    """largest p00 -> tip ratio over the corpora, on a metric both ends measured"""
+    best = 0.0
+    for cp in L.CORPORA:
+        a, b = get(cp, "p00"), get(cp, TIP)
+        if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b:
+            best = max(best, float(a) / float(b))
+    return best
+
+
+BEST_MEM = int(_best_ratio(lambda cp, pt: val(cp, pt, "peak")))
+BEST_ITER = int(_best_ratio(
+    lambda cp, pt: (iterlat.get((cp, pt)) or (None,))[0]))
+
+
 def build():
     parts = ['<div class="wrap"><header>',
              '<p class="eyebrow">tlapm &middot; performance</p>',
              '<h1>%s pull requests to make large proofs tractable</h1>'
              % numword(N_PR).capitalize(),
-             '<p class="lede">%s commits, one subject each, measured commit by commit '
-             'on %s specifications with %s metrics a user can time from outside the '
-             'tool. Two of those specifications cannot be prepared at all today.</p>'
-             % (numword(N_CM).capitalize(), numword(len(L.CORPORA)),
-                numword(len(METRICS))),
+             '<p class="lede">Peak memory divided by %d, iteration latency by %d. '
+             '%s commits, one subject each, measured commit by commit.</p>'
+             % (BEST_MEM, BEST_ITER, numword(N_CM).capitalize()),
              '<div class="meta"><span>branch <code>%s</code></span>'
              '<span>%d files, +%d&thinsp;/&thinsp;&minus;%d</span>'
              '<span>base <code>%s</code></span></div></header>'
