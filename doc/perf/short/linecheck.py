@@ -292,10 +292,16 @@ def check_vouched_rows():
             continue
         if r["boot"] == line_boot.get((r["corpus"], "prep")):
             continue
-        if r["boot"] not in anch:
-            bad.append("%s/%s was measured on boot %s, which has no anchor run, so "
-                       "no chart can use it -- re-run the anchor on that boot"
-                       % (r["corpus"], r["point"], r["boot"]))
+        if r["boot"] in anch:
+            continue
+        # only worth saying when the cell has no admissible reading at all: an older
+        # unusable row behind a good one costs the reader nothing
+        v = sweep.get((r["point"], r["corpus"]), {}).get("prep")
+        if isinstance(v, int):
+            continue
+        bad.append("%s/%s was measured on boot %s, which nothing can vouch for, so "
+                   "no chart can use it -- measure a cell of at least a minute on "
+                   "both boots, or the anchor" % (r["corpus"], r["point"], r["boot"]))
     return bad
 
 
