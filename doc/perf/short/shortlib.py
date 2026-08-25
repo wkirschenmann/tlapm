@@ -181,10 +181,20 @@ def apply_reps(sweep, path=None, boot=None):
                 (int(r["ms"]), int(r["peak_kb"])))
     if not boots:
         return sweep, {}
-    boot = boot or max(boots, key=lambda b: sum(1 for k in runs if k[0] == b))
+    # The boot is chosen per (corpus, metric), for the reason load_sweep chooses it
+    # per line: one corpus re-measured on a fresh host must be able to move without
+    # dragging the rest of the file with it, and must not be outvoted by the row
+    # count of corpora it has nothing to do with.  More rows wins; on a tie the more
+    # recent boot does.
+    tally = collections.Counter()
+    for (b, cp, mt, pt) in runs:
+        tally[(cp, mt, b)] += len(runs[(b, cp, mt, pt)])
+    line_boot = {}
+    for (cp, mt, b), n in sorted(tally.items(), key=lambda kv: (kv[1], kv[0][2])):
+        line_boot[(cp, mt)] = b
     used = {}
     for (b, cp, mt, pt), v in runs.items():
-        if b != boot or len(v) < 3:
+        if b != (boot or line_boot.get((cp, mt))) or len(v) < 3:
             continue
         ms = sorted(m for m, _ in v)
         med = ms[len(ms) // 2]
