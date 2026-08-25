@@ -475,23 +475,30 @@ if N_CM != len(CT.CM):
         "Every 'seventeen commits' in the document is derived from the first, so "
         "they have to agree." % (N_CM, len(CT.CM)))
 
+# name, how it is measured, when a user meets it, what it is
 METRICS = [
     ("preparation time", "<code>tlapm --noproving --nofp</code>",
+     "checking a file, from the command line or from the editor&rsquo;s "
+     "&ldquo;prove everything&rdquo;",
      "the per-obligation pipeline with no prover launched &mdash; find the method, "
      "annotate constants, fingerprint, expand, normalise, prune, encode &mdash; so it "
      "reproduces without solvers installed."),
     ("peak memory", "maximum resident set of that run",
+     "the same run &mdash; it decides whether it finishes at all",
      "what decides whether a large specification runs at all. Runs are capped at "
      "12&nbsp;GB of address space; one that hits the cap is an abort, never a large "
      "number."),
     ("generation time", "<code>tlapm -N --nofp</code>",
+     "the start of every run, and every interaction with the editor",
      "parse, elaborate, generate obligations, stop. The floor under every editor "
      "interaction."),
     ("iteration latency", "<code>tlapm --toolbox L H</code> on a warm cache",
+     "changing one proof step and asking for it to be re-checked",
      "the wait after editing one proof step with every fingerprint already cached: "
      "everything is re-parsed, re-elaborated and re-fingerprinted, and only the "
      "changed obligation is proved."),
     ("keystroke &rarr; diagnostics", "the LSP protocol boundary",
+     "typing",
      "<code>didChange</code> sent, <code>publishDiagnostics</code> received, measured "
      "by a client speaking the protocol &mdash; what the editor waits."),
 ]
@@ -506,11 +513,12 @@ def _metrics_table():
          "tlapm with stock flags on a stock build &mdash; no probe, no patched "
          "binary, nothing this series introduces.</p>",
          '<div class="scroller"><table><thead><tr><th>metric</th><th>how</th>'
-         '<th>what it is</th></tr></thead><tbody>']
-    for name, how, what in METRICS:
+         '<th>when you meet it</th><th>what it is</th></tr></thead><tbody>']
+    for name, how, when, what in METRICS:
         c.append('<tr><td><strong>%s</strong></td><td class="num">%s</td>'
+                 '<td style="color:var(--ink-2);font-size:14px">%s</td>'
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
-                 % (name, how, what))
+                 % (name, how, when, what))
     c.append("</tbody></table></div>")
     return "".join(c)
 
@@ -607,8 +615,9 @@ of change for each:</p>
 
 def sec_proposal():
     c = ["<p>%s pull requests, %s commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
-         "Each commit is one subject, states its own invariant, and passes the gate in "
-         "&sect;{method} on its own.</p>"
+         "Each commit is one subject, states its own invariant, and passes the "
+         "repository's test suite on its own &mdash; the gate is fail-set identity "
+         "with <code>main</code>, not a pass count.</p>"
          % (numword(N_PR).capitalize(), numword(N_CM),
             TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
     c.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>pull request</th>'
@@ -630,6 +639,7 @@ def sec_proposal():
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
                  % (tag, pid, title, len(cms), files, short))
     c.append("</tbody></table></div>")
+    c.append(sec_curves())
     c.append("<p style=\"margin-top:14px\">The order is not the order the work happened "
              "in; it is the order the measurements support. Each of the first six pull "
              "requests either crosses a threshold &mdash; a specification that could not "
@@ -1068,35 +1078,20 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
         rule=None, better="lower"):
     return ('<figure style="margin-top:20px"><div class="fig-head">'
             '<h4 style="margin:0">%s</h4>%s</div>'
-            '<p style="font-size:13.5px;color:var(--ink-2);margin:2px 0 12px">%s</p>%s'
-            '<figcaption>%s</figcaption></figure>'
+            '<p style="font-size:13.5px;color:var(--ink-2);margin:2px 0 12px">%s</p>%s%s'
+            '</figure>'
             % (title, _better(better), sub,
                C.chart(aria, values, unit, fmt_end, series, points, rule,
                        better=better),
-               caption))
+               ("<figcaption>%s</figcaption>" % caption) if caption else ""))
 
 
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
-series is proposed in. A red mark instead of a point means the run
-<strong>did not complete</strong>, and its <em>shape</em> says whether that is a result.
-A <strong>cross</strong> is a result: the run was refused memory, or it was given a full
-hour and still did not finish. A <strong>ring</strong> is a
-<strong>protocol timeout &mdash; inconclusive</strong>: this protocol&rsquo;s clock
-stopped the run, not anything in the commit, so it says where we stopped looking and
-nothing about where the commit ends up. It is not a slower
-version of a cross; it is the absence of an answer. The tables in &sect;{perpr} say which of the two
-ways a real failure failed, because the difference matters &mdash; a change that speeds
-preparation up reaches the memory wall <em>sooner</em>, turning a run we stopped into a
-run the cap refused, without being a regression. Public and private corpora share each chart: hue separates
-them, dash separates sizes.</p>
-<p>Commit labels are coloured by provenance: <span style="color:var(--lbl-286);font-weight:600">violet</span>
-is a commit whose message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>,
-<span style="color:var(--lbl-keep);font-weight:600">green</span> is new here. Bold
-labels are the last commit of a pull request &mdash; the point a reviewer merging that
-pull request would land on.</p>
-<p>The first chart is throughput rather than speedup for one reason: on the two private
-specifications <code>main</code> has no value to form a ratio against.</p>"""]
+series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap refused;
+a red <strong>ring</strong> is a run given an hour that did not finish. Hue separates
+public corpora from private, dash separates sizes, and a bold label is the last commit
+of a pull request &mdash; the point a reviewer merging it would land on.</p>"""]
 
     c.append(fig(
     "Preparation throughput",
@@ -1108,15 +1103,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "on a logarithmic axis; the two private specifications do not complete on main.",
     {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
     lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
-    "A red mark below the axis is a run that did not complete. It has no height "
-    "because its throughput is <strong>zero</strong> &mdash; it never finished preparing "
-    "the corpus &mdash; and zero has no place on a logarithmic axis. That is why these "
-    "sit in a band rather than on the curve: the other charts can put a failure "
-    "somewhere meaningful, this one cannot. A cross is a result; a ring is a "
-    "<strong>protocol timeout</strong>, and therefore inconclusive &mdash; the number "
-    "it would have had is unknown, not zero. On the two private specifications "
-    "<code>main</code> is one of these marks, and the curve begins only where a commit "
-    "makes the specification runnable.", better="higher"))
+    "", better="higher"))
 
     c.append(fig(
     "Peak memory of a preparation pass",
@@ -1125,23 +1112,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "Peak resident set per commit, five corpora, logarithmic axis.",
     {cp: peak(cp) for cp in L.CORPORA}, "GB",
     lambda v: "%.0f MB" % (v * 1024) if v < 1 else "%.2f GB" % v,
-    "The step is the fourth pull request, and it is a step rather than a slope: peak "
-    "memory stops being a function of the file and becomes a function of one obligation. "
-    "Everything to the right of it is flat, which is the point &mdash; no later commit "
-    "gives any of it back. "
-    "Two marks, and only one of them is a result. A <strong>cross</strong> is a "
-    "result: the cap refused an allocation, and the reading is real &mdash; the "
-    "resident set reached just before the refusal. More time cannot change it. A "
-    "<strong>red ring</strong> is a <strong>protocol timeout, and therefore "
-    "inconclusive</strong>: this protocol&rsquo;s clock stopped the run, so the mark "
-    "records our own cut-off and not the commit&rsquo;s behaviour. "
-    + _pending_sentence() + " Where a ring sits says what little is known: on the cap "
-    "line it was holding a large share of the cap and still climbing, below the cap it "
-    "was merely slow and sits at the peak it had reached. Neither is a figure to quote. "
-    + _same_wall() +
-    " The distinction the chart is really about is the pull request in the middle: to "
-    "its left the failure is memory, to its right it is only time.",
-    rule=(12.0, "12 GB address-space cap")))
+    "", rule=(12.0, "12 GB address-space cap")))
 
     c.append(fig(
     "Generation time",
@@ -1152,11 +1123,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "Generation time in seconds per commit, five corpora, logarithmic axis.",
     {cp: gen(cp) for cp in L.CORPORA}, "s",
     lambda v: "%d ms" % (v * 1000) if v < 1 else "%.1f s" % v,
-    "Unlike preparation, <code>main</code> completes this on every corpus, so every "
-    "curve here starts from a real number and the whole series is one continuous "
-    "line. Two of the nine pull requests are visible only on this chart and on the "
-    "keystroke: the linear <code>ENABLED</code> scan and the memoized grammar do "
-    "nothing to per-obligation preparation, because neither runs in that loop."))
+    ""))
 
     IT = {cp: iters(cp) for cp in L.CORPORA}
     c.append(fig(
@@ -1166,7 +1133,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
     IT, "s", fmt_secs,
-    _iter_caption(),
+    "",
     series=_series_for(IT)))
 
     KS = keyser()
@@ -1177,7 +1144,7 @@ specifications <code>main</code> has no value to form a ratio against.</p>"""]
         "the LSP protocol. Seconds.",
         "Keystroke to diagnostics latency per commit, one series per corpus measured.",
         KS, "s", fmt_secs,
-        _keystroke_caption(),
+        "",
         series=_series_for(KS)))
     return "".join(c)
 
@@ -1264,8 +1231,7 @@ def sec_perpr():
     c = ["<p>Each pull request: why it exists, then each of its commits with what "
          "changes, how to check it, how to switch it off, and what it measured. Ratios "
          "are quoted on the corpus where the change is separable from its neighbours; "
-         "the full per-commit table is in "
-         "<code>doc/perf/short/short_sweep.csv</code>.</p>"]
+         "</p>"]
     for pid, title, tag, cms, motive in CT.PRS:
         files = sorted({f for cm in cms for f, _, _ in BY_LABEL[cm][3]})
         c.append('<div class="pr"><div class="pr-head"><span class="pr-n">%s</span>'
@@ -1466,8 +1432,6 @@ different one.</p>
     secs = [("problem",   "What breaks, and where",           sec_problem),
             ("mechanism", "One mechanism, four consequences", sec_mechanism),
             ("proposal",  "What is proposed",                 sec_proposal),
-            ("method",    "How it was measured",              sec_method),
-            ("curves",    "Commit by commit",                 sec_curves),
             ("perpr",     "Each pull request",                sec_perpr),
             ("286",       "Relation to issue #286",           sec_286),
             ("not",       "What is deliberately not here",    sec_not)]
@@ -1483,11 +1447,10 @@ different one.</p>
         parts.append('<section><div class="sec-head"><span class="n">%02d</span>'
                      '<h2>%s</h2></div>%s</section>' % (n, title, body))
     parts.append("""<footer>
-<p>Every chart, table and ratio here is generated by
-<code>doc/perf/short/mkshort.py</code> from the CSVs beside it. Two figures are not, and
-say so where they appear: &sect;{not}'s nine ranges, from a larger campaign on another
-machine, and the sharing figure in &sect;{mechanism}, from a
-<code>TLAPM_PREP_SHARE</code> probe on the private monolith.</p>
+<p>Two figures here come from a different campaign and say so where they appear:
+&sect;{not}'s nine ranges, from a larger campaign on another machine, and the sharing
+figure in &sect;{mechanism}, from a <code>TLAPM_PREP_SHARE</code> probe on the private
+monolith.</p>
 <p>The two private specifications are a customer's and are not published &mdash; only
 the measurements taken on them are.</p>
 <p>This work &mdash; the code, the measurement harness, and this document &mdash; was
