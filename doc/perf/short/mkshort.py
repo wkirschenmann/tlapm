@@ -1340,24 +1340,6 @@ user can observe. They are listed because the reason they are absent is a result
                  '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
                  % (area, what, meas, why))
     c.append("</tbody></table></div>")
-    c.append("""<p style="margin-top:14px">The ranges are the ratios over every corpus and both
-of generation and preparation, from a separate larger campaign on a different
-machine. Their absolute timings do not transfer; the ratios do, and every one of these
-nine straddles 1 &mdash; a ratio that changes sign between two corpora of the same
-tool is measuring the run, not the change.</p>
-<p>The bar is a <em>sustained</em> step, not a large single ratio, and applying it
-changed a decision. A tenth commit &mdash; memoizing the two instances of each grammar
-rule &mdash; was on this list because the editor-latency harness could not resolve it
-at ten repetitions. Re-reading the same campaign by corpus showed a step on generation
-of the two private specifications that the following nine commits all sustain. It is
-now PR9. The lesson is in the method rather than in the commit: one metric failing to
-see a change is not the same as the change not being there.</p>
-<p>What is still open after this series is a different kind of change rather than a
-smaller one, which is why none of it is here: the editor re-elaborates the whole
-document on every interaction and then a child process repeats the work; there is no
-in-process cache of elaborated <code>EXTENDS</code> dependencies; and obligations are
-generated eagerly for the whole file even when the request concerns one proof. Each of
-those is an architectural change with a design discussion in front of it, not a commit.</p>""")
     return "".join(c)
 
 
@@ -1428,7 +1410,7 @@ different one.</p>
         parts.append('<section><div class="sec-head"><span class="n">%02d</span>'
                      '<h2>%s</h2></div>%s</section>' % (n, title, body))
     parts.append("""<footer>
-<p>Two figures here come from a different campaign and say so where they appear:
+<p>Two figures here come from a different campaign:
 &sect;{not}'s nine ranges, from a larger campaign on another machine, and the sharing
 figure in &sect;{mechanism}, from a <code>TLAPM_PREP_SHARE</code> probe on the private
 monolith.</p>
