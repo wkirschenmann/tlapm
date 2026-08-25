@@ -32,9 +32,19 @@ VIOLET, TEAL = "var(--lbl-286)", "var(--lbl-keep)"
 # so a sixth corpus does not need a sixth colour, and a corpus with no
 # measurements never reaches the legend -- _series_for filters this list by
 # what actually has points.
-SERIES = [("public synthetic, 1 800", "synth300", PUB,  None),
-          ("public synthetic, 600",   "synth100", PUB,  "5 3"),
-          ("public synthetic, 71",    "tiny",     PUB,  "1 3"),
+def _obl(cp):
+    """The obligation count, from the campaign rather than from this line.
+
+    It was typed here, and when the control corpus turned out to have twenty
+    obligations rather than seventy-one the legend went on saying seventy-one --
+    the number was corrected in shortlib and this copy was missed.
+    """
+    return "{:,}".format(L.OBL[cp]).replace(",", "\u00a0")
+
+
+SERIES = [("public synthetic, " + _obl("synth300"), "synth300", PUB,  None),
+          ("public synthetic, " + _obl("synth100"), "synth100", PUB,  "5 3"),
+          ("public synthetic, " + _obl("tiny"),     "tiny",     PUB,  "1 3"),
           # long-short, not another plain dash: rendered at this size "9 3" was
           # indistinguishable from synth100's "5 3", which makes the dash stop
           # being a secondary encoding and leaves two same-hue series told

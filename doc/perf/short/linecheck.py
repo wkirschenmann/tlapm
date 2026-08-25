@@ -250,13 +250,34 @@ def check_obligation_counts():
     return bad
 
 
+def check_series_labels():
+    """A chart legend that names an obligation count must name the campaign's.
+
+    "public synthetic, 71" survived in the legend after the corpus was found to
+    have twenty obligations, because the count lived in two places and only one
+    was corrected.
+    """
+    import re as _re
+    import charts as C
+    bad = []
+    for name, cp, _, _ in C.SERIES:
+        m = _re.search(r"([\d\u00a0 ,]{2,})$", name)
+        if not m:
+            continue
+        n = int(_re.sub(r"[^\d]", "", m.group(1)))
+        if n != L.OBL.get(cp):
+            bad.append("the legend calls %s \"%s\" and the campaign counts %s "
+                       "obligations" % (cp, name, L.OBL.get(cp)))
+    return bad
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:
