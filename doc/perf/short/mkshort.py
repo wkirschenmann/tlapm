@@ -1231,8 +1231,7 @@ def sec_perpr():
     c = ["<p>Each pull request: why it exists, then each of its commits with what "
          "changes, how it was validated, how to switch it off, and what it measured. "
          "Ratios are quoted on the corpus where the change is separable from its "
-         "neighbours; the warm line lists only the corpora where the metric moved "
-         "by more than 10\u2009%.</p>",
+         "neighbours.</p>",
          "<p>Same validation for every commit: dump the obligations with "
          "<code>tlapm -N --toolbox 0 0 --printallobs --nofp FILE</code>, strip timings, "
          "prover names and banner, diff against <code>main</code>. Empty diff, 82&thinsp;792 "
@@ -1274,9 +1273,6 @@ LONG_CP = {cp: (n if n.replace(" ", "").isdigit()
            for cp, n in SHORT_CP.items()}
 
 
-WARM_FLOOR = 0.10
-
-
 def _cm_table(cm):
     """what this commit measured, on every corpus where both sides are numbers"""
     i = L.POINTS.index(cm)
@@ -1294,41 +1290,11 @@ def _cm_table(cm):
                        L.fmt_ms(ga), L.fmt_ms(gb), fmt_x(ga, gb),
                        L.fmt_ms(a), L.fmt_ms(b), fmt_x(a, b),
                        L.fmt_kb(pa), L.fmt_kb(pb), fmt_x(pa, pb)))
-    # Both warm metrics, on every corpus measured.  This used to read two hardcoded
-    # corpora for iteration latency and one unkeyed lookup for the keystroke -- and
-    # when the keystroke reader became per-corpus the unkeyed lookup silently returned
-    # nothing, so seventeen commit blocks lost their keystroke figure without any of
-    # them going blank.  Deriving both from the data is what stops that recurring.
-    def pair(a, b):
-        """one 'before -> after' cell, ratio only when both sides are numbers"""
-        fa = L.fmt_ms(a) if not isinstance(a, float) else fmt_secs(a)
-        fb = L.fmt_ms(b) if not isinstance(b, float) else fmt_secs(b)
-        r = ""
-        if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b:
-            r = ' <span class="r">&times;%.2f</span>' % (float(a) / float(b))
-        return "%s &rarr; %s%s" % (fa, fb, r)
-
-    # Only the corpora where the metric actually moved.  A commit that leaves both
-    # warm metrics alone used to print twelve cells at 1.00, which says nothing.
-    def moved(a, b):
-        if not (isinstance(a, (int, float)) and isinstance(b, (int, float)) and b):
-            return False
-        return abs(float(a) / float(b) - 1.0) >= WARM_FLOOR
-
-    warm = []
-    for lab, src in (("iteration", iterlat), ("keystroke", keys)):
-        for cp in L.CORPORA:
-            ra, rb = src.get((cp, prev)), src.get((cp, cm))
-            if ra and rb and moved(ra[0], rb[0]):
-                warm.append("%s, %s: %s" % (lab, SHORT_CP[cp], pair(ra[0], rb[0])))
     out = ""
     if rows:
         out += ('<div class="scroller"><table><thead><tr><th>corpus</th><th class="num">generate</th>'
                 '<th class="num">prepare</th><th class="num">peak</th></tr></thead><tbody>%s'
                 '</tbody></table></div>' % "".join(rows))
-    if warm:
-        out += ('<p style="margin-top:10px"><span class="lbl">warm</span>%s</p>'
-                % " &middot; ".join(warm))
     if not out:
         out = ('<p style="color:var(--ink-3);font-size:14px">Not separately measured on '
                'this campaign.</p>')
