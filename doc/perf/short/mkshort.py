@@ -1237,9 +1237,8 @@ def sec_perpr():
          "and compared, line by line, with the dump <code>main</code> produces from the "
          "same file &mdash; after removing the run banner, the timings and the prover "
          "names, the only lines that differ between two runs of the same binary. The "
-         "comparison finds no difference, on tlapm's own test suite and on every "
-         "corpus of this campaign that <code>main</code> is able to dump. "
-         "<code>make test</code> passes.</p>"]
+         "comparison finds no difference, on every corpus of this campaign. "
+         "tlapm's own test suite passes.</p>"]
     for pid, title, tag, cms, motive in CT.PRS:
         files = sorted({f for cm in cms for f, _, _ in BY_LABEL[cm][3]})
         c.append('<div class="pr"><div class="pr-head"><span class="pr-n">%s</span>'

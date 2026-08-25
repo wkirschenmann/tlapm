@@ -305,13 +305,36 @@ def check_vouched_rows():
     return bad
 
 
+def check_golden():
+    """the document claims the dump is identical on every corpus -- golden.csv says so"""
+    import csv
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden.csv")
+    if not os.path.exists(f):
+        return ["golden.csv is missing, and section 4 claims the obligation dump is "
+                "identical on every corpus"]
+    seen = {}
+    with open(f) as fh:
+        for r in csv.DictReader(fh):
+            seen[r["corpus"]] = r["verdict"]
+    bad = []
+    for cp in L.CORPORA:
+        v = seen.get(cp)
+        if v is None:
+            bad.append("golden.csv has no row for %s, so the claim in section 4 covers "
+                       "a corpus nothing checked" % cp)
+        elif v != "IDENTICAL":
+            bad.append("golden.csv says %s is %s -- section 4 claims no difference on "
+                       "any corpus" % (cp, v))
+    return bad
+
+
 if __name__ == "__main__":
     sweep, boot, _ = L.load_sweep()
     # Apply the repeated pass, exactly as the generator does.  Without this the
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels() + check_vouched_rows()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels() + check_vouched_rows() + check_golden()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:
