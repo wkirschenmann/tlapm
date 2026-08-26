@@ -629,12 +629,12 @@ of change for each:</p>
 
 
 def sec_proposal():
-    c = ["<p>%s pull requests, %s commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
-         "Each commit is one subject, states its own invariant, and passes the "
-         "repository's test suite on its own &mdash; the gate is fail-set identity "
-         "with <code>main</code>.</p>"
-         % (numword(N_PR).capitalize(), numword(N_CM),
-            TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
+    c = ["<p>%d commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. Each commit is one "
+         "subject, states its own invariant, and passes the repository's test suite "
+         "on its own &mdash; the gate is fail-set identity with <code>main</code>. We "
+         "propose to spread the commits into %s pull requests, as set out in "
+         "&sect;{perpr}.</p>"
+         % (N_CM, TOTAL_FILES, TOTAL_ADD, TOTAL_DEL, numword(N_PR))]
     c.append(sec_curves())
     return "".join(c)
 
