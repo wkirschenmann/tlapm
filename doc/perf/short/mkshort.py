@@ -1214,7 +1214,12 @@ issue does not describe.</p>"""
     "on a logarithmic axis; the two private specifications do not complete on main.",
     {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
     lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
-    "", better="higher"))
+    "A cross carries the rate the run was going at when the cap refused it, which is "
+    "an average over the obligations it reached &mdash; the first ones in the file, and "
+    "the cheap ones. The last figure measures that: on the monolith the rate falls "
+    "from 46 to 5.6 obligations per second between the start of the file and its end, "
+    "so a cross sitting above a point that finished is not the faster of the two.",
+    better="higher"))
 
     c.append(fig(
     "Peak memory of a preparation pass",
