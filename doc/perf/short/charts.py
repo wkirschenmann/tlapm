@@ -326,7 +326,9 @@ def rate_by_position(series, aria):
     the first quarter of a file is not the same quantity as an average over all
     of it.
     """
-    W2, H2, PL, PR2, PT2, PB2 = 720, 300, 62, 96, 16, 34
+    # the same frame as every other chart on the page: a figure that is 20 % smaller
+    # than its neighbours reads as a lesser one
+    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, PADR, PADT, PADB
     pts = [(lab, col, dash, rows) for lab, col, dash, rows in series if len(rows) > 40]
     if not pts:
         return ""
