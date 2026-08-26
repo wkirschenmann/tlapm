@@ -1208,11 +1208,8 @@ def figs_position():
                 "factor of thirty.",
                 svg,
                 "A curve ends where its run ended: in a cross when the cap refused "
-                "it%s, in a dot when it reached the last obligation. A short curve "
-                "here is not a slow one &mdash; the fastest runs end soonest. What "
-                "this axis cannot show is the comparison the figure above makes: two "
-                "curves at the same abscissa are at different places in the file."
-                % named,
+                "it, in a dot when it reached the last obligation.%s"
+                % (" Refused here: %s." % ", ".join(stopped) if stopped else ""),
                 better="higher"))
     return "".join(out)
 
