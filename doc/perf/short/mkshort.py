@@ -204,11 +204,18 @@ def thr(cp):
         elif v in L.FAILED:
             w = WALL.get(cp)
             att = bool(w and pt in w[1] and v == L.CEIL)
-            # a refused run still prepared something before it died, and counting
-            # it puts the cross on the axis at the rate it was going
+            # A refused run still prepared something before it died, and counting
+            # it puts the cross on the axis at the rate it was going.  The count
+            # comes from a separate run -- it needs --printallobs to be visible --
+            # but the CLOCK has to be this line's own, or the point would be the
+            # only one on the curve measured on a different workload, and a curve
+            # exists to be read across its points.  The two runs reach the same
+            # peak to the kilobyte, which is what makes the count transferable.
             part = PARTIAL.get((cp, pt))
+            at = _cell(cp, pt).get("prep_raw") if pt != "p00" else \
+                L.main_raw(sweep, cp, "prep")
             d[pt] = {"kind": L.ABORT if att else v,
-                     "at": (part[0] * 1000.0 / part[1]) if part else None,
+                     "at": (part[0] * 1000.0 / at) if (part and at) else None,
                      "pending": False if att else _pending(cp, pt)}
         else:
             d[pt] = L.OBL[cp] * 1000.0 / v
