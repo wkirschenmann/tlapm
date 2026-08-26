@@ -28,3 +28,20 @@ machines -- the cap is 12 GB wherever the run happens -- while a duration does
 not. So every verdict this campaign settles reaches the document as soon as it
 is measured, and its timings wait until the new boot owns the whole line and a
 curve can be drawn from one machine.
+
+## The two control corpora, repeated
+
+`controls.csv` holds a separate sweep: the 20-obligation and 600-obligation
+corpora, all eighteen points, twelve repeats each, both metrics, with nothing
+else running on the machine. Its purpose is the split between the front end and
+preparation proper.
+
+`tlapm -N` sets `suppress_all`, which skips `process_obs` -- the whole
+per-obligation pipeline. `--noproving` runs that pipeline and sends nothing to
+the backends. So preparation proper is the difference of the two, and on the
+20-obligation control that difference is 17 ms out of 108: one run of each
+cannot measure it, because the noise on either is the same size as the answer.
+Twelve of each, compared on medians, can.
+
+Columns are the sweep's; phase R, one row per run, `-2` in the metric the run
+did not measure.
