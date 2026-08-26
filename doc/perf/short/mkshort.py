@@ -454,6 +454,8 @@ a{color:var(--sig-ink)}
   color:var(--sig);margin:0 0 18px}
 .lede{font-size:19px;color:var(--ink-2);margin:18px 0 0}
 .l286{color:var(--lbl-286);font-weight:600} .lkeep{color:var(--lbl-keep);font-weight:600}
+.cmname{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12.5px;
+  color:var(--ink-2);background:var(--rule-2);border-radius:4px;padding:1px 6px}
 header{border-bottom:2px solid var(--ink);padding-bottom:26px;margin-bottom:12px}
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;
   font:400 13px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -1154,7 +1156,8 @@ def figs_position():
         for pt in pts:
             lab, from286 = C.LABELS[pt]
             col = "var(--lbl-286)" if from286 else "var(--lbl-keep)"
-            series.append((pt, col, "" if pt in L.ENDPOINTS else "3 3", rows[(cp, pt)]))
+            series.append((lab, col, "" if pt in L.ENDPOINTS else "3 3",
+                           rows[(cp, pt)]))
         name = CORPUS_NAME.get(cp, cp)
         svg = C.rate_by_position(
             series, "Preparation rate against obligations prepared, %s" % name)
@@ -1163,9 +1166,9 @@ def figs_position():
         # A short curve is not evidence of a refusal: a run still in flight is short
         # too.  The verdict comes from the campaign, not from the length.
         total = L.OBL.get(cp)
-        stopped = sorted(pt for pt in pts
-                         if total and rows[(cp, pt)][-1][0] < total * 0.98
-                         and val(cp, pt, "prep") in L.FAILED)
+        stopped = [C.LABELS[pt][0] for pt in pts
+                   if total and rows[(cp, pt)][-1][0] < total * 0.98
+                   and val(cp, pt, "prep") in L.FAILED]
         out.append(fig_svg(
             "Preparation rate against position &mdash; %s" % name,
             "Obligations prepared per second over a sliding window, against how far "
@@ -1360,7 +1363,11 @@ def sec_perpr():
         for cm in cms:
             lab, sha, subj, fl, body = BY_LABEL[cm]
             d = CT.CM[cm]
-            c.append('<div class="cm"><p class="cm-h"><code>%s</code> &nbsp;%s</p>' % (sha, subj))
+            # the name this commit carries on every chart, so a reader can go
+            # from a curve to the commit that made it and back
+            c.append('<div class="cm"><p class="cm-h"><code>%s</code> '
+                     '<span class="cmname">%s</span> &nbsp;%s</p>'
+                     % (sha, C.LABELS[cm][0], subj))
             c.append('<p class="files">%s</p>' % " ".join(
                 '<span>%s <span class="plus">+%s</span>&thinsp;<span class="minus">&minus;%s</span></span>'
                 % (f, p, m) for f, p, m in fl))
