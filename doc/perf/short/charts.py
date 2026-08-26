@@ -400,17 +400,40 @@ def rate_by_position(series, aria):
             o.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (x(n), y(r), col))
         ends.append([lab, col, x(n), y(r)])
     # A dozen curves end within a few pixels of each other, so the names have to be
-    # laid out rather than dropped where the curve stops: nudge each one down until
-    # it clears the one above, and hang it on the left of the endpoint when the
-    # gutter cannot hold it.  A leader line keeps a nudged name attached to its curve.
-    ends.sort(key=lambda e: e[3])
-    prev = None
-    for e in ends:
-        ty = e[3] + 3.5
-        if prev is not None and ty - prev < 11.5:
-            ty = prev + 11.5
-        prev = ty
-        e.append(ty)
+    # laid out rather than dropped where the curve stops.  Three rules, and the last
+    # two are what a naive cascade gets wrong:
+    #   -- names that end far apart do not collide, so nudging is done inside groups
+    #      of neighbouring endpoints, not over the whole set.  Otherwise a run
+    #      refused a quarter of the way in gets pushed down by names it never
+    #      touches, and ends up detached from its own cross.
+    #   -- a stack that runs past the bottom of the plot is lifted back inside it.
+    #      Cascading downwards without a floor put the last name below the axis
+    #      labels, and one of them outside the frame altogether.
+    #   -- a name that ended up off its endpoint is tied back to it by a leader.
+    top_lim, bot_lim = PT2 + 6, H2 - PB2 - 2
+    groups = []
+    for e in sorted(ends, key=lambda e: e[2]):
+        if groups and e[2] - groups[-1][-1][2] < 80:
+            groups[-1].append(e)
+        else:
+            groups.append([e])
+    for g in groups:
+        g.sort(key=lambda e: e[3])
+        prev = None
+        for e in g:
+            ty = min(max(e[3] + 3.5, top_lim), bot_lim)
+            if prev is not None and ty - prev < 11.5:
+                ty = prev + 11.5
+            prev = ty
+            e.append(ty)
+        over = g[-1][4] - bot_lim
+        if over > 0:
+            prev = None
+            for e in g:
+                e[4] = max(e[4] - over, top_lim)
+                if prev is not None and e[4] - prev < 11.5:
+                    e[4] = prev + 11.5
+                prev = e[4]
     for lab, col, ex, ey, ty in ends:
         wid = 6.0 * len(lab)
         if ex + 8 + wid > W2 - 4:
