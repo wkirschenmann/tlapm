@@ -305,6 +305,35 @@ def check_vouched_rows():
     return bad
 
 
+def check_one_boot_per_cell():
+    """A row carrying both metrics is read for both, so both lines must want it.
+
+    The row selection keeps a row when its boot is the boot of the FIRST metric it
+    carries, and then reads every metric off it.  That is only sound while a corpus
+    whose rows carry both metrics has the same boot chosen for both lines -- if the
+    two lines ever diverge, one of them would be quietly reading a duration measured
+    on a machine it rejected.  Nothing in the loader prevents that; this does.
+    """
+    import csv as _csv
+    import collections as _c
+    rows = list(_csv.DictReader(open(os.path.join(L.S, "short_sweep.csv"))))
+    both = _c.defaultdict(int)
+    for r in rows:
+        if r["gen_ms"] != "-2" and r["prep_ms"] != "-2":
+            both[r["corpus"]] += 1
+    sweep, _b, _d = L.load_sweep()
+    lb = sweep.get("_line_boot", {})
+    bad = []
+    for cp, n in sorted(both.items()):
+        g, p = lb.get((cp, "gen")), lb.get((cp, "prep"))
+        if g is not None and p is not None and g != p:
+            bad.append("%s has %d rows carrying both metrics, but its generation "
+                       "line sits on boot %s and its preparation line on %s, so one "
+                       "of the two reads a duration off a boot it rejected"
+                       % (cp, n, g, p))
+    return bad
+
+
 def check_golden():
     """the document claims the dump is identical on every corpus -- golden.csv says so"""
     import csv
@@ -334,7 +363,7 @@ if __name__ == "__main__":
     # checker reads single samples while the document reads medians, so it reports a
     # trend the reader cannot see and stays silent about one the reader can.
     sweep, _reps = L.apply_reps(sweep)
-    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels() + check_vouched_rows() + check_golden()
+    msgs = check(sweep) + check_inconclusive() + check_demo_readme() + check_sixth_corpus() + check_iter_threshold() + check_marked_points() + check_obligation_counts() + check_series_labels() + check_vouched_rows() + check_golden() + check_one_boot_per_cell()
     for m in msgs:
         print("LINECHECK " + m)
     if not msgs:

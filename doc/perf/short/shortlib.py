@@ -136,6 +136,16 @@ def load_sweep(path=None, boot=None):
                    for m1, m2 in pairs)
 
     # per (corpus, field), the boot carrying the most measured points
+    def fields_of(r):
+        """A row can carry both metrics, and then it is a point on both lines.
+
+        Classing such a row by one metric alone left the other line with no boot at
+        all: every one of its rows then counted as off-boot, and the line survived
+        only because the row was admitted under the first metric's name.  Coverage is
+        per line, so a row counts for each line it has a reading on."""
+        return [f for f, ms in (("gen", r["gen_ms"]), ("prep", r["prep_ms"]))
+                if int(ms) != -2]
+
     def field_of(r):
         return "gen" if int(r["gen_ms"]) != -2 else "prep"
 
@@ -147,7 +157,8 @@ def load_sweep(path=None, boot=None):
     # row a reader's csv module happened to see first.
     cover = collections.defaultdict(set)
     for r in data:
-        cover[(r["corpus"], field_of(r), r["boot"])].add(r["point"])
+        for fld in fields_of(r):
+            cover[(r["corpus"], fld, r["boot"])].add(r["point"])
     line_boot = {}
     for (cp, fld, b), pts in cover.items():
         k = (cp, fld)
