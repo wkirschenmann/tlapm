@@ -86,3 +86,18 @@ away exactly what was just gained.
 
 The monolith does not have this problem: its aborts already come from the earlier
 campaign, and nothing on that line was re-measured here.
+
+## What a restart costs, and a resume guard that was wrong
+
+The re-measurement was interrupted by a container restart, which split it across
+two boots: p00-p03 on the one before, p04 onwards on the one after. Since the
+reader picks a line's boot by how many points it covers, neither half beat the
+earlier campaign's eighteen, and none of the durations taken today were used --
+the page went on showing the earlier campaign's numbers while its abort texts
+came from here. Three hosts on one line, which is the thing the rule exists to
+prevent.
+
+p14 was missing from the second half for a different reason. It was in the file
+already, as the phase-A anchor run on the earlier boot, and the resume guard
+looked for the POINT rather than for the point on the right boot. A guard that
+skips work it has not done is worse than no guard; it now matches on both.
