@@ -1161,7 +1161,7 @@ def figs_position():
         name = CORPUS_NAME.get(cp, cp)
         svg = C.rate_by_position(
             series, "Preparation rate against seconds spent preparing, %s" % name,
-            xkind="time")
+            xkind="time", xlog=True)
         if not svg:
             continue
         # A short curve is not evidence of a refusal: a run still in flight is short

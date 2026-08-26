@@ -311,7 +311,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
     return "".join(o)
 
 
-def rate_by_position(series, aria, xkind="obl"):
+def rate_by_position(series, aria, xkind="obl", xlog=False):
     """Preparation rate against how far into the file it has got.
 
     series: [(label, colour, dash, [(n, seconds), ...], refused)], one per commit.
@@ -369,7 +369,17 @@ def rate_by_position(series, aria, xkind="obl"):
             step *= m
             break
     ticks = [t for t in (step * i for i in range(0, 12)) if t <= top]
-    x = lambda n: PL + n / float(xs_max) * (W2 - PL - PR2)
+    # On a time axis the chain crushes into the first eighth of the frame -- main
+    # spends 2 745 s where the tip spends 303 -- so the decades get a log axis and
+    # every curve keeps a share of the width.  The rate axis stays linear: it is the
+    # collapse of the rate that this figure exists to show, and a log rate hides it.
+    if xlog:
+        lo = max(1.0, min(v for _, _, _, w, _ in curves for v, _ in w))
+        span = math.log10(xs_max) - math.log10(lo)
+        x = lambda n: PL + (math.log10(max(n, lo)) - math.log10(lo)) / span \
+            * (W2 - PL - PR2)
+    else:
+        x = lambda n: PL + n / float(xs_max) * (W2 - PL - PR2)
     y = lambda v: (H2 - PB2) - (v / top) * (H2 - PB2 - PT2)
     o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W2, H2, aria)]
     for t in ticks:
@@ -378,9 +388,27 @@ def rate_by_position(series, aria, xkind="obl"):
         o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Sans, '
                  'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
                  % (PL - 6, y(t) + 3, _tick(t)))
-    for n in (0, xs_max / 2.0, xs_max):
+    if xlog:
+        lo = max(1.0, min(v for _, _, _, w, _ in curves for v, _ in w))
+        xticks = []
+        d = 10 ** math.floor(math.log10(lo))
+        while d <= xs_max * 1.0001:
+            for m in (1, 2, 5):
+                if lo <= d * m <= xs_max:
+                    xticks.append(d * m)
+            d *= 10
+        # the end of the axis is worth naming, but not on top of the decade next to it
+        if not xticks or xs_max / xticks[-1] > 1.35:
+            xticks.append(xs_max)
+    else:
+        xticks = [0, xs_max / 2.0, xs_max]
+    for n in xticks:
         lab = ("%d s" % round(n)) if xkind == "time" \
             else "{:,}".format(int(n)).replace(",", "\u2009")
+        if xlog:
+            o.append('<line x1="%.1f" y1="%d" x2="%.1f" y2="%.1f" stroke="currentColor" '
+                     'stroke-width="1" opacity=".06"/>'
+                     % (x(n), PT2, x(n), H2 - PB2))
         o.append('<text x="%.1f" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
                  'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
                  % (x(n), H2 - PB2 + 15, lab))
