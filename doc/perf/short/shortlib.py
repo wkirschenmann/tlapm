@@ -270,6 +270,34 @@ def apply_reps(sweep, path=None, boot=None):
     return sweep, used
 
 
+def load_rate_by_position(path=None):
+    """{(corpus, point): [(n, seconds), ...]} -- one row per obligation prepared.
+
+    Written by the appendix pass, one file per (corpus, point).  A file that stops
+    short of the corpus total is a run the cap refused there.
+    """
+    import glob
+    d = path or os.path.join(S, "rate_by_position")
+    out = {}
+    if not os.path.isdir(d):
+        return out
+    for f in sorted(glob.glob(os.path.join(d, "*.csv"))):
+        base = os.path.basename(f)[:-4]
+        if "_" not in base:
+            continue
+        cp, pt = base.rsplit("_", 1)
+        rows = []
+        with open(f) as fh:
+            for r in csv.DictReader(fh):
+                try:
+                    rows.append((int(r["n"]), float(r["seconds"])))
+                except (KeyError, ValueError):
+                    continue
+        if rows:
+            out[(cp, pt)] = rows
+    return out
+
+
 def load_partial(path=None):
     """{(corpus, point): (obligations prepared, ms)} for runs the cap refused.
 

@@ -309,3 +309,71 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
                      % (lx + 25, ly, lab))
     o.append('</g></svg>')
     return "".join(o)
+
+
+def rate_by_position(series, aria):
+    """Preparation rate against how far into the file it has got.
+
+    series: [(label, colour, dash, [(n, seconds), ...])], one entry per commit.
+
+    x is obligations prepared, y is the rate over a sliding window -- not the
+    running average, which would hide the shape by carrying the cheap head of the
+    file all the way to the right.  A curve that ends before the axis does is a
+    run the cap refused there.
+
+    This is the chart that says whether an aborted cell's rate can be read next
+    to a completing one's: if the rate falls as position rises, an average over
+    the first quarter of a file is not the same quantity as an average over all
+    of it.
+    """
+    W2, H2, PL, PR2, PT2, PB2 = 720, 300, 62, 96, 16, 34
+    pts = [(lab, col, dash, rows) for lab, col, dash, rows in series if len(rows) > 40]
+    if not pts:
+        return ""
+    xs_max = max(rows[-1][0] for _, _, _, rows in pts)
+
+    def windows(rows):
+        """(position, rate) over windows of a fortieth of the run, at least 25 wide"""
+        w = max(25, len(rows) // 40)
+        out = []
+        for i in range(w, len(rows), w):
+            dn = rows[i][0] - rows[i - w][0]
+            dt = rows[i][1] - rows[i - w][1]
+            if dt > 0 and dn > 0:
+                out.append((rows[i][0], dn / dt))
+        return out
+
+    curves = [(lab, col, dash, windows(rows)) for lab, col, dash, rows in pts]
+    curves = [c for c in curves if c[3]]
+    if not curves:
+        return ""
+    ys = [r for _, _, _, w in curves for _, r in w]
+    lo, hi, ticks = _decades(min(ys), max(ys))
+    x = lambda n: PL + n / float(xs_max) * (W2 - PL - PR2)
+    y = lambda v: (H2 - PB2) - (math.log10(v) - math.log10(lo)) / \
+        (math.log10(hi) - math.log10(lo)) * (H2 - PB2 - PT2)
+    o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W2, H2, aria)]
+    for t in ticks:
+        o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
+                 'stroke-width="1" opacity=".08"/>' % (PL, y(t), W2 - PR2, y(t)))
+        o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Sans, '
+                 'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
+                 % (PL - 6, y(t) + 3, _tick(t)))
+    for n in (0, xs_max // 2, xs_max):
+        o.append('<text x="%.1f" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
+                 'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
+                 % (x(n), H2 - 12, "{:,}".format(n).replace(",", "\u2009")))
+    o.append('<text x="%d" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
+             'sans-serif" font-size="10" fill="currentColor" opacity=".55">obligations '
+             'prepared</text>' % ((PL + W2 - PR2) // 2, H2 - 2))
+    for lab, col, dash, w in curves:
+        d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", x(n), y(r))
+                     for i, (n, r) in enumerate(w))
+        o.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6" opacity=".85"%s/>'
+                 % (d, col, ' stroke-dasharray="%s"' % dash if dash else ""))
+        n, r = w[-1]
+        o.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (x(n), y(r), col))
+        o.append('<text x="%.1f" y="%.1f" font-family="IBM Plex Sans, sans-serif" '
+                 'font-size="10.5" fill="%s">%s</text>' % (x(n) + 6, y(r) + 3.5, col, lab))
+    o.append("</svg>")
+    return "".join(o)

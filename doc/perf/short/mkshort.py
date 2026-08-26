@@ -1126,6 +1126,47 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
                ("<figcaption>%s</figcaption>" % caption) if caption else ""))
 
 
+def sec_position():
+    """Rate against position: the chart the aborted cells' rates have to be read with."""
+    rows = L.load_rate_by_position()
+    if not rows:
+        return ""
+    cps = sorted({cp for cp, _ in rows}, key=lambda c: L.OBL.get(c, 0), reverse=True)
+    out = []
+    for cp in cps:
+        pts = sorted((pt for c, pt in rows if c == cp), key=L.POINTS.index)
+        series = []
+        for pt in pts:
+            lab, from286 = C.LABELS[pt]
+            col = "var(--lbl-286)" if from286 else "var(--lbl-keep)"
+            series.append((("%s %s" % (pt, lab))[:26], col,
+                           "" if pt in L.ENDPOINTS else "3 3", rows[(cp, pt)]))
+        svg = C.rate_by_position(series, "Preparation rate against obligations "
+                                 "prepared, %s" % CORPUS_NAME.get(cp, cp))
+        if not svg:
+            continue
+        # A short curve is not evidence of a refusal: a run still in flight is
+        # short too.  The verdict comes from the campaign, not from the length.
+        done = {pt: rows[(cp, pt)][-1][0] for pt in pts}
+        total = L.OBL.get(cp)
+        stopped = sorted(pt for pt in pts
+                         if total and done[pt] < total * 0.98
+                         and val(cp, pt, "prep") in L.FAILED)
+        out.append('<h4>%s</h4>' % CORPUS_NAME.get(cp, cp).capitalize())
+        out.append('<p class="cap">Rate over a sliding window against how far into '
+                   'the file preparation has got. A curve that stops before the right '
+                   'edge is a run the 12&nbsp;GB cap refused there%s. Solid is the last '
+                   'commit of a pull request, dashed an intermediate one.</p>'
+                   % (" &mdash; %s" % ", ".join(stopped) if stopped else ""))
+        out.append('<div class="scroller">%s</div>' % svg)
+    if not out:
+        return ""
+    return ('<p>An aborted cell&rsquo;s rate is an average over the obligations it '
+            'reached, and those are the first ones in the file. This is what says '
+            'whether that average can be read next to the full rate of a cell that '
+            'finished.</p>' + "".join(out))
+
+
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
 series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap
@@ -1431,7 +1472,8 @@ why what follows is %s pull requests against the existing design.</p>
             ("mechanism", "One mechanism, four consequences", sec_mechanism),
             ("proposal",  "What is proposed",                 sec_proposal),
             ("perpr",     "Each pull request",                sec_perpr),
-                ("not",       "What is deliberately not here",    sec_not)]
+                ("not",       "What is deliberately not here",    sec_not),
+        ("position",  "Appendix: rate against position",   sec_position)]
     # numbered by position, and a section with nothing measured behind it does not
     # take a number: the phase table exists only once its campaign row does
     n, num = 0, {}
