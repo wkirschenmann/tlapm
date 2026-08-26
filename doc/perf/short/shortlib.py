@@ -139,13 +139,24 @@ def load_sweep(path=None, boot=None):
     def field_of(r):
         return "gen" if int(r["gen_ms"]) != -2 else "prep"
 
-    tally = collections.Counter()
+    # Count POINTS of the line a boot covers, not rows: a boot that repeated one
+    # cell twenty times covers one point, and a line drawn from it would be one
+    # point long.  Ties go to the newer boot -- when a line has been re-measured
+    # end to end on a second machine, that measurement is the deliberate one, and
+    # leaving the choice to dictionary order makes the document depend on which
+    # row a reader's csv module happened to see first.
+    cover = collections.defaultdict(set)
     for r in data:
-        tally[(r["corpus"], field_of(r), r["boot"])] += 1
+        cover[(r["corpus"], field_of(r), r["boot"])].add(r["point"])
     line_boot = {}
-    for (cp, fld, b), n in tally.items():
+    for (cp, fld, b), pts in cover.items():
         k = (cp, fld)
-        if k not in line_boot or n > tally[(cp, fld, line_boot[k])]:
+        cur = line_boot.get(k)
+        if cur is None:
+            line_boot[k] = b
+            continue
+        n_cur = len(cover[(cp, fld, cur)])
+        if len(pts) > n_cur or (len(pts) == n_cur and int(b) > int(cur)):
             line_boot[k] = b
     # phase L supersedes a ceiling it was run to resolve, on the same line's boot
     longer = {(r["point"], r["corpus"]) for r in data
