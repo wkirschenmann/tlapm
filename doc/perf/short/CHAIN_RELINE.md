@@ -45,3 +45,27 @@ Twelve of each, compared on medians, can.
 
 Columns are the sweep's; phase R, one row per run, `-2` in the metric the run
 did not measure.
+
+## Counting how far an aborted run got -- and how not to
+
+`partial_oom.csv` holds, per aborted cell, how many obligations were prepared
+before the cap refused the run.
+
+The first attempt counted `@!!status:to be proved` and was wrong. That message is
+printed for the whole obligation array in one loop *before* `process_obs`
+(tlapm_lib.ml:1126), so counting it returns the corpus total wherever the run
+dies. It reported 29 965 of 29 965 on the monolith at two different commits,
+which read as "preparation completes and the run dies holding the result" -- and
+that reading cannot be true, because the prefix-resume caches of PR6 would then
+have nothing to speed up.
+
+An obligation has been prepared when it reaches `really_ship` (prep.ml:1810),
+which under `--printallobs` prints `normalized`. `really_ship` runs more than
+once per obligation, so distinct ids are counted, and the trivial ones are added
+because they are decided without being shipped: on the 20-obligation control,
+15 normalized plus 5 trivial.
+
+One caveat stays. `--printallobs` forces the shipped form to be built, which
+plain `--noproving` skips, so these runs do more per obligation than the timed
+ones and their wall can fall at a different index. The count is a measure of
+progress through preparation, not a reading of the timed run.
