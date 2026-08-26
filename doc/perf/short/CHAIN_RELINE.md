@@ -18,3 +18,13 @@ Rows land in `chain_reline.csv`, same columns as `short_sweep.csv`.
 
 `prep_ms` is wall clock; `prep_rc` is 0 for a run that finished, 124 for the
 timeout, 134 or 137 for an abort on memory. `peak_kb` is maximum resident set.
+
+## Folding the rows back
+
+`harness/merge_reline.py` appends the phase-N rows to `short_sweep.csv` as
+phase L, and skips rows it has already folded, so it can be run after each
+point lands. Phase L is not decoration: an abort verdict transfers between
+machines -- the cap is 12 GB wherever the run happens -- while a duration does
+not. So every verdict this campaign settles reaches the document as soon as it
+is measured, and its timings wait until the new boot owns the whole line and a
+curve can be drawn from one machine.
