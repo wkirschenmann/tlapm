@@ -48,6 +48,9 @@ NUMWORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
 
 N_PR = len(L.PRS)
 N_CM = sum(len(c) for _, _, c in L.PRS)
+# commits whose message credits the upstream issue; the charts colour their
+# labels differently and the legend has to agree with the charts
+N_286 = sum(1 for v in C.LABELS.values() if v[1])
 
 
 def numword(n):
@@ -395,6 +398,10 @@ a{color:var(--sig-ink)}
 .eyebrow{font:600 11.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
   color:var(--sig);margin:0 0 18px}
 .lede{font-size:19px;color:var(--ink-2);margin:18px 0 0}
+.klegend{font-size:14px;color:var(--ink-2);margin:-2px 0 16px}
+.k{display:inline-block;width:22px;height:3px;border-radius:2px;
+  vertical-align:middle;margin-right:7px}
+.k286{background:var(--lbl-286)} .kkeep{background:var(--lbl-keep)}
 header{border-bottom:2px solid var(--ink);padding-bottom:26px;margin-bottom:12px}
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;
   font:400 13px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -628,25 +635,6 @@ def sec_proposal():
          "with <code>main</code>, not a pass count.</p>"
          % (numword(N_PR).capitalize(), numword(N_CM),
             TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
-    c.append('<div class="scroller"><table><thead><tr><th>&nbsp;</th><th>pull request</th>'
-             '<th class="num">commits</th><th class="num">files</th>'
-             '<th>what it is for</th></tr></thead><tbody>')
-    for pid, title, tag, cms, motive in CT.PRS:
-        files = len({f for cm in cms for f, _, _ in BY_LABEL[cm][3]})
-        # the summary is the opening sentences up to a readable length, and at
-        # least enough of them to say something -- some motivations open with a
-        # three-word count ("Five defects.") that is useless on its own
-        parts = [x.strip().rstrip(".") for x in motive.split(". ") if x.strip()]
-        short = ""
-        for x in parts:
-            short += ("" if not short else " ") + x + "."
-            if len(short) >= 60:
-                break
-        c.append('<tr><td class="num"><span class="tag %s">%s</span></td>'
-                 '<td><strong>%s</strong></td><td class="num">%d</td><td class="num">%d</td>'
-                 '<td style="color:var(--ink-2);font-size:14px">%s</td></tr>'
-                 % (tag, pid, title, len(cms), files, short))
-    c.append("</tbody></table></div>")
     c.append(sec_curves())
     c.append("<p style=\"margin-top:14px\">The order is not the order the work happened "
              "in; it is the order the measurements support. Each of the first six pull "
@@ -1099,8 +1087,12 @@ def sec_curves():
 series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap refused;
 a red <strong>ring</strong> is a run stopped at %s without finishing. Hue separates
 public corpora from private, dash separates sizes, and a bold label is the last commit
-of a pull request &mdash; the point a reviewer merging it would land on.</p>"""
-         % L.CEIL_LABEL.replace("did not finish in ", "")]
+of a pull request &mdash; the point a reviewer merging it would land on.</p>
+<p class="klegend"><span class="k k286"></span>credits
+<a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a> (%s of %s)
+&nbsp;&nbsp;<span class="k kkeep"></span>not described by the issue (%s)</p>"""
+         % (L.CEIL_LABEL.replace("did not finish in ", ""),
+            numword(N_286), numword(N_CM), numword(N_CM - N_286))]
 
     c.append(fig(
     "Preparation throughput",
@@ -1354,24 +1346,6 @@ user can observe. They are listed because the reason they are absent is a result
     return "".join(c)
 
 
-def sec_286():
-    n286 = sum(1 for v in C.LABELS.values() if v[1])
-    return """<p>""" + numword(n286).capitalize() + """ of these """ + numword(N_CM) + """ commits credit <a
-href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>, and the
-issue itself describes four families of optimisation. The counts differ, and here is why.</p>
-<p>The reference patchset put seven independent micro-optimisations in a single
-commit. Splitting that batch one subject per commit is the whole point of the
-exercise &mdash; each becomes reviewable on its own, and each becomes
-<em>measurable</em> on its own. Measuring them separately is what showed that five of
-the seven move nothing, so they are in &sect;{not} rather than here. Two survive: the
-deque lookups and the scheduler reaper. Add the single-pass expansion, the two
-prunes, and the linear <code>ENABLED</code> scan, and that is the six.</p>
-<p>The other eleven commits are new. Three are the timing defects, two more are
-scheduler fixes, two are the memory pull request, three are the prefix-resume caches,
-one is the editor's obligation pool and one memoizes the grammar &mdash; and the pool
-is in a component the issue does not touch at all.</p>""".replace("Six of these seventeen", "%s of these seventeen" % ("Six" if n286 == 6 else str(n286)))
-
-
 def build():
     parts = ['<div class="wrap"><header>',
              '<p class="eyebrow">tlapm &middot; performance</p>',
@@ -1405,8 +1379,7 @@ different one.</p>
             ("mechanism", "One mechanism, four consequences", sec_mechanism),
             ("proposal",  "What is proposed",                 sec_proposal),
             ("perpr",     "Each pull request",                sec_perpr),
-            ("286",       "Relation to issue #286",           sec_286),
-            ("not",       "What is deliberately not here",    sec_not)]
+                ("not",       "What is deliberately not here",    sec_not)]
     # numbered by position, and a section with nothing measured behind it does not
     # take a number: the phase table exists only once its campaign row does
     n, num = 0, {}
