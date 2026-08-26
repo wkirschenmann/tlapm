@@ -471,9 +471,34 @@ def keystroke_ranges(path=None, boot=None):
     return best
 
 
+# How long a run had before the harness stopped it.  A bare "did not finish" leaves
+# the reader unable to tell a slow run from a hung one, and the cap is the whole
+# content of that cell.  Read it off the rows themselves rather than repeating the
+# harness constant here, so the two cannot drift apart.
+def _ceiling_label():
+    import csv as _csv
+    caps = []
+    try:
+        with open(os.path.join(S, "short_sweep.csv")) as fh:
+            for r in _csv.DictReader(fh):
+                for f in ("gen", "prep"):
+                    if r[f + "_rc"] == "124":
+                        caps.append(int(r[f + "_ms"]))
+    except (IOError, KeyError, ValueError):
+        return "did not finish"
+    if not caps:
+        return "did not finish"
+    m = max(caps) / 60000.0
+    return "did not finish in %d min" % round(m) if m < 60 else \
+           "did not finish in %.0f h" % (m / 60.0)
+
+
+CEIL_LABEL = _ceiling_label()
+
+
 def fmt_ms(v, unit="s"):
     if v in FAILED:
-        return {DNC: "&mdash;", CEIL: "did not finish", ABORT: "OOM"}[v]
+        return {DNC: "&mdash;", CEIL: CEIL_LABEL, ABORT: "OOM"}[v]
     if unit == "ms" or v < 1000:
         return "%d ms" % v
     # Above ten minutes, minutes.  "2665 s" against "40.5 s" makes the reader do the
@@ -486,7 +511,7 @@ def fmt_ms(v, unit="s"):
 def fmt_kb(v):
     if v in FAILED:
         # on a memory column the failure to name is the memory one
-        return {DNC: "&mdash;", CEIL: "did not finish", ABORT: "OOM"}[v]
+        return {DNC: "&mdash;", CEIL: CEIL_LABEL, ABORT: "OOM"}[v]
     return "%.0f MB" % (v / 1024.0) if v < 1024 * 1024 else "%.2f GB" % (v / 1048576.0)
 
 

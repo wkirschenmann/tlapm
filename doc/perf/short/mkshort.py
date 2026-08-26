@@ -1089,9 +1089,10 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
 series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap refused;
-a red <strong>ring</strong> is a run given an hour that did not finish. Hue separates
+a red <strong>ring</strong> is a run stopped at %s without finishing. Hue separates
 public corpora from private, dash separates sizes, and a bold label is the last commit
-of a pull request &mdash; the point a reviewer merging it would land on.</p>"""]
+of a pull request &mdash; the point a reviewer merging it would land on.</p>"""
+         % L.CEIL_LABEL.replace("did not finish in ", "")]
 
     c.append(fig(
     "Preparation throughput",
