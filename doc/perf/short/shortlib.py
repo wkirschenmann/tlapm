@@ -270,6 +270,32 @@ def apply_reps(sweep, path=None, boot=None):
     return sweep, used
 
 
+def load_partial(path=None):
+    """{(corpus, point): (obligations prepared, ms)} for runs the cap refused.
+
+    A cell that aborts has no throughput today, only a cross in the band below the
+    axis.  It did do work before it died, though, and counting it turns the cross
+    into a positioned one: this is how fast the run was going when it stopped.
+
+    The count comes from a separate run under --printallobs, which builds the
+    shipped form that plain --noproving skips; so its clock is its own, not the
+    timed run's, and the rate is computed from the pair that belongs together.
+    """
+    path = path or os.path.join(S, "partial_oom.csv")
+    if not os.path.exists(path):
+        return {}
+    out = {}
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            try:
+                done, ms = int(r["obl_done"]), int(r["ms"])
+            except (KeyError, ValueError):
+                continue
+            if done > 0 and ms > 0:
+                out[(r["corpus"], r["point"])] = (done, ms)
+    return out
+
+
 def main_point(sweep, corpus, field):
     """main's value for a field: the mean of the two measurements when both
     completed, the single one when only one did, else the shared sentinel."""

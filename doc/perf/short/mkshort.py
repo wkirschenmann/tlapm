@@ -16,6 +16,7 @@ BRANCH = "tlapm-perf-short"
 
 sweep, boot, drift = L.load_sweep()
 sweep, REPS = L.apply_reps(sweep)
+PARTIAL = L.load_partial()
 iterlat, iboot = L.load_iteration_latency()
 keys, kboot = L.load_keystroke()
 
@@ -203,7 +204,11 @@ def thr(cp):
         elif v in L.FAILED:
             w = WALL.get(cp)
             att = bool(w and pt in w[1] and v == L.CEIL)
-            d[pt] = {"kind": L.ABORT if att else v, "at": None,
+            # a refused run still prepared something before it died, and counting
+            # it puts the cross on the axis at the rate it was going
+            part = PARTIAL.get((cp, pt))
+            d[pt] = {"kind": L.ABORT if att else v,
+                     "at": (part[0] * 1000.0 / part[1]) if part else None,
                      "pending": False if att else _pending(cp, pt)}
         else:
             d[pt] = L.OBL[cp] * 1000.0 / v
@@ -1074,7 +1079,8 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
 series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap
-refused. Hue separates public corpora from private, dash separates sizes, and a bold
+refused; where the obligations it prepared before dying have been counted, the
+cross sits on the axis at that rate rather than in the band. Hue separates public corpora from private, dash separates sizes, and a bold
 label is the last commit of a pull request &mdash; the point a reviewer merging it
 would land on. A commit&rsquo;s label is <span class="l286">violet</span> when its
 message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>
