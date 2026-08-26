@@ -614,12 +614,22 @@ def sec_problem():
         (pt for pt in L.POINTS if _measured(pt)), "p00")
     it_main = iterlat.get(("ffi", it_at), (None,))[0]
     it_tip = iterlat.get(("ffi", TIP), (None,))[0]
+    # How many machines the table actually spans is a fact about the campaign, not a
+    # sentence to be maintained by hand: a row measured on a second host is exactly
+    # the sort of thing that gets added later and leaves the prose behind.
+    _lb = sweep.get("_line_boot", {})
+    _hosts = {b for cp in L.CORPORA for b in
+              (_lb.get((cp, "gen")), _lb.get((cp, "prep"))) if b}
+    _where = ("same tool and same machine throughout"
+              if len(_hosts) <= 1 else
+              "same tool and same flags throughout, each specification measured "
+              "on one machine")
     c.append("<p style=\"margin-top:18px\">tlapm is fine on small proofs and unusable "
              "on large ones, and the boundary is not gradual. Here are the %s "
-             "specifications on <code>main</code>, one column per metric, same tool and "
-             "same machine throughout: %s obligations finish before you notice, and "
-             "ten thousand do not finish at all.</p>"
-             % (numword(len(L.CORPORA)), numword(L.OBL["tiny"])))
+             "specifications on <code>main</code>, one column per metric, %s: %s "
+             "obligations finish before you notice, and ten thousand do not finish "
+             "at all.</p>"
+             % (numword(len(L.CORPORA)), _where, numword(L.OBL["tiny"])))
     c.append('<div class="scroller"><table><thead><tr><th>specification</th>'
              '<th class="num">obligations</th><th class="num">generate</th>'
              '<th class="num">prepare</th><th class="num">peak</th>'
