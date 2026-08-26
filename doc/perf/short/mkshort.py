@@ -341,7 +341,7 @@ def fmt_x(a, b):
 
 # ---------------------------------------------------------------- prose blocks
 def head():
-    return """<title>Nine Pull Requests</title>
+    return """<title>tlapm on Large Proofs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -1362,28 +1362,16 @@ one is the editor's obligation pool and one memoizes the grammar &mdash; and the
 is in a component the issue does not touch at all.</p>""".replace("Six of these seventeen", "%s of these seventeen" % ("Six" if n286 == 6 else str(n286)))
 
 
-def _best_ratio(get):
-    """largest p00 -> tip ratio over the corpora, on a metric both ends measured"""
-    best = 0.0
-    for cp in L.CORPORA:
-        a, b = get(cp, "p00"), get(cp, TIP)
-        if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b:
-            best = max(best, float(a) / float(b))
-    return best
-
-
-BEST_ITER = int(_best_ratio(
-    lambda cp, pt: (iterlat.get((cp, pt)) or (None,))[0]))
-
-
 def build():
     parts = ['<div class="wrap"><header>',
              '<p class="eyebrow">tlapm &middot; performance</p>',
-             '<h1>%s pull requests to make large proofs tractable</h1>'
-             % numword(N_PR).capitalize(),
-             '<p class="lede">Peak memory divided by more than 30, iteration latency '
-             'by %d. %s commits, one subject each, measured commit by commit.</p>'
-             % (BEST_ITER, numword(N_CM).capitalize()),
+             '<h1>Optimize performance on large proof files</h1>',
+             '<p class="lede">On a 9&thinsp;967-obligation refinement chain &mdash; '
+             'preparation: does not finish &rarr; %s. Peak memory: over 12&nbsp;GB '
+             '&rarr; %s. %s commits, one subject each, grouped into %s pull '
+             'requests.</p>'
+             % (L.fmt_ms(val("ffi", TIP, "prep")), L.fmt_kb(val("ffi", TIP, "peak")),
+                numword(N_CM).capitalize(), numword(N_PR)),
              '<div class="meta"><span>branch <code>%s</code></span>'
              '<span>%d files, +%d&thinsp;/&thinsp;&minus;%d</span>'
              '<span>base <code>%s</code></span></div></header>'
