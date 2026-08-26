@@ -632,7 +632,7 @@ def sec_proposal():
     c = ["<p>%s pull requests, %s commits, %d files, +%d&thinsp;/&thinsp;&minus;%d. "
          "Each commit is one subject, states its own invariant, and passes the "
          "repository's test suite on its own &mdash; the gate is fail-set identity "
-         "with <code>main</code>, not a pass count.</p>"
+         "with <code>main</code>.</p>"
          % (numword(N_PR).capitalize(), numword(N_CM),
             TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
     c.append(sec_curves())
