@@ -272,6 +272,15 @@ def main_point(sweep, corpus, field):
     return DNC
 
 
+def main_raw(sweep, corpus, field):
+    """the elapsed time behind main's cell, whatever verdict that cell carries"""
+    for p in ("p00", "p00b"):
+        v = sweep.get((p, corpus), {}).get(field + "_raw")
+        if isinstance(v, int) and v > 0:
+            return v
+    return None
+
+
 # The iteration-latency harness names the private refinement chain "chain"; every
 # other reader calls it "ffi", after the module.  One vocabulary, mapped on read,
 # so a lookup can never silently return nothing -- which it did, and the chart
@@ -496,9 +505,25 @@ def _ceiling_label():
 CEIL_LABEL = _ceiling_label()
 
 
-def fmt_ms(v, unit="s"):
+def _failed(v, at):
+    """the word for a failure, and for an abort the time it took to reach it.
+
+    A bare "OOM" reads as a property of the file; "OOM after 35 min" says the run
+    spent thirty-five minutes climbing before the cap refused it, which is the
+    part a reader is trying to size.
+    """
+    s = {DNC: "&mdash;", CEIL: CEIL_LABEL, ABORT: "OOM"}[v]
+    if v is ABORT and isinstance(at, int) and at > 0:
+        # minutes from a minute up, so the column does not mix "589 s" with
+        # "12 min" and make the reader divide before comparing two aborts
+        s += " after %d min" % round(at / 60000.0) if at >= 60000 \
+             else " after %.0f s" % (at / 1000.0)
+    return s
+
+
+def fmt_ms(v, unit="s", at=None):
     if v in FAILED:
-        return {DNC: "&mdash;", CEIL: CEIL_LABEL, ABORT: "OOM"}[v]
+        return _failed(v, at)
     if unit == "ms" or v < 1000:
         return "%d ms" % v
     # Above ten minutes, minutes.  "2665 s" against "40.5 s" makes the reader do the
@@ -508,10 +533,10 @@ def fmt_ms(v, unit="s"):
     return ("%.1f s" if v < 100000 else "%d s") % (v / 1000.0)
 
 
-def fmt_kb(v):
+def fmt_kb(v, at=None):
     if v in FAILED:
         # on a memory column the failure to name is the memory one
-        return {DNC: "&mdash;", CEIL: CEIL_LABEL, ABORT: "OOM"}[v]
+        return _failed(v, at)
     return "%.0f MB" % (v / 1024.0) if v < 1024 * 1024 else "%.2f GB" % (v / 1048576.0)
 
 

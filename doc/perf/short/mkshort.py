@@ -332,6 +332,13 @@ def val(cp, pt, field):
     return sweep.get((pt, cp), {}).get(field, L.DNC)
 
 
+def at_of(cp, pt):
+    """elapsed time of the run behind a cell, kept even when the cell is a verdict"""
+    if pt == "p00":
+        return L.main_raw(sweep, cp, "prep")
+    return sweep.get((pt, cp), {}).get("prep_raw")
+
+
 def fmt_x(a, b):
     """b -> a as a times-figure, only when both are real numbers"""
     r = L.ratio(a, b)
@@ -558,9 +565,10 @@ def sec_problem():
              '<th class="num">iteration</th><th class="num">keystroke</th>'
              '</tr></thead><tbody>')
     for cp in L.CORPORA:
+        a = at_of(cp, "p00")
         cells = [L.fmt_ms(L.main_point(sweep, cp, "gen")),
-                 L.fmt_ms(L.main_point(sweep, cp, "prep")),
-                 L.fmt_kb(L.main_point(sweep, cp, "peak"))]
+                 L.fmt_ms(L.main_point(sweep, cp, "prep"), at=a),
+                 L.fmt_kb(L.main_point(sweep, cp, "peak"), at=a)]
         r = iterlat.get((cp, "p00"))
         if not r:
             cells.append("&mdash;")
@@ -1292,8 +1300,10 @@ def _cm_table(cm):
                     '<td class="num">%s &rarr; %s %s</td><td class="num">%s &rarr; %s %s</td></tr>'
                     % (LONG_CP[cp],
                        L.fmt_ms(ga), L.fmt_ms(gb), fmt_x(ga, gb),
-                       L.fmt_ms(a), L.fmt_ms(b), fmt_x(a, b),
-                       L.fmt_kb(pa), L.fmt_kb(pb), fmt_x(pa, pb)))
+                       L.fmt_ms(a, at=at_of(cp, prev)),
+                       L.fmt_ms(b, at=at_of(cp, cm)), fmt_x(a, b),
+                       L.fmt_kb(pa, at=at_of(cp, prev)),
+                       L.fmt_kb(pb, at=at_of(cp, cm)), fmt_x(pa, pb)))
     out = ""
     if rows:
         out += ('<div class="scroller"><table><thead><tr><th>corpus</th><th class="num">generate</th>'
