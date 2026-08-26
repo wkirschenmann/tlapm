@@ -352,10 +352,19 @@ def rate_by_position(series, aria):
     if not curves:
         return ""
     ys = [r for _, _, _, w, _ in curves for _, r in w]
-    lo, hi, ticks = _decades(min(ys), max(ys))
+    # Linear, not logarithmic.  What this chart exists to show is a rate collapsing
+    # as position rises; a log axis turns a factor of eight into a gentle slope and
+    # hides the very thing being claimed.  The other charts need log because their
+    # corpora span three decades -- here every curve is one corpus.
+    top = max(ys) * 1.08
+    step = 10 ** math.floor(math.log10(top / 4.0))
+    for m in (1, 2, 2.5, 5, 10):
+        if top / (step * m) <= 6:
+            step *= m
+            break
+    ticks = [t for t in (step * i for i in range(0, 12)) if t <= top]
     x = lambda n: PL + n / float(xs_max) * (W2 - PL - PR2)
-    y = lambda v: (H2 - PB2) - (math.log10(v) - math.log10(lo)) / \
-        (math.log10(hi) - math.log10(lo)) * (H2 - PB2 - PT2)
+    y = lambda v: (H2 - PB2) - (v / top) * (H2 - PB2 - PT2)
     o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W2, H2, aria)]
     for t in ticks:
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
