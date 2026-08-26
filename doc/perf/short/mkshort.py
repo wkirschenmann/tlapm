@@ -398,10 +398,7 @@ a{color:var(--sig-ink)}
 .eyebrow{font:600 11.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
   color:var(--sig);margin:0 0 18px}
 .lede{font-size:19px;color:var(--ink-2);margin:18px 0 0}
-.klegend{font-size:14px;color:var(--ink-2);margin:-2px 0 16px}
-.k{display:inline-block;width:22px;height:3px;border-radius:2px;
-  vertical-align:middle;margin-right:7px}
-.k286{background:var(--lbl-286)} .kkeep{background:var(--lbl-keep)}
+.l286{color:var(--lbl-286);font-weight:600} .lkeep{color:var(--lbl-keep);font-weight:600}
 header{border-bottom:2px solid var(--ink);padding-bottom:26px;margin-bottom:12px}
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;
   font:400 13px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -1079,10 +1076,10 @@ def sec_curves():
 series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap
 refused. Hue separates public corpora from private, dash separates sizes, and a bold
 label is the last commit of a pull request &mdash; the point a reviewer merging it
-would land on.</p>
-<p class="klegend"><span class="k k286"></span>credits
-<a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a> (%s of %s)
-&nbsp;&nbsp;<span class="k kkeep"></span>not described by the issue (%s)</p>"""
+would land on. A commit&rsquo;s label is <span class="l286">violet</span> when its
+message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a>
+&mdash; %s of the %s do &mdash; and <span class="lkeep">green</span> for the %s the
+issue does not describe.</p>"""
          % (numword(N_286), numword(N_CM), numword(N_CM - N_286))]
 
     c.append(fig(
