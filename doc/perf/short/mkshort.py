@@ -1139,11 +1139,13 @@ def fig_svg(title, sub, svg, caption, better="higher"):
 
 
 def figs_position():
-    """The seventh figure: rate against how far into the file preparation has got.
+    """The last two figures: the same windowed rate, laid against two axes.
 
-    An aborted cell's rate is an average over the obligations it reached, and those
-    are the first ones in the file.  This is what says whether that average can be
-    read next to the full rate of a cell that finished.
+    Against position, because an aborted cell's rate is an average over the
+    obligations it reached, and those are the first ones in the file -- this is what
+    says whether that average can be read next to the full rate of a cell that
+    finished.  Against time, because that is the axis a user waits on, and a log rate
+    is what separates a chain whose points differ by a factor of thirty.
     """
     rows = L.load_rate_by_position()
     if not rows:
@@ -1159,29 +1161,46 @@ def figs_position():
             series.append((lab, col, "" if pt in L.ENDPOINTS else "3 3",
                            rows[(cp, pt)], val(cp, pt, "prep") in L.FAILED))
         name = CORPUS_NAME.get(cp, cp)
-        svg = C.rate_by_position(
-            series, "Preparation rate against seconds spent preparing, %s" % name,
-            xkind="time", xlog=True)
-        if not svg:
-            continue
         # A short curve is not evidence of a refusal: a run still in flight is short
         # too.  The verdict comes from the campaign, not from the length.
         total = L.OBL.get(cp)
         stopped = [C.LABELS[pt][0] for pt in pts
                    if total and rows[(cp, pt)][-1][0] < total * 0.98
                    and val(cp, pt, "prep") in L.FAILED]
-        out.append(fig_svg(
-            "Preparation rate against time &mdash; %s" % name,
-            "Obligations prepared per second over a sliding window, against the "
-            "seconds already spent preparing. Solid is the last commit of a pull "
-            "request, dashed an intermediate one.",
-            svg,
-            "A curve ends where its run ended: in a cross when the 12&nbsp;GB cap "
-            "refused it%s, in a dot when it reached the last obligation of the file. "
-            "So a short curve here is not a slow one &mdash; the fastest runs are the "
-            "ones that end soonest."
-            % (" &mdash; %s" % ", ".join(stopped) if stopped else ""),
-            better="higher"))
+        named = " &mdash; %s" % ", ".join(stopped) if stopped else ""
+        sub = ("Obligations prepared per second over a sliding window. Solid is the "
+               "last commit of a pull request, dashed an intermediate one.")
+        svg = C.rate_by_position(
+            series, "Preparation rate against obligations prepared, %s" % name)
+        if svg:
+            out.append(fig_svg(
+                "Preparation rate against position &mdash; %s" % name,
+                sub + " The axis is how far into the file preparation has got, so "
+                "every curve covers the same ground and two curves at the same "
+                "abscissa are at the same place in the file.",
+                svg,
+                "A curve stopping before the right edge is a run the 12&nbsp;GB cap "
+                "refused there%s. The rate an aborted cell carries on the throughput "
+                "chart is the average of its curve up to that point, which is why it "
+                "cannot be read against a curve that reaches the edge." % named,
+                better="higher"))
+        svg = C.rate_by_position(
+            series, "Preparation rate against seconds spent preparing, %s" % name,
+            xkind="time", ylog=True)
+        if svg:
+            out.append(fig_svg(
+                "Preparation rate against time &mdash; %s" % name,
+                sub + " The axis is the seconds already spent, which is what a user "
+                "waits on, and the rate is logarithmic because the chain spans a "
+                "factor of thirty.",
+                svg,
+                "A curve ends where its run ended: in a cross when the cap refused "
+                "it%s, in a dot when it reached the last obligation. A short curve "
+                "here is not a slow one &mdash; the fastest runs end soonest. What "
+                "this axis cannot show is the comparison the figure above makes: two "
+                "curves at the same abscissa are at different places in the file."
+                % named,
+                better="higher"))
     return "".join(out)
 
 def sec_curves():

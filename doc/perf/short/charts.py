@@ -311,7 +311,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
     return "".join(o)
 
 
-def rate_by_position(series, aria, xkind="obl", xlog=False):
+def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
     """Preparation rate against how far into the file it has got.
 
     series: [(label, colour, dash, [(n, seconds), ...], refused)], one per commit.
@@ -362,13 +362,23 @@ def rate_by_position(series, aria, xkind="obl", xlog=False):
     # as position rises; a log axis turns a factor of eight into a gentle slope and
     # hides the very thing being claimed.  The other charts need log because their
     # corpora span three decades -- here every curve is one corpus.
-    top = max(ys) * 1.08
-    step = 10 ** math.floor(math.log10(top / 4.0))
-    for m in (1, 2, 2.5, 5, 10):
-        if top / (step * m) <= 6:
-            step *= m
-            break
-    ticks = [t for t in (step * i for i in range(0, 12)) if t <= top]
+    if ylog:
+        top, bot = max(ys) * 1.25, min(ys) / 1.25
+        ticks = []
+        d = 10 ** math.floor(math.log10(bot))
+        while d <= top:
+            for m in (1, 2, 5):
+                if bot <= d * m <= top:
+                    ticks.append(d * m)
+            d *= 10
+    else:
+        top = max(ys) * 1.08
+        step = 10 ** math.floor(math.log10(top / 4.0))
+        for m in (1, 2, 2.5, 5, 10):
+            if top / (step * m) <= 6:
+                step *= m
+                break
+        ticks = [t for t in (step * i for i in range(0, 12)) if t <= top]
     # On a time axis the chain crushes into the first eighth of the frame -- main
     # spends 2 745 s where the tip spends 303 -- so the decades get a log axis and
     # every curve keeps a share of the width.  The rate axis stays linear: it is the
@@ -380,7 +390,12 @@ def rate_by_position(series, aria, xkind="obl", xlog=False):
             * (W2 - PL - PR2)
     else:
         x = lambda n: PL + n / float(xs_max) * (W2 - PL - PR2)
-    y = lambda v: (H2 - PB2) - (v / top) * (H2 - PB2 - PT2)
+    if ylog:
+        yspan = math.log10(top) - math.log10(bot)
+        y = lambda v: (H2 - PB2) - (math.log10(max(v, bot)) - math.log10(bot)) \
+            / yspan * (H2 - PB2 - PT2)
+    else:
+        y = lambda v: (H2 - PB2) - (v / top) * (H2 - PB2 - PT2)
     o = ['<svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (W2, H2, aria)]
     for t in ticks:
         o.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="currentColor" '
