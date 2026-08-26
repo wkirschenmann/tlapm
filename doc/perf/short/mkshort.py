@@ -211,6 +211,29 @@ def _count_for(cp, pt):
     return have[max(have, key=lambda p: L.POINTS.index(p))]
 
 
+def prept(cp):
+    """Preparation wall clock in seconds, one entry per commit.
+
+    A run the cap refused has an elapsed time -- how long it ran before dying --
+    and that is a real coordinate, so its cross sits there.  Read it as a lower
+    bound: the run would have taken longer had it been allowed to finish, and on
+    a lower-is-better axis a lower bound looks better than the truth.  The cross
+    is what says the run did not deliver.
+    """
+    d = {}
+    for pt in L.POINTS:
+        v = L.main_point(sweep, cp, "prep") if pt == "p00" else _cell(cp, pt).get("prep")
+        raw = L.main_raw(sweep, cp, "prep") if pt == "p00" else _cell(cp, pt).get("prep_raw")
+        if v is None or v == L.DNC:
+            d[pt] = None
+        elif v in L.FAILED:
+            d[pt] = {"kind": v, "at": (raw / 1000.0) if raw else None,
+                     "pending": _pending(cp, pt) if v == L.CEIL else False}
+        else:
+            d[pt] = v / 1000.0
+    return d
+
+
 def thr(cp):
     """Obligations prepared per second.  A run that did not complete prepared none of
     them to the end, so its throughput is zero -- which a logarithmic axis cannot
@@ -1114,6 +1137,16 @@ message credits <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tl
 &mdash; %s of the %s do &mdash; and <span class="lkeep">green</span> for the %s the
 issue does not describe.</p>"""
          % (numword(N_286), numword(N_CM), numword(N_CM - N_286))]
+
+    c.append(fig(
+    "Preparation wall clock",
+    "Seconds for <code>tlapm --noproving --nofp</code> to prepare the whole file. A "
+    "cross is a run the cap refused, placed at the time it had spent when it died: "
+    "a lower bound, since it never finished.",
+    "Preparation time in seconds per commit, five corpora on a logarithmic axis.",
+    {cp: prept(cp) for cp in L.CORPORA}, "s",
+    lambda v: "%.0f s" % v if v < 600 else "%.0f min" % (v / 60.0),
+    "", better="lower"))
 
     c.append(fig(
     "Preparation throughput",
