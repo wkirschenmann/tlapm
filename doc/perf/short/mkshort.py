@@ -1377,11 +1377,9 @@ def build():
              '<p class="eyebrow">tlapm &middot; performance</p>',
              '<h1>Optimize performance on large proof files</h1>',
              '<p class="lede">On a 9&thinsp;967-obligation refinement chain &mdash; '
-             'preparation: OOM &gt;12&nbsp;GB after %d min &rarr; %s and %s. '
-             '%s commits, one subject each, grouped into %s pull requests.</p>'
+             'preparation: OOM &gt;12&nbsp;GB after %d min &rarr; %s and %s.</p>'
              % (round(at_of("ffi", "p00") / 60000.0),
-                L.fmt_kb(val("ffi", TIP, "peak")), L.fmt_ms(val("ffi", TIP, "prep")),
-                numword(N_CM).capitalize(), numword(N_PR)),
+                L.fmt_kb(val("ffi", TIP, "peak")), L.fmt_ms(val("ffi", TIP, "prep"))),
              '<div class="meta"><span>branch <code>%s</code></span>'
              '<span>%d files, +%d&thinsp;/&thinsp;&minus;%d</span>'
              '<span>base <code>%s</code></span></div></header>'
