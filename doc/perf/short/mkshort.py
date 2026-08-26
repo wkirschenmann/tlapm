@@ -191,6 +191,26 @@ def _pending(cp, pt):
     return c.get("prep") == L.CEIL and not c.get("long")
 
 
+def _count_for(cp, pt):
+    """How many obligations an aborted cell prepared, measured or carried.
+
+    Counting costs one run per cell, so only a few are measured.  A cell without
+    its own takes the count of the nearest measured point AT OR AFTER it: those
+    points are the ones that reach at least as far, and a point to the left of a
+    measured one never gets further than it.  The time is always the cell's own.
+    """
+    have = {p: n for (c, p), (n, _) in PARTIAL.items() if c == cp}
+    if not have:
+        return None
+    if pt in have:
+        return have[pt]
+    i = L.POINTS.index(pt)
+    after = [p for p in have if L.POINTS.index(p) >= i]
+    if after:
+        return have[min(after, key=lambda p: L.POINTS.index(p))]
+    return have[max(have, key=lambda p: L.POINTS.index(p))]
+
+
 def thr(cp):
     """Obligations prepared per second.  A run that did not complete prepared none of
     them to the end, so its throughput is zero -- which a logarithmic axis cannot
@@ -211,11 +231,11 @@ def thr(cp):
             # only one on the curve measured on a different workload, and a curve
             # exists to be read across its points.  The two runs reach the same
             # peak to the kilobyte, which is what makes the count transferable.
-            part = PARTIAL.get((cp, pt))
+            part = _count_for(cp, pt)
             at = _cell(cp, pt).get("prep_raw") if pt != "p00" else \
                 L.main_raw(sweep, cp, "prep")
             d[pt] = {"kind": L.ABORT if att else v,
-                     "at": (part[0] * 1000.0 / at) if (part and at) else None,
+                     "at": (part * 1000.0 / at) if (part and at) else None,
                      "pending": False if att else _pending(cp, pt)}
         else:
             d[pt] = L.OBL[cp] * 1000.0 / v
