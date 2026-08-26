@@ -1160,7 +1160,8 @@ def figs_position():
                            rows[(cp, pt)], val(cp, pt, "prep") in L.FAILED))
         name = CORPUS_NAME.get(cp, cp)
         svg = C.rate_by_position(
-            series, "Preparation rate against obligations prepared, %s" % name)
+            series, "Preparation rate against seconds spent preparing, %s" % name,
+            xkind="time")
         if not svg:
             continue
         # A short curve is not evidence of a refusal: a run still in flight is short
@@ -1170,15 +1171,15 @@ def figs_position():
                    if total and rows[(cp, pt)][-1][0] < total * 0.98
                    and val(cp, pt, "prep") in L.FAILED]
         out.append(fig_svg(
-            "Preparation rate against position &mdash; %s" % name,
-            "Obligations prepared per second over a sliding window, against how far "
-            "into the file preparation has got. Solid is the last commit of a pull "
+            "Preparation rate against time &mdash; %s" % name,
+            "Obligations prepared per second over a sliding window, against the "
+            "seconds already spent preparing. Solid is the last commit of a pull "
             "request, dashed an intermediate one.",
             svg,
-            "A curve stopping before the right edge is a run the 12&nbsp;GB cap "
-            "refused there%s. The rate an aborted cell carries on the throughput "
-            "chart is the average of its curve up to that point, which is why it "
-            "cannot be read against a curve that reaches the edge."
+            "A curve ends where its run ended: in a cross when the 12&nbsp;GB cap "
+            "refused it%s, in a dot when it reached the last obligation of the file. "
+            "So a short curve here is not a slow one &mdash; the fastest runs are the "
+            "ones that end soonest."
             % (" &mdash; %s" % ", ".join(stopped) if stopped else ""),
             better="higher"))
     return "".join(out)

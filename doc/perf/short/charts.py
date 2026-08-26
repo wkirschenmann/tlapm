@@ -311,7 +311,7 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
     return "".join(o)
 
 
-def rate_by_position(series, aria):
+def rate_by_position(series, aria, xkind="obl"):
     """Preparation rate against how far into the file it has got.
 
     series: [(label, colour, dash, [(n, seconds), ...], refused)], one per commit.
@@ -337,17 +337,20 @@ def rate_by_position(series, aria):
     pts = [t for t in series if len(t[3]) > 40]
     if not pts:
         return ""
-    xs_max = max(t[3][-1][0] for t in pts)
+    xs_max = max(t[3][-1][1 if xkind == "time" else 0] for t in pts)
 
     def windows(rows):
-        """(position, rate) over windows of a fortieth of the run, at least 25 wide"""
+        """(x, rate) over windows of a fortieth of the run, at least 25 wide
+
+        x is the position reached, or the seconds spent reaching it -- the rate is
+        the same quantity either way, only the axis it is laid against changes."""
         w = max(25, len(rows) // 40)
         out = []
         for i in range(w, len(rows), w):
             dn = rows[i][0] - rows[i - w][0]
             dt = rows[i][1] - rows[i - w][1]
             if dt > 0 and dn > 0:
-                out.append((rows[i][0], dn / dt))
+                out.append((rows[i][1] if xkind == "time" else rows[i][0], dn / dt))
         return out
 
     curves = [(t[0], t[1], t[2], windows(t[3]), t[4]) for t in pts]
@@ -375,13 +378,16 @@ def rate_by_position(series, aria):
         o.append('<text x="%d" y="%.1f" text-anchor="end" font-family="IBM Plex Sans, '
                  'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
                  % (PL - 6, y(t) + 3, _tick(t)))
-    for n in (0, xs_max // 2, xs_max):
+    for n in (0, xs_max / 2.0, xs_max):
+        lab = ("%d s" % round(n)) if xkind == "time" \
+            else "{:,}".format(int(n)).replace(",", "\u2009")
         o.append('<text x="%.1f" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
                  'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
-                 % (x(n), H2 - PB2 + 15, "{:,}".format(n).replace(",", "\u2009")))
+                 % (x(n), H2 - PB2 + 15, lab))
     o.append('<text x="%d" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
-             'sans-serif" font-size="10" fill="currentColor" opacity=".55">obligations '
-             'prepared</text>' % ((PL + W2 - PR2) // 2, H2 - PB2 + 32))
+             'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
+             % ((PL + W2 - PR2) // 2, H2 - PB2 + 32,
+                "seconds spent preparing" if xkind == "time" else "obligations prepared"))
     ends = []
     for lab, col, dash, w, refused in curves:
         d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", x(n), y(r))
