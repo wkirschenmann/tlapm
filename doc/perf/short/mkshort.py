@@ -1076,15 +1076,14 @@ def fig(title, sub, aria, values, unit, fmt_end, caption, series=None, points=No
 
 def sec_curves():
     c = ["""<p>One point per commit, <code>main</code> at the left, in the order the
-series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap refused;
-a red <strong>ring</strong> is a run stopped at %s without finishing. Hue separates
-public corpora from private, dash separates sizes, and a bold label is the last commit
-of a pull request &mdash; the point a reviewer merging it would land on.</p>
+series is proposed in. A red <strong>cross</strong> is a run the 12&nbsp;GB cap
+refused. Hue separates public corpora from private, dash separates sizes, and a bold
+label is the last commit of a pull request &mdash; the point a reviewer merging it
+would land on.</p>
 <p class="klegend"><span class="k k286"></span>credits
 <a href="https://github.com/tlaplus/tlapm/issues/286">tlaplus/tlapm#286</a> (%s of %s)
 &nbsp;&nbsp;<span class="k kkeep"></span>not described by the issue (%s)</p>"""
-         % (L.CEIL_LABEL.replace("did not finish in ", ""),
-            numword(N_286), numword(N_CM), numword(N_CM - N_286))]
+         % (numword(N_286), numword(N_CM), numword(N_CM - N_286))]
 
     c.append(fig(
     "Preparation throughput",
