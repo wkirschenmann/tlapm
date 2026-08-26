@@ -118,7 +118,7 @@ CM = {
 "p12": dict(
   what='Consecutive obligations share a context prefix: 699 of 743 hypotheses are physically the same objects as in the previous obligation on the 30k module. <code>expand_defs</code> and <code>add_constness</code> fold front to back over a state that only grows, so the fold resumes at the first difference.',
   how="Dump identical. <code>--debug noprepcache</code> restores the uncached path for a differential run.",
-  off='<code>--debug noprepcache</code> restores the uncached path &mdash; not a disabled cache but the original code, reached at three call sites: the full <code>expand_defs</code>, the full normalisation, and <code>add_constness_nocache</code>. That is what makes the flag usable as a differential reference rather than merely as an off switch.'),
+  off='<code>--debug noprepcache</code> restores the uncached path &mdash; not a disabled cache but the original code, reached at three call sites: the full <code>expand_defs</code>, the full normalisation, and <code>add_constness_nocache</code>.'),
 
 "p13": dict(
   what='The same for <code>Elab.normalize</code>, the third and most expensive per-obligation pass.',
@@ -142,7 +142,7 @@ CM = {
 
 "p17": dict(
   what='Each grammar rule has two useful instances &mdash; bulleted list allowed at that position or not &mdash; and every reference to a rule rebuilt its whole combinator family, at every token position. Both instances are built once.',
-  how="Dump identical. A difference here would be a parse error, not a slower parse.",
-  off='No switch. The memoized rules describe the same grammar; a difference would be a parse error, not a slower parse.'),
+  how="Dump identical.",
+  off='No switch. The memoized rules describe the same grammar.'),
 
 }

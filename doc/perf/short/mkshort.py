@@ -636,14 +636,6 @@ def sec_proposal():
          % (numword(N_PR).capitalize(), numword(N_CM),
             TOTAL_FILES, TOTAL_ADD, TOTAL_DEL)]
     c.append(sec_curves())
-    c.append("<p style=\"margin-top:14px\">The order is not the order the work happened "
-             "in; it is the order the measurements support. Each of the first six pull "
-             "requests either crosses a threshold &mdash; a specification that could not "
-             "be prepared now can &mdash; or moves a metric by a ratio well clear of its "
-             "spread. The memory pull request sits at position four rather than last "
-             "because that is where it removes every out-of-memory failure from the rest "
-             "of the series; putting it later credits the change after it with a "
-             "completion it did not cause.</p>")
     return "".join(c)
 
 
@@ -1098,8 +1090,7 @@ of a pull request &mdash; the point a reviewer merging it would land on.</p>
     "Preparation throughput",
     "Obligations prepared per second &mdash; <code>tlapm --noproving --nofp</code>, the "
     "whole per-obligation pipeline with no prover. Obligations differ "
-    "in size between corpora, so compare the shape of a curve, not its height against "
-    "another's.",
+    "in size between corpora, so compare the shape of a curve.",
     "Preparation throughput in obligations per second, one point per commit, five corpora "
     "on a logarithmic axis; the two private specifications do not complete on main.",
     {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
@@ -1130,7 +1121,7 @@ of a pull request &mdash; the point a reviewer merging it would land on.</p>
     c.append(fig(
     "Iteration latency &mdash; the wait after one edit",
     "Warm prover, every fingerprint already in the cache, one proof step changed. "
-    "Seconds. This is the loop a user sits in, not a batch run.",
+    "Seconds.",
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
     IT, "s", fmt_secs,
@@ -1369,8 +1360,7 @@ does not scale to these: the cost of an obligation grows with the file it sits i
 the work grows faster than the proof does.</p>
 <p>We went looking for where that growth comes from. It is localised &mdash; a handful
 of places where a non-linear cost sits inside a loop over the context &mdash; which is
-why what follows is %s pull requests against the existing design rather than a
-different one.</p>
+why what follows is %s pull requests against the existing design.</p>
 </section>""" % numword(N_PR))
     # Sections are referred to by NAME in the prose and numbered here.  Fourteen
     # references were written as "&sect;5", two of them were already pointing at the
