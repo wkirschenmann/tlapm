@@ -1371,7 +1371,6 @@ def _best_ratio(get):
     return best
 
 
-BEST_MEM = int(_best_ratio(lambda cp, pt: val(cp, pt, "peak")))
 BEST_ITER = int(_best_ratio(
     lambda cp, pt: (iterlat.get((cp, pt)) or (None,))[0]))
 
@@ -1381,9 +1380,9 @@ def build():
              '<p class="eyebrow">tlapm &middot; performance</p>',
              '<h1>%s pull requests to make large proofs tractable</h1>'
              % numword(N_PR).capitalize(),
-             '<p class="lede">Peak memory divided by %d, iteration latency by %d. '
-             '%s commits, one subject each, measured commit by commit.</p>'
-             % (BEST_MEM, BEST_ITER, numword(N_CM).capitalize()),
+             '<p class="lede">Peak memory divided by more than 30, iteration latency '
+             'by %d. %s commits, one subject each, measured commit by commit.</p>'
+             % (BEST_ITER, numword(N_CM).capitalize()),
              '<div class="meta"><span>branch <code>%s</code></span>'
              '<span>%d files, +%d&thinsp;/&thinsp;&minus;%d</span>'
              '<span>base <code>%s</code></span></div></header>'
