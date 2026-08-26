@@ -328,9 +328,10 @@ def rate_by_position(series, aria):
     the first quarter of a file is not the same quantity as an average over all
     of it.
     """
-    # the same frame as every other chart on the page: a figure that is 20 % smaller
-    # than its neighbours reads as a lesser one
-    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, PADR, PADT, PADB
+    # the same frame and the same width as every other chart on the page.  The one
+    # departure is a wider right gutter: this chart names twelve curves at their
+    # ends, and PADR is sized for a tick label, not for a commit name.
+    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, 104, PADT, PADB
     pts = [t for t in series if len(t[3]) > 40]
     if not pts:
         return ""
@@ -379,6 +380,7 @@ def rate_by_position(series, aria):
     o.append('<text x="%d" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
              'sans-serif" font-size="10" fill="currentColor" opacity=".55">obligations '
              'prepared</text>' % ((PL + W2 - PR2) // 2, H2 - 2))
+    ends = []
     for lab, col, dash, w, refused in curves:
         d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", x(n), y(r))
                      for i, (n, r) in enumerate(w))
@@ -394,7 +396,29 @@ def rate_by_position(series, aria):
                         x(n) - g, y(r) + g, x(n) + g, y(r) - g))
         else:
             o.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (x(n), y(r), col))
-        o.append('<text x="%.1f" y="%.1f" font-family="IBM Plex Sans, sans-serif" '
-                 'font-size="10.5" fill="%s">%s</text>' % (x(n) + 8, y(r) + 3.5, col, lab))
+        ends.append([lab, col, x(n), y(r)])
+    # A dozen curves end within a few pixels of each other, so the names have to be
+    # laid out rather than dropped where the curve stops: nudge each one down until
+    # it clears the one above, and hang it on the left of the endpoint when the
+    # gutter cannot hold it.  A leader line keeps a nudged name attached to its curve.
+    ends.sort(key=lambda e: e[3])
+    prev = None
+    for e in ends:
+        ty = e[3] + 3.5
+        if prev is not None and ty - prev < 11.5:
+            ty = prev + 11.5
+        prev = ty
+        e.append(ty)
+    for lab, col, ex, ey, ty in ends:
+        wid = 6.0 * len(lab)
+        if ex + 8 + wid > W2 - 4:
+            tx, anchor, lx = ex - 8, ' text-anchor="end"', ex - 6
+        else:
+            tx, anchor, lx = ex + 8, "", ex + 6
+        if abs(ty - 3.5 - ey) > 2:
+            o.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" '
+                     'stroke-width="1" opacity=".35"/>' % (ex, ey, lx, ty - 3.5, col))
+        o.append('<text x="%.1f" y="%.1f"%s font-family="IBM Plex Sans, sans-serif" '
+                 'font-size="10.5" fill="%s">%s</text>' % (tx, ty, anchor, col, lab))
     o.append("</svg>")
     return "".join(o)
