@@ -1181,12 +1181,13 @@ def figs_position():
         sub = ("Obligations prepared per second over a sliding window. Solid is the "
                "last commit of a pull request, dashed an intermediate one.")
         svg = C.rate_by_position(
-            series, "Preparation rate against obligations prepared, %s" % name,
-            ylog=True)
+            series, "Preparation rate against the share of the file prepared, %s"
+            % name, xkind="pct", ylog=True)
         if svg:
             out.append(fig_svg(
                 "Preparation rate against position &mdash; %s" % name,
-                sub + " The axis is how far into the file preparation has got, so "
+                sub + " The axis is the share of the file preparation has got "
+                "through, so "
                 "every curve covers the same ground and two curves at the same "
                 "abscissa are at the same place in the file. The rate is "
                 "logarithmic: the chain spans a factor of thirty, and on a "

@@ -415,12 +415,18 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
         # the end of the axis is worth naming, but not on top of the decade next to it
         if not xticks or xs_max / xticks[-1] > 1.35:
             xticks.append(xs_max)
+    elif xkind == "pct":
+        xticks = [xs_max * f for f in (0, .25, .5, .75, 1)]
     else:
         xticks = [0, xs_max / 2.0, xs_max]
     for n in xticks:
-        lab = ("%d s" % round(n)) if xkind == "time" \
-            else "{:,}".format(int(n)).replace(",", "\u2009")
-        if xlog:
+        if xkind == "time":
+            lab = "%d s" % round(n)
+        elif xkind == "pct":
+            lab = "%d&thinsp;%%" % round(n / xs_max * 100)
+        else:
+            lab = "{:,}".format(int(n)).replace(",", "\u2009")
+        if xlog or (xkind == "pct" and 0 < n < xs_max):
             o.append('<line x1="%.1f" y1="%d" x2="%.1f" y2="%.1f" stroke="currentColor" '
                      'stroke-width="1" opacity=".06"/>'
                      % (x(n), PT2, x(n), H2 - PB2))
@@ -430,7 +436,9 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
     o.append('<text x="%d" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
              'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
              % ((PL + W2 - PR2) // 2, H2 - PB2 + 32,
-                "seconds spent preparing" if xkind == "time" else "obligations prepared"))
+                {"time": "seconds spent preparing",
+                 "pct": "share of the file prepared"}.get(xkind,
+                                                          "obligations prepared")))
     ends = []
     for lab, col, dash, w, refused in curves:
         d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", x(n), y(r))
