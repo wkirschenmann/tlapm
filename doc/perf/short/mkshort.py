@@ -1157,7 +1157,7 @@ def figs_position():
             lab, from286 = C.LABELS[pt]
             col = "var(--lbl-286)" if from286 else "var(--lbl-keep)"
             series.append((lab, col, "" if pt in L.ENDPOINTS else "3 3",
-                           rows[(cp, pt)]))
+                           rows[(cp, pt)], val(cp, pt, "prep") in L.FAILED))
         name = CORPUS_NAME.get(cp, cp)
         svg = C.rate_by_position(
             series, "Preparation rate against obligations prepared, %s" % name)

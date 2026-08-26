@@ -314,7 +314,9 @@ def chart(aria, values, unit, fmt_end, series=None, points=None, rule=None,
 def rate_by_position(series, aria):
     """Preparation rate against how far into the file it has got.
 
-    series: [(label, colour, dash, [(n, seconds), ...])], one entry per commit.
+    series: [(label, colour, dash, [(n, seconds), ...], refused)], one per commit.
+    `refused` marks a run the cap stopped: its curve ends in the same red cross the
+    other charts use for a refusal, rather than in a dot that would read as an end.
 
     x is obligations prepared, y is the rate over a sliding window -- not the
     running average, which would hide the shape by carrying the cheap head of the
@@ -329,10 +331,10 @@ def rate_by_position(series, aria):
     # the same frame as every other chart on the page: a figure that is 20 % smaller
     # than its neighbours reads as a lesser one
     W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, PADR, PADT, PADB
-    pts = [(lab, col, dash, rows) for lab, col, dash, rows in series if len(rows) > 40]
+    pts = [t for t in series if len(t[3]) > 40]
     if not pts:
         return ""
-    xs_max = max(rows[-1][0] for _, _, _, rows in pts)
+    xs_max = max(t[3][-1][0] for t in pts)
 
     def windows(rows):
         """(position, rate) over windows of a fortieth of the run, at least 25 wide"""
@@ -345,11 +347,11 @@ def rate_by_position(series, aria):
                 out.append((rows[i][0], dn / dt))
         return out
 
-    curves = [(lab, col, dash, windows(rows)) for lab, col, dash, rows in pts]
+    curves = [(t[0], t[1], t[2], windows(t[3]), t[4]) for t in pts]
     curves = [c for c in curves if c[3]]
     if not curves:
         return ""
-    ys = [r for _, _, _, w in curves for _, r in w]
+    ys = [r for _, _, _, w, _ in curves for _, r in w]
     lo, hi, ticks = _decades(min(ys), max(ys))
     x = lambda n: PL + n / float(xs_max) * (W2 - PL - PR2)
     y = lambda v: (H2 - PB2) - (math.log10(v) - math.log10(lo)) / \
@@ -368,14 +370,22 @@ def rate_by_position(series, aria):
     o.append('<text x="%d" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
              'sans-serif" font-size="10" fill="currentColor" opacity=".55">obligations '
              'prepared</text>' % ((PL + W2 - PR2) // 2, H2 - 2))
-    for lab, col, dash, w in curves:
+    for lab, col, dash, w, refused in curves:
         d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", x(n), y(r))
                      for i, (n, r) in enumerate(w))
         o.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6" opacity=".85"%s/>'
                  % (d, col, ' stroke-dasharray="%s"' % dash if dash else ""))
         n, r = w[-1]
-        o.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (x(n), y(r), col))
+        if refused:
+            g = 3.6
+            o.append('<g stroke="%s" stroke-width="2" stroke-linecap="round">'
+                     '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
+                     '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/></g>'
+                     % (FAIL, x(n) - g, y(r) - g, x(n) + g, y(r) + g,
+                        x(n) - g, y(r) + g, x(n) + g, y(r) - g))
+        else:
+            o.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (x(n), y(r), col))
         o.append('<text x="%.1f" y="%.1f" font-family="IBM Plex Sans, sans-serif" '
-                 'font-size="10.5" fill="%s">%s</text>' % (x(n) + 6, y(r) + 3.5, col, lab))
+                 'font-size="10.5" fill="%s">%s</text>' % (x(n) + 8, y(r) + 3.5, col, lab))
     o.append("</svg>")
     return "".join(o)
