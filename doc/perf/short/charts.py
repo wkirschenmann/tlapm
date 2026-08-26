@@ -328,10 +328,12 @@ def rate_by_position(series, aria):
     the first quarter of a file is not the same quantity as an average over all
     of it.
     """
-    # the same frame and the same width as every other chart on the page.  The one
-    # departure is a wider right gutter: this chart names twelve curves at their
-    # ends, and PADR is sized for a tick label, not for a commit name.
-    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, 104, PADT, PADB
+    # the same frame and the same width as every other chart on the page.  Two
+    # departures, both because this chart carries different furniture: a wider right
+    # gutter, since it names twelve curves at their ends and PADR is sized for a tick
+    # label; and a shallower bottom, since PADB holds the others' rotated commit
+    # names and a legend, and here the axis is two lines of plain text.
+    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, 104, PADT, 44
     pts = [t for t in series if len(t[3]) > 40]
     if not pts:
         return ""
@@ -376,10 +378,10 @@ def rate_by_position(series, aria):
     for n in (0, xs_max // 2, xs_max):
         o.append('<text x="%.1f" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
                  'sans-serif" font-size="10" fill="currentColor" opacity=".55">%s</text>'
-                 % (x(n), H2 - 12, "{:,}".format(n).replace(",", "\u2009")))
+                 % (x(n), H2 - PB2 + 15, "{:,}".format(n).replace(",", "\u2009")))
     o.append('<text x="%d" y="%d" text-anchor="middle" font-family="IBM Plex Sans, '
              'sans-serif" font-size="10" fill="currentColor" opacity=".55">obligations '
-             'prepared</text>' % ((PL + W2 - PR2) // 2, H2 - 2))
+             'prepared</text>' % ((PL + W2 - PR2) // 2, H2 - PB2 + 32))
     ends = []
     for lab, col, dash, w, refused in curves:
         d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", x(n), y(r))
