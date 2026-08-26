@@ -1381,9 +1381,9 @@ def build():
              % (round(at_of("ffi", "p00") / 60000.0),
                 L.fmt_kb(val("ffi", TIP, "peak")), L.fmt_ms(val("ffi", TIP, "prep"))),
              '<div class="meta"><span>branch <code>%s</code></span>'
-             '<span>%d files, +%d&thinsp;/&thinsp;&minus;%d</span>'
+             '<span>%d commits, %d files, +%d&thinsp;/&thinsp;&minus;%d</span>'
              '<span>base <code>%s</code></span></div></header>'
-             % (BRANCH, TOTAL_FILES, TOTAL_ADD, TOTAL_DEL,
+             % (BRANCH, N_CM, TOTAL_FILES, TOTAL_ADD, TOTAL_DEL,
                 subprocess.check_output(["git", "rev-parse", "--short", "main"]).decode().strip())]
     parts.append("""<section>
 <p>Machine assistance has made it realistic to <em>generate</em> TLA+ proofs rather
