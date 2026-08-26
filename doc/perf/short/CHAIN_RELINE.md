@@ -69,3 +69,20 @@ One caveat stays. `--printallobs` forces the shipped form to be built, which
 plain `--noproving` skips, so these runs do more per obligation than the timed
 ones and their wall can fall at a different index. The count is a measure of
 progress through preparation, not a reading of the timed run.
+
+## Why the line has to be finished
+
+The five leftmost cells used to read "did not finish in 15 min" -- a statement
+about our patience, with no usable duration. This series replaced them with dated
+aborts, and those durations are now visible in two places: the text of the cell,
+and the divisor of the partial rate on the throughput curve.
+
+That is what obliges the series to cover p09 to p17 as well. A verdict transfers
+between machines -- the cap is 12 GB wherever the run happens -- but a duration
+does not, and the moment the left half of the line carries durations taken here,
+leaving the right half on the earlier campaign puts two machines on one line. The
+alternative is to drop the dated aborts and go back to the ceilings, which throws
+away exactly what was just gained.
+
+The monolith does not have this problem: its aborts already come from the earlier
+campaign, and nothing on that line was re-measured here.
