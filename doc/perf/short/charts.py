@@ -502,5 +502,37 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
                      'stroke-width="1" opacity=".35"/>' % (ex, ey, lx, ty - 3.5, col))
         o.append('<text x="%.1f" y="%.1f"%s font-family="IBM Plex Sans, sans-serif" '
                  'font-size="10.5" fill="%s">%s</text>' % (tx, ty, anchor, col, lab))
+    # A ramp is only readable if its ends are named: a strip of the gradient in the
+    # corner the curves leave empty, with the two ends of the chain under it.
+    cols = [c[1] for c in curves]
+    if len(cols) > 2:
+        gid = "ramp-" + xkind + ("-log" if ylog else "")
+        bw, bh = 150.0, 9.0
+        bx2 = W2 - PR2
+        bx1 = bx2 - bw
+        by = PT2 + 1
+        ly = by + bh + 12
+        o.insert(1, '<defs><linearGradient id="%s" x1="0" y1="0" x2="1" y2="0">%s'
+                 '</linearGradient></defs>'
+                 % (gid, "".join('<stop offset="%.4f" stop-color="%s"/>'
+                                 % (i / float(len(cols) - 1), c)
+                                 for i, c in enumerate(cols))))
+        o.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2" '
+                 'fill="url(#%s)"/>' % (bx1, by, bw, bh, gid))
+        o.append('<g font-family="IBM Plex Sans, sans-serif" font-size="9.5" '
+                 'fill="currentColor" opacity=".6">')
+        o.append('<text x="%.1f" y="%.1f">base</text>' % (bx1, ly))
+        o.append('<text x="%.1f" y="%.1f" text-anchor="end">optimized</text>'
+                 % (bx2, ly))
+        o.append('</g>')
+        ax1, ax2 = bx1 + 28, bx2 - 50
+        ay = ly - 3.2
+        o.append('<g stroke="currentColor" opacity=".45" stroke-width="1" '
+                 'stroke-linecap="round"><line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
+                 '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
+                 '<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/></g>'
+                 % (ax1, ay, ax2, ay,
+                    ax2 - 3.4, ay - 3, ax2, ay,
+                    ax2 - 3.4, ay + 3, ax2, ay))
     o.append("</svg>")
     return "".join(o)
