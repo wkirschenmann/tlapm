@@ -420,6 +420,7 @@ def head():
   --shadow:0 1px 2px rgba(20,24,28,.05),0 8px 24px -16px rgba(20,24,28,.22);
   --s-pub:#00969b; --s-priv:#c0762c; --fail:#b32450;
   --lbl-286:#4a3aa7; --lbl-keep:#0a7a54;
+  --rp0:#cb920b;--rp1:#c6a30c;--rp2:#c1b20e;--rp3:#b8bc0f;--rp4:#a1b711;--rp5:#8cb212;--rp6:#78ad13;--rp7:#65a914;--rp8:#54a415;--rp9:#449f17;--rp10:#359b18;--rp11:#279619;--rp12:#1a9219;--rp13:#1a8d26;--rp14:#1b8932;--rp15:#1c843d;--rp16:#1c8047;--rp17:#1d7c50;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --paper:#12151a; --card:#191d24; --ink:#e9ecef; --ink-2:#aab2ba; --ink-3:#79828c;
@@ -429,7 +430,8 @@ def head():
   --good:#84c78e; --good-soft:#1a2a1d;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
   --s-pub:#0b9ba0; --s-priv:#c9822f; --fail:#dd4a6b;
-  --lbl-286:#9085e9; --lbl-keep:#28a87e;}}
+  --lbl-286:#9085e9; --lbl-keep:#28a87e;
+  --rp0:#facf42;--rp1:#f8e042;--rp2:#f6f143;--rp3:#e6f443;--rp4:#d2f144;--rp5:#beef44;--rp6:#abed45;--rp7:#99ea45;--rp8:#87e846;--rp9:#76e547;--rp10:#66e348;--rp11:#56e048;--rp12:#49dd4b;--rp13:#4adb5b;--rp14:#4bd86a;--rp15:#4cd579;--rp16:#4dd386;--rp17:#4ed093;}}
 :root[data-theme="dark"]{
   --paper:#12151a; --card:#191d24; --ink:#e9ecef; --ink-2:#aab2ba; --ink-3:#79828c;
   --rule:#2a313a; --rule-2:#20262e;
@@ -438,7 +440,8 @@ def head():
   --good:#84c78e; --good-soft:#1a2a1d;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
   --s-pub:#0b9ba0; --s-priv:#c9822f; --fail:#dd4a6b;
-  --lbl-286:#9085e9; --lbl-keep:#28a87e;}
+  --lbl-286:#9085e9; --lbl-keep:#28a87e;
+  --rp0:#facf42;--rp1:#f8e042;--rp2:#f6f143;--rp3:#e6f443;--rp4:#d2f144;--rp5:#beef44;--rp6:#abed45;--rp7:#99ea45;--rp8:#87e846;--rp9:#76e547;--rp10:#66e348;--rp11:#56e048;--rp12:#49dd4b;--rp13:#4adb5b;--rp14:#4bd86a;--rp15:#4cd579;--rp16:#4dd386;--rp17:#4ed093;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);
   font:400 16.5px/1.7 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -1168,9 +1171,16 @@ def figs_position():
                      key=lambda c: L.OBL.get(c, 0), reverse=True):
         pts = sorted((pt for c, pt in rows if c == cp), key=L.POINTS.index)
         series = []
-        for pt in pts:
-            lab, from286 = C.LABELS[pt]
-            col = "var(--lbl-286)" if from286 else "var(--lbl-keep)"
+        # Twelve curves on one frame, and what a reader needs from a colour here is
+        # not which subject a commit belongs to -- the other charts say that -- but
+        # where it sits in the chain.  So the colour is a ramp over the chain's
+        # position, gold at main and green at the tip, and it is read like an axis.
+        # Spread the ramp over the points MEASURED, not over the whole chain: the
+        # twelve here sit in the chain's second half, and indexing by chain position
+        # crowded them into four steps of gold-free green.
+        for i, pt in enumerate(pts):
+            lab, _ = C.LABELS[pt]
+            col = "var(--rp%d)" % round(i / float(max(len(pts) - 1, 1)) * 17)
             series.append((lab, col, "" if pt in L.ENDPOINTS else "3 3",
                            rows[(cp, pt)], val(cp, pt, "prep") in L.FAILED))
         name = CORPUS_NAME.get(cp, cp)
@@ -1182,7 +1192,9 @@ def figs_position():
                    and val(cp, pt, "prep") in L.FAILED]
         named = " &mdash; %s" % ", ".join(stopped) if stopped else ""
         sub = ("Obligations prepared per second over a sliding window. Solid is the "
-               "last commit of a pull request, dashed an intermediate one.")
+               "last commit of a pull request, dashed an intermediate one; the colour "
+               "runs with the chain, gold at the earliest commit measured and green "
+               "at the tip.")
         svg = C.rate_by_position(
             series, "Preparation rate against the share of the file prepared, %s"
             % name, xkind="pct", ylog=True)
