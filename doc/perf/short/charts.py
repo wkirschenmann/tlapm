@@ -512,11 +512,13 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
         bx1 = bx2 - bw
         by = PT2 + 1
         ly = by + bh + 12
-        o.insert(1, '<defs><linearGradient id="%s" x1="0" y1="0" x2="1" y2="0">%s'
-                 '</linearGradient></defs>'
-                 % (gid, "".join('<stop offset="%.4f" stop-color="%s"/>'
-                                 % (i / float(len(cols) - 1), c)
-                                 for i, c in enumerate(cols))))
+        # two stops, the two ends of the ramp: the curve colours are a straight
+        # interpolation between them, so naming every one of them would only be a
+        # longer way of writing the same band
+        o.insert(1, '<defs><linearGradient id="%s" x1="0" y1="0" x2="1" y2="0">'
+                 '<stop offset="0" stop-color="%s"/>'
+                 '<stop offset="1" stop-color="%s"/></linearGradient></defs>'
+                 % (gid, cols[0], cols[-1]))
         o.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2" '
                  'fill="url(#%s)"/>' % (bx1, by, bw, bh, gid))
         o.append('<g font-family="IBM Plex Sans, sans-serif" font-size="9.5" '

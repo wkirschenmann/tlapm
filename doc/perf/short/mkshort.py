@@ -420,7 +420,7 @@ def head():
   --shadow:0 1px 2px rgba(20,24,28,.05),0 8px 24px -16px rgba(20,24,28,.22);
   --s-pub:#00969b; --s-priv:#c0762c; --fail:#b32450;
   --lbl-286:#4a3aa7; --lbl-keep:#0a7a54;
-  --rp0:#cb920b;--rp1:#c6a30c;--rp2:#c1b20e;--rp3:#b8bc0f;--rp4:#a1b711;--rp5:#8cb212;--rp6:#78ad13;--rp7:#65a914;--rp8:#54a415;--rp9:#449f17;--rp10:#359b18;--rp11:#279619;--rp12:#1a9219;--rp13:#1a8d26;--rp14:#1b8932;--rp15:#1c843d;--rp16:#1c8047;--rp17:#1d7c50;
+  --rp0:#d99a08;--rp1:#cd980c;--rp2:#c29610;--rp3:#b69415;--rp4:#ab9219;--rp5:#9f901d;--rp6:#948e21;--rp7:#888c25;--rp8:#7d8a29;--rp9:#71892e;--rp10:#668732;--rp11:#5a8536;--rp12:#4f833a;--rp13:#43813e;--rp14:#387f42;--rp15:#2c7d47;--rp16:#217b4b;--rp17:#15794f;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --paper:#12151a; --card:#191d24; --ink:#e9ecef; --ink-2:#aab2ba; --ink-3:#79828c;
@@ -431,7 +431,7 @@ def head():
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
   --s-pub:#0b9ba0; --s-priv:#c9822f; --fail:#dd4a6b;
   --lbl-286:#9085e9; --lbl-keep:#28a87e;
-  --rp0:#facf42;--rp1:#f8e042;--rp2:#f6f143;--rp3:#e6f443;--rp4:#d2f144;--rp5:#beef44;--rp6:#abed45;--rp7:#99ea45;--rp8:#87e846;--rp9:#76e547;--rp10:#66e348;--rp11:#56e048;--rp12:#49dd4b;--rp13:#4adb5b;--rp14:#4bd86a;--rp15:#4cd579;--rp16:#4dd386;--rp17:#4ed093;}}
+  --rp0:#f7c948;--rp1:#edc94c;--rp2:#e3ca51;--rp3:#d9ca55;--rp4:#cfcb5a;--rp5:#c5cb5e;--rp6:#bbcb62;--rp7:#b1cc67;--rp8:#a7cc6b;--rp9:#9ecd70;--rp10:#94cd74;--rp11:#8ace79;--rp12:#80ce7d;--rp13:#76ce81;--rp14:#6ccf86;--rp15:#62cf8a;--rp16:#58d08f;--rp17:#4ed093;}}
 :root[data-theme="dark"]{
   --paper:#12151a; --card:#191d24; --ink:#e9ecef; --ink-2:#aab2ba; --ink-3:#79828c;
   --rule:#2a313a; --rule-2:#20262e;
@@ -441,7 +441,7 @@ def head():
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
   --s-pub:#0b9ba0; --s-priv:#c9822f; --fail:#dd4a6b;
   --lbl-286:#9085e9; --lbl-keep:#28a87e;
-  --rp0:#facf42;--rp1:#f8e042;--rp2:#f6f143;--rp3:#e6f443;--rp4:#d2f144;--rp5:#beef44;--rp6:#abed45;--rp7:#99ea45;--rp8:#87e846;--rp9:#76e547;--rp10:#66e348;--rp11:#56e048;--rp12:#49dd4b;--rp13:#4adb5b;--rp14:#4bd86a;--rp15:#4cd579;--rp16:#4dd386;--rp17:#4ed093;}
+  --rp0:#f7c948;--rp1:#edc94c;--rp2:#e3ca51;--rp3:#d9ca55;--rp4:#cfcb5a;--rp5:#c5cb5e;--rp6:#bbcb62;--rp7:#b1cc67;--rp8:#a7cc6b;--rp9:#9ecd70;--rp10:#94cd74;--rp11:#8ace79;--rp12:#80ce7d;--rp13:#76ce81;--rp14:#6ccf86;--rp15:#62cf8a;--rp16:#58d08f;--rp17:#4ed093;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);
   font:400 16.5px/1.7 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
