@@ -454,8 +454,11 @@ a{color:var(--sig-ink)}
   color:var(--sig);margin:0 0 18px}
 .lede{font-size:19px;color:var(--ink-2);margin:18px 0 0}
 .l286{color:var(--lbl-286);font-weight:600} .lkeep{color:var(--lbl-keep);font-weight:600}
-.cmname{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12.5px;
-  color:var(--ink-2);background:var(--rule-2);border-radius:4px;padding:1px 6px}
+.cm-name{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13.5px;
+  font-weight:600;background:var(--rule-2);border-radius:4px;padding:1px 7px}
+.cm-name.n286{color:var(--lbl-286)} .cm-name.nkeep{color:var(--lbl-keep)}
+.cmsha{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;
+  color:var(--ink-3)}
 header{border-bottom:2px solid var(--ink);padding-bottom:26px;margin-bottom:12px}
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;
   font:400 13px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -1401,9 +1404,11 @@ def sec_perpr():
             d = CT.CM[cm]
             # the name this commit carries on every chart, so a reader can go
             # from a curve to the commit that made it and back
-            c.append('<div class="cm"><p class="cm-h"><code>%s</code> '
-                     '<span class="cmname">%s</span> &nbsp;%s</p>'
-                     % (sha, C.LABELS[cm][0], subj))
+            nm, from286 = C.LABELS[cm]
+            c.append('<div class="cm"><p class="cm-h">'
+                     '<span class="cm-name %s">%s</span> '
+                     '<span class="cmsha">%s</span> &nbsp;%s</p>'
+                     % ("n286" if from286 else "nkeep", nm, sha, subj))
             c.append('<p class="files">%s</p>' % " ".join(
                 '<span>%s <span class="plus">+%s</span>&thinsp;<span class="minus">&minus;%s</span></span>'
                 % (f, p, m) for f, p, m in fl))
