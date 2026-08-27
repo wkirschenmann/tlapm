@@ -331,9 +331,10 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
     # the same frame and the same width as every other chart on the page.  Two
     # departures, both because this chart carries different furniture: a wider right
     # gutter, since it names twelve curves at their ends and PADR is sized for a tick
-    # label; and a shallower bottom, since PADB holds the others' rotated commit
-    # names and a legend, and here the axis is two lines of plain text.
-    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, 104, PADT, 44
+    # label; and a shallower bottom and top, since PADB holds the others' rotated
+    # commit names and a legend, here the axis is two lines of plain text, and the
+    # only thing above the plot is the topmost tick label.
+    W2, H2, PL, PR2, PT2, PB2 = W, H, PADL, 104, 16, 44
     pts = [t for t in series if len(t[3]) > 40]
     if not pts:
         return ""
@@ -363,7 +364,7 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
     # hides the very thing being claimed.  The other charts need log because their
     # corpora span three decades -- here every curve is one corpus.
     if ylog:
-        top, bot = max(ys) * 1.25, min(ys) / 1.25
+        top, bot = max(ys) * 1.12, min(ys) / 1.2
         ticks = []
         d = 10 ** math.floor(math.log10(bot))
         while d <= top:
@@ -510,7 +511,7 @@ def rate_by_position(series, aria, xkind="obl", xlog=False, ylog=False):
         bw, bh = 150.0, 9.0
         bx2 = W2 - PR2
         bx1 = bx2 - bw
-        by = PT2 + 1
+        by = PT2 + 16
         ly = by + bh + 12
         # two stops, the two ends of the ramp: the curve colours are a straight
         # interpolation between them, so naming every one of them would only be a
