@@ -1248,7 +1248,8 @@ issue does not describe.</p>"""
     "Seconds for <code>tlapm --noproving --nofp</code> to prepare the whole file. A "
     "cross is a run the cap refused, placed at the time it had spent when it died: "
     "a lower bound, since it never finished.",
-    "Preparation time in seconds per commit, five corpora on a logarithmic axis.",
+    "Preparation time in seconds per commit, %s corpora on a logarithmic axis."
+    % numword(len(L.CORPORA)),
     {cp: prept(cp) for cp in L.CORPORA}, "s",
     lambda v: "%.0f s" % v if v < 600 else "%.0f min" % (v / 60.0),
     "", better="lower"))
@@ -1258,7 +1259,8 @@ issue does not describe.</p>"""
     "Obligations prepared per second &mdash; <code>tlapm --noproving --nofp</code>, the "
     "whole per-obligation pipeline with no prover. Obligations differ "
     "in size between corpora, so compare the shape of a curve.",
-    "Preparation throughput in obligations per second, one point per commit, five corpora "
+    "Preparation throughput in obligations per second, one point per commit, %s corpora "
+    % numword(len(L.CORPORA)) +
     "on a logarithmic axis; the two private specifications do not complete on main.",
     {cp: thr(cp) for cp in L.CORPORA}, "obl/s",
     lambda v: "%.0f/s" % v if v >= 10 else "%.1f/s" % v,
@@ -1273,7 +1275,7 @@ issue does not describe.</p>"""
     "Peak memory of a preparation pass",
     "Maximum resident set of the same run, in gigabytes, under a 12&nbsp;GB address-space "
     "cap.",
-    "Peak resident set per commit, five corpora, logarithmic axis.",
+    "Peak resident set per commit, %s corpora, logarithmic axis." % numword(len(L.CORPORA)),
     {cp: peak(cp) for cp in L.CORPORA}, "GB",
     lambda v: "%.0f MB" % (v * 1024) if v < 1 else "%.2f GB" % v,
     "", rule=(12.0, "12 GB address-space cap")))
@@ -1284,7 +1286,7 @@ issue does not describe.</p>"""
     "Seconds. This is the floor under every editor interaction and "
     "the fixed cost each worker of any parallel scheme pays before it proves "
     "anything.",
-    "Generation time in seconds per commit, five corpora, logarithmic axis.",
+    "Generation time in seconds per commit, %s corpora, logarithmic axis." % numword(len(L.CORPORA)),
     {cp: gen(cp) for cp in L.CORPORA}, "s",
     lambda v: "%d ms" % (v * 1000) if v < 1 else "%.1f s" % v,
     ""))
