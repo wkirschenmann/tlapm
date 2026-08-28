@@ -589,6 +589,14 @@ def _failed(v, at):
     part a reader is trying to size.
     """
     s = {DNC: "&mdash;", CEIL: CEIL_LABEL, ABORT: "OOM"}[v]
+    if v is CEIL and isinstance(at, int) and at > 0:
+        # The ceiling is per run, not per campaign: this document's cells were
+        # stopped at fifteen minutes, and the one added later at an hour. Taking
+        # the longest of them for every cell would put an hour's patience on a run
+        # that was given a quarter of one.
+        m = at / 60000.0
+        return "did not finish in %d min" % round(m) if m < 60 \
+            else "did not finish in %.0f h" % (m / 60.0)
     if v is ABORT and isinstance(at, int) and at > 0:
         # minutes from a minute up, so the column does not mix "589 s" with
         # "12 min" and make the reader divide before comparing two aborts
