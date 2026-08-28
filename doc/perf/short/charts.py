@@ -50,6 +50,10 @@ SERIES = [("public synthetic, " + _obl("synth300"), "synth300", PUB,  None),
           # being a secondary encoding and leaves two same-hue series told
           # apart only by where they happen to sit.
           ("public refinement stack", "idemo",    PUB,  "11 3 2 3"),
+          # dot-dash: the four other public dashes are all runs of one length, so a
+          # pattern that alternates is the only one still telling itself apart from
+          # them at this size
+          ("public graph processing", "gp2",      PUB,  "1 2 7 2"),
           ("private 30k monolith",    "mono",     PRIV, None),
           ("private refinement chain","ffi",      PRIV, "5 3")]
 

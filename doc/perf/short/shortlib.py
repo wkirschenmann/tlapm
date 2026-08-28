@@ -38,13 +38,13 @@ PRS = [
 ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS]
 
 OBL = {"tiny": 20, "synth100": 600, "synth300": 1800, "idemo": 2703,
-       "ffi": 9967, "mono": 29965}
+       "gp2": 5957, "ffi": 9967, "mono": 29965}
 
 # Every corpus this campaign knows how to measure, smallest first.  Which of
 # them actually appear on the curves is decided by the data, not by this list:
 # a corpus with no rows in the sweep would otherwise contribute an empty line
 # and a legend entry pointing at nothing.
-CORPUS_ORDER = ["tiny", "synth100", "synth300", "idemo", "ffi", "mono"]
+CORPUS_ORDER = ["tiny", "synth100", "synth300", "idemo", "gp2", "ffi", "mono"]
 
 
 def _corpora_present(path=None):
