@@ -36,6 +36,8 @@ CORPUS_META = {
                  "a 1&nbsp;800-obligation synthetic module", "1 800"),
     "idemo": ("public refinement stack",
               "a public three-level refinement stack", "stack"),
+    "gp2": ("public graph processing",
+            "a public graph processing development", "graph"),
     "ffi": ("private refinement chain",
             "a private refinement chain", "chain"),
     "mono": ("private monolith", "a private 30k-line monolith", "monolith"),
