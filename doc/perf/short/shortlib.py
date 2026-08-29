@@ -178,7 +178,19 @@ def load_sweep(path=None, boot=None):
     out = collections.defaultdict(dict)
     for r in data:
         fld = field_of(r)
-        if r["boot"] != line_boot.get((r["corpus"], fld)):
+        # A row that carries both metrics is classed by the first of them, so an
+        # abort measured on another host could never be admitted as a settled
+        # verdict: the test below asked for a preparation-only row. Judge the
+        # transfer on the reading being transferred, and admit only that reading --
+        # the generation time on such a row is an ordinary duration, and durations
+        # do not cross hosts.
+        prep_only = False
+        if r["boot"] != line_boot.get((r["corpus"], fld)) and fld == "gen" \
+                and int(r["prep_ms"]) != -2 and r["phase"] == "L" \
+                and _verdict(int(r["prep_rc"])) == ABORT \
+                and r["boot"] != line_boot.get((r["corpus"], "prep")):
+            prep_only, fld = True, "prep"
+        if not prep_only and r["boot"] != line_boot.get((r["corpus"], fld)):
             # An extended-clock row from another boot is admissible when what it
             # establishes is a VERDICT rather than a duration.  The cap is 12 GB on
             # any machine, so "the cap refused an allocation" transfers between hosts;
@@ -199,7 +211,7 @@ def load_sweep(path=None, boot=None):
             continue
         k = (r["point"], r["corpus"])
         out[k]["sha"] = r["sha"]
-        g, grc = int(r["gen_ms"]), int(r["gen_rc"])
+        g, grc = (-2, 0) if prep_only else (int(r["gen_ms"]), int(r["gen_rc"]))
         p_, prc = int(r["prep_ms"]), int(r["prep_rc"])
         if g != -2:
             out[k]["gen"] = _verdict(grc) or g
