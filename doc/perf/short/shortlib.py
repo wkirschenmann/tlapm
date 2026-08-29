@@ -177,42 +177,43 @@ def load_sweep(path=None, boot=None):
 
     out = collections.defaultdict(dict)
     for r in data:
-        fld = field_of(r)
-        # A row that carries both metrics is classed by the first of them, so an
-        # abort measured on another host could never be admitted as a settled
-        # verdict: the test below asked for a preparation-only row. Judge the
-        # transfer on the reading being transferred, and admit only that reading --
-        # the generation time on such a row is an ordinary duration, and durations
-        # do not cross hosts.
-        prep_only = False
-        if r["boot"] != line_boot.get((r["corpus"], fld)) and fld == "gen" \
-                and int(r["prep_ms"]) != -2 and r["phase"] == "L" \
-                and _verdict(int(r["prep_rc"])) == ABORT \
-                and r["boot"] != line_boot.get((r["corpus"], "prep")):
-            prep_only, fld = True, "prep"
-        if not prep_only and r["boot"] != line_boot.get((r["corpus"], fld)):
-            # An extended-clock row from another boot is admissible when what it
-            # establishes is a VERDICT rather than a duration.  The cap is 12 GB on
-            # any machine, so "the cap refused an allocation" transfers between hosts;
-            # "it finished in 1035 s" does not, and is dropped like any other
-            # off-boot row.  This is what lets a stopped run be settled on whatever
-            # machine happens to be available, without putting a foreign timing on a
-            # curve.
-            settled = (r["phase"] == "L" and fld == "prep"
-                       and _verdict(int(r["prep_rc"])) == ABORT)
-            vouched = (r["phase"] == "L" and fld == "prep"
-                       and _verdict(int(r["prep_rc"])) is None
-                       and hosts_agree(r["boot"], line_boot.get((r["corpus"], fld)),
-                                       skip=(r["corpus"], r["point"])))
-            if not (settled or vouched):
-                continue
-        if r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
-                and fld == "prep" and int(r["prep_rc"]) == 124:
+        # Admission is per READING, not per row. A row can carry a generation time
+        # and a preparation time, and the two lines can sit on different machines --
+        # here they do: preparation was measured over an afternoon and two restarts,
+        # generation end to end in a quarter of an hour afterwards. Judging the row
+        # by its first reading threw the other one away with it, which emptied a
+        # whole column the moment the generation line moved host.
+        def admit(fld):
+            ms = int(r[fld + "_ms"])
+            if ms == -2:
+                return False
+            if r["boot"] == line_boot.get((r["corpus"], fld)):
+                return True
+            # An off-boot row is admissible when what it establishes is a VERDICT
+            # rather than a duration. The cap is 12 GB on any machine, so "the cap
+            # refused an allocation" transfers between hosts; "it finished in 1035 s"
+            # does not, unless the two hosts have a shared reading that agrees.
+            if r["phase"] != "L":
+                return False
+            v = _verdict(int(r[fld + "_rc"]))
+            if v == ABORT:
+                return True
+            return v is None and hosts_agree(
+                r["boot"], line_boot.get((r["corpus"], fld)),
+                skip=(r["corpus"], r["point"]))
+
+        take_gen, take_prep = admit("gen"), admit("prep")
+        if not (take_gen or take_prep):
             continue
+        if take_prep and r["phase"] != "L" and (r["point"], r["corpus"]) in longer \
+                and int(r["prep_rc"]) == 124:
+            take_prep = False
+            if not take_gen:
+                continue
         k = (r["point"], r["corpus"])
         out[k]["sha"] = r["sha"]
-        g, grc = (-2, 0) if prep_only else (int(r["gen_ms"]), int(r["gen_rc"]))
-        p_, prc = int(r["prep_ms"]), int(r["prep_rc"])
+        g, grc = (int(r["gen_ms"]), int(r["gen_rc"])) if take_gen else (-2, 0)
+        p_, prc = (int(r["prep_ms"]), int(r["prep_rc"])) if take_prep else (-2, 0)
         if g != -2:
             out[k]["gen"] = _verdict(grc) or g
             out[k]["gen_raw"] = g

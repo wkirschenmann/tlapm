@@ -306,32 +306,30 @@ def check_vouched_rows():
 
 
 def check_one_boot_per_cell():
-    """A row carrying both metrics is read for both, so both lines must want it.
+    """Say which machine each line of a corpus was measured on, when they differ.
 
-    The row selection keeps a row when its boot is the boot of the FIRST metric it
-    carries, and then reads every metric off it.  That is only sound while a corpus
-    whose rows carry both metrics has the same boot chosen for both lines -- if the
-    two lines ever diverge, one of them would be quietly reading a duration measured
-    on a machine it rejected.  Nothing in the loader prevents that; this does.
+    This used to be an error. It was written when a row carrying both metrics was
+    admitted or rejected whole, so two lines on two machines meant one of them was
+    reading a duration off a host it had rejected. Admission is per reading now:
+    each cell takes its reading from its own line's host, and a corpus whose two
+    lines sit on different machines is an ordinary outcome of measuring the cheap
+    line again after a restart. What is still worth printing is WHICH machine, so
+    that a reader comparing two numbers across metrics knows they do not share one.
     """
     import csv as _csv
     import collections as _c
     rows = list(_csv.DictReader(open(os.path.join(L.S, "short_sweep.csv"))))
-    both = _c.defaultdict(int)
-    for r in rows:
-        if r["gen_ms"] != "-2" and r["prep_ms"] != "-2":
-            both[r["corpus"]] += 1
+    both = _c.Counter(r["corpus"] for r in rows
+                      if r["gen_ms"] != "-2" and r["prep_ms"] != "-2")
     sweep, _b, _d = L.load_sweep()
     lb = sweep.get("_line_boot", {})
-    bad = []
-    for cp, n in sorted(both.items()):
+    out = []
+    for cp in sorted(both):
         g, p = lb.get((cp, "gen")), lb.get((cp, "prep"))
         if g is not None and p is not None and g != p:
-            bad.append("%s has %d rows carrying both metrics, but its generation "
-                       "line sits on boot %s and its preparation line on %s, so one "
-                       "of the two reads a duration off a boot it rejected"
-                       % (cp, n, g, p))
-    return bad
+            out.append("NOTE %s: generation measured on boot %s, preparation on %s; "
+                       "each cell reads from its own line's host" % (cp, g, p))
+    return out
 
 
 def check_golden():
