@@ -230,14 +230,59 @@ let mymap =
 (* END of aux functions section *)
 
 
+(* Probe (TLAPM_ACTION_TIMES): which of the five passes costs. The frontend
+   normalises every obligation sent to a first-order backend, and three of its
+   passes exist for the temporal fragment; a specification without primes or
+   modal operators pays for them all the same. Inert without the variable. *)
+let act_on = lazy (Sys.getenv_opt "TLAPM_ACTION_TIMES" <> None)
+let act_t = Array.make 5 0.0
+let act_n = ref 0
+let () = at_exit begin fun () ->
+  if Lazy.force act_on && !act_n > 0 then begin
+    let names = [| "compute_level"; "compute_subst"; "expand_prime_defs";
+                   "symbol_commute"; "coalesce_modal" |] in
+    Array.iteri (fun i t ->
+      Printf.eprintf "[ACTION_TIMES] %-18s %8.3f s\n%!" names.(i) t) act_t ;
+    Printf.eprintf "[ACTION_TIMES] obligations=%d\n%!" !act_n
+  end
+end
+let act i f x =
+  if Lazy.force act_on then begin
+    let t0 = Unix.gettimeofday () in
+    let y = f x in
+    act_t.(i) <- act_t.(i) +. (Unix.gettimeofday () -. t0) ;
+    y
+  end else f x
+
+(* Experiment (TLAPM_LEVELSKIP=1): two of the passes rewrite the action and
+   temporal fragment only -- [A]_v, <<A>>_v and UNCHANGED are expanded by
+   [expand_prime_defs], and [symbol_commute] pushes primes, [], <> down to
+   the variables.  An obligation whose TLA+ level is at most 1 (constant or
+   state) contains none of those by definition, so both passes traverse it
+   and rewrite nothing.  The level is already computed by the first pass.
+
+   [coalesce_modal] is NOT skipped: it also renames declared operators after
+   their kind and locus, which every obligation undergoes. *)
+let levelskip = lazy (Sys.getenv_opt "TLAPM_LEVELSKIP" <> None)
+let act_skipped = ref 0
+let () = at_exit begin fun () ->
+  if Lazy.force act_on && !act_n > 0 then
+    Printf.eprintf "[ACTION_TIMES] level<=1 obligations=%d of %d\n%!"
+      !act_skipped !act_n
+end
+
 let process_eob ob =
   let cx = Deque.empty in
   let scx = ((), cx) in
-  let ob = Expr.Levels.compute_level cx ob in
-  let ob = Expr.SubstOp.compute_subst cx ob in
-  let ob = expand_prime_defs scx ob in
-  let ob = symbol_commute mymap ob in
-  let ob = coalesce_modal cx ob in
+  if Lazy.force act_on then incr act_n ;
+  let ob = act 0 (Expr.Levels.compute_level cx) ob in
+  let low = Expr.Levels.has_level ob && Expr.Levels.get_level ob <= 1 in
+  if low && Lazy.force act_on then incr act_skipped ;
+  let ob = act 1 (Expr.SubstOp.compute_subst cx) ob in
+  let skip = low && Lazy.force levelskip in
+  let ob = if skip then ob else act 2 (expand_prime_defs scx) ob in
+  let ob = if skip then ob else act 3 (symbol_commute mymap) ob in
+  let ob = act 4 (coalesce_modal cx) ob in
   ob
 
 let process_obligation ob =

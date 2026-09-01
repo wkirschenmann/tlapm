@@ -195,7 +195,10 @@ let expand_defs ?(what = fun _ -> true) ob =
    carry essentially all of the cost. Keeping the last few contexts and resuming
    from whichever shares the longest prefix costs one physical-equality scan per
    entry -- cheap against the fold it avoids. *)
-let expand_cache_size = 12
+let expand_cache_size =
+  match Sys.getenv_opt "TLAPM_EXPCACHE" with
+  | Some v -> (try max 1 (int_of_string v) with _ -> 12)
+  | None -> 12
 let expand_cache
     : (hyp array * (Expr.Subst.sub * hyp Deque.dq) array) array
   = Array.make expand_cache_size ([||], [||])
@@ -234,9 +237,104 @@ let () = at_exit begin fun () ->
   end
 end
 
+(* Early reachability, computed on the RAW context (TLAPM_PRUNE_RAW=1).
+
+   [prune_context] drops the hypotheses an obligation cannot reach -- but it
+   runs at the END of preparation, so [expand_defs] has already substituted
+   through every one of them, and [elab_normalize] has already normalized
+   them.  Measured on a 28 818-obligation specification, most of a
+   1 600-hypothesis context is dropped that way.
+
+   Deciding earlier is possible because reachability computed over the raw
+   (pre-expansion) references is a SUPERSET of the post-expansion one:
+   expansion only inlines the body of a visible definition into a hypothesis
+   that already referred to that definition, so it creates no reference the
+   raw closure does not already have.  A hypothesis the raw closure does not
+   reach is therefore dropped by [prune_context] as well, and substituting
+   through it is wasted work.
+
+   Two invariants keep this from disturbing the caches this file depends on.
+   The context KEEPS ITS SHAPE: an unreachable hypothesis is replaced in
+   place by a placeholder of the same constructor whose body is the same
+   `Opaque "__pruned__"` marker [prune_context] uses, so every de Bruijn
+   index and every fold state is what it was.  And the analysis is cached
+   POSITION-WISE, not prefix-wise (the same device as [find_meth_stable]):
+   the free-variable set of a hypothesis and its placeholder are pure
+   functions of the node, so a node physically identical to the one at the
+   same position of the previous obligation reuses both -- which also keeps
+   the placeholder physically shared across obligations, so the downstream
+   prefix caches still resume on it. *)
+let prune_raw = lazy (Sys.getenv_opt "TLAPM_PRUNE_RAW" <> None)
+
+(* [None] marks a hypothesis whose references cannot be read off, which
+   [prune_context] answers by keeping everything before it. *)
+let fvs_cache : (hyp array * Expr.Collect.var_set option array) ref
+  = ref ([||], [||])
+let ph_cache : (hyp array * hyp array) ref = ref ([||], [||])
+
+let hyp_fvs h = match h.core with
+  | Defn ({core = Operator (_, e)}, _, _, _)
+  | Defn ({core = Bpragma (_, e, _)}, _, _, _)
+  | Fact (e, _, _) -> Some (Expr.Collect.fvs e)
+  | Fresh (_, _, _, Bounded (dom, _)) -> Some (Expr.Collect.fvs dom)
+  | Fresh _ | Flex _ | Defn ({core = Recursive _}, _, _, _) ->
+      Some Util.Coll.Is.empty
+  | _ -> None
+
+(* Prunable EARLY: hidden operator and pragma definitions only.  The seed of
+   [prune_context] also drops unreferenced hidden facts, but that pass runs
+   after the triviality check, which discharges a support obligation from a
+   hidden fact equal to the goal -- a use that follows no de Bruijn
+   reference, so reachability does not see it.  Hidden facts are therefore
+   substituted through as before.  Pragma definitions are excluded too: the
+   fold below inlines a `Bpragma` whatever its visibility, so replacing one
+   would substitute the marker into every reference to it. *)
+let prunable h = match h.core with
+  | Defn ({core = Operator _}, _, Hidden, _) -> true
+  | _ -> false
+
+let dummy_hyp : hyp =
+  noprops (Fact (noprops (Opaque "__pruned__"), Hidden, Always))
+
+(* The marker replaces the BODY only: a definition keeps its parameters, so
+   its arity -- which the level computation checks on every definition of the
+   context, reachable or not -- is what it was. *)
+let placeholder h =
+  let mk e = Opaque "__pruned__" @@ e in
+  let body e = match e.core with
+    | Lambda (vs, b) -> Lambda (vs, mk b) @@ e
+    | _ -> mk e
+  in
+  match h.core with
+  | Defn ({core = Operator (nm, e)} as d, wd, vis, ex) ->
+      Defn (Operator (nm, body e) @@ d, wd, vis, ex) @@ h
+  | _ -> h
+
+(* [keep.(i)] over the raw context: the seed and the rear-to-front closure of
+   [prune_context], read on raw references. *)
+let raw_keep raw fvs active_fvs =
+  let n = Array.length raw in
+  let keep = Array.make n false in
+  for p = 0 to n - 1 do
+    if not (prunable raw.(p)) then keep.(p) <- true
+  done ;
+  let mark m = function
+    | None -> for q = 0 to m - 1 do keep.(q) <- true done
+    | Some fv ->
+        Util.Coll.Is.iter
+          (fun k -> let pos = m - k in
+            if pos >= 0 && pos < n then keep.(pos) <- true)
+          fv
+  in
+  mark n active_fvs ;
+  for p = n - 1 downto 0 do
+    if keep.(p) then mark p fvs.(p)
+  done ;
+  keep
+
 let expand_defs_cached ob =
   let sq = ob.obl.core in
-  let (raw, l, states) = prep_time t_exp_discover begin fun () ->
+  let (raw, l, states, best_k) = prep_time t_exp_discover begin fun () ->
     let raw = Array.of_list (Deque.to_list sq.context) in
     let n = Array.length raw in
     (* the entry sharing the longest prefix wins; a scan stops at the first
@@ -254,16 +352,38 @@ let expand_defs_cached ob =
     let (_, cstates) = expand_cache.(!best) in
     let states = Array.make (n + 1) (shift 0, Deque.empty) in
     Array.blit cstates 0 states 0 (min (l + 1) (Array.length cstates));
-    (raw, l, states)
+    (raw, l, states, !best)
   end () in
   let n = Array.length raw in
+  (* see [prune_raw]: positions the goal cannot reach are replaced by a
+     placeholder instead of being substituted through *)
+  let (keep, ph) =
+    if not (Lazy.force prune_raw) then ([||], [||])
+    else prep_time t_exp_discover begin fun () ->
+      let (fraw, ffvs) = !fvs_cache in
+      let (praw, pph) = !ph_cache in
+      let fl = Array.length fraw and pl = Array.length praw in
+      let fvs = Array.make n None and ph = Array.make n dummy_hyp in
+      for i = 0 to n - 1 do
+        fvs.(i) <-
+          (if i < fl && raw.(i) == fraw.(i) then ffvs.(i) else hyp_fvs raw.(i)) ;
+        ph.(i) <-
+          (if i < pl && raw.(i) == praw.(i) then pph.(i) else placeholder raw.(i))
+      done ;
+      fvs_cache := (raw, fvs) ;
+      ph_cache := (raw, ph) ;
+      (raw_keep raw fvs (Some (Expr.Collect.fvs sq.active)), ph)
+    end ()
+  in
   (* The states carry memoized substitutions: index resolution through
      the deep expansion spine is cached on the substitution value, which
      the prefix cache shares across obligations (see Expr.Subst.memo). *)
   let rec fold i ((s, kept) as st) =
     if i = n then st
     else begin
-      let h = app_hyp s raw.(i) in
+      let h =
+        if Array.length keep > 0 && not keep.(i) then ph.(i)
+        else app_hyp s raw.(i) in
       (* Memoize every thirty-second level, not every one.
 
          [memo] wraps the substitution at each fold step, so a resolution that
@@ -298,17 +418,42 @@ let expand_defs_cached ob =
        count with a low l means one early divergence throws away a context that
        is otherwise identical, and the prefix rule is what loses it. *)
     if n - l > 1000 then begin
-      let (craw, _) = expand_cache.(0) in
+      let (craw, _) = expand_cache.(best_k) in
       let m = min n (Array.length craw) in
       let same = ref 0 in
       for i = 0 to m - 1 do if raw.(i) == craw.(i) then incr same done ;
       n_late := !n_late + 1 ;
       sum_same := !sum_same + !same ;
-      sum_n_late := !sum_n_late + n
+      sum_n_late := !sum_n_late + n ;
+      if !n_late <= 25 then begin
+        let kind h = match h.Property.core with
+          | Fresh _ -> "Fresh" | Flex _ -> "Flex"
+          | Defn ({Property.core = Operator (nm, _); _}, _, _, _) ->
+              "Defn:" ^ nm.Property.core
+          | Defn _ -> "Defn" | Fact _ -> "Fact" | _ -> "Other"
+        in
+        let eqhere =
+          if l < m then
+            (try if Expr.Eq.hyp raw.(l) craw.(l) then "EQ" else "NE"
+             with _ -> "?")
+          else "-" in
+        Printf.eprintf
+          "[EXP_TAIL] cold n=%d l=%d best=%d same=%d cand=%d at%d new=%s old=%s %s loc=%s\n%!"
+          n l best_k !same (Array.length craw) l
+          (if l < n then kind raw.(l) else "-")
+          (if l < m then kind craw.(l) else "-")
+          eqhere
+          (Util.location ~cap:false ob.obl)
+      end
     end ;
     n_obl_tail := !n_obl_tail + 1 ;
     sum_ctx := !sum_ctx + n ;
     sum_tail := !sum_tail + (n - l) ;
+    if !n_obl_tail mod 1000 = 0 then
+      Printf.eprintf "[EXP_TAIL] running obl=%d mean_ctx=%.0f mean_tail=%.1f\n%!"
+        !n_obl_tail
+        (float_of_int !sum_ctx /. float_of_int !n_obl_tail)
+        (float_of_int !sum_tail /. float_of_int !n_obl_tail) ;
     let b = if n - l = 0 then 0
             else min 9 (1 + int_of_float (log (float_of_int (n - l))
                                           /. log 4.0)) in
@@ -1874,6 +2019,29 @@ let find_meth ob =
           h
      in
      let cx = Deque.map f ob.obl.core.context in
+     if Sys.getenv_opt "TLAPM_RAW_SHARE" <> None then begin
+       let n = Array.length raw and cn = Array.length cin in
+       let m = min n cn in
+       let l = ref 0 in
+       while !l < m && raw.(!l) == cin.(!l) do incr l done ;
+       let same = ref 0 in
+       for i = 0 to m - 1 do if raw.(i) == cin.(i) then incr same done ;
+       let kind h = match h.Property.core with
+         | Fresh (nm, _, _, _) -> "Fresh:" ^ nm.Property.core
+         | Flex nm -> "Flex:" ^ nm.Property.core
+         | Defn ({Property.core = Operator (nm, _); _}, _, v, _) ->
+             "Defn:" ^ nm.Property.core
+             ^ (match v with Visible -> "/V" | Hidden -> "/H")
+         | Defn _ -> "Defn" | Fact (_, v, _) ->
+             "Fact" ^ (match v with Visible -> "/V" | Hidden -> "/H")
+         | _ -> "Other" in
+       Printf.eprintf "[RAW] n=%d prev=%d l=%d same=%d new=%s old=%s eq=%s loc=%s\n%!"
+         n cn !l !same
+         (if !l < n then kind raw.(!l) else "-")
+         (if !l < cn then kind cin.(!l) else "-")
+         (if !l < m then (if Expr.Eq.hyp raw.(!l) cin.(!l) then "EQ" else "NE") else "-")
+         (Util.location ~cap:false ob.obl)
+     end ;
      find_meth_stable := (raw, out);
      let meths =
         match !meths with
@@ -1962,6 +2130,11 @@ let add_constness_nocache ob =
    context across obligations downstream, which is what makes
    [expand_defs_cached] effective. *)
 let constness_cache : (Expr.T.hyp array * Expr.T.hyp list) ref = ref ([||], [])
+(* how much of const:tail is rebuilding the shared prefix rather than annotating *)
+let t_const_mirror = ref 0.0
+let () = at_exit (fun () ->
+  if Lazy.force prep_times_on then
+    Printf.eprintf "[PREP_TIMES] %-18s %8.3f s\n%!" "const:mirror" !t_const_mirror)
 
 let add_constness ob =
   if Params.debugging "noprepcache" then add_constness_nocache ob
@@ -1998,6 +2171,7 @@ let add_constness ob =
        context it extends), and the lookup falls back to [Deque.nth]
        whenever the sizes disagree.  Entries are indexed front-to-back,
        so [Ix n] reads slot [size - n]. *)
+    let t_mirror0 = Unix.gettimeofday () in
     let alen = ref 0 in
     let arr = ref (Array.make 1024 None) in
     List.iteri (fun i h ->
@@ -2007,6 +2181,8 @@ let add_constness ob =
         end;
         !arr.(i) <- Some h; incr alen)
       ann_prefix;
+    if Lazy.force prep_times_on then
+      t_const_mirror := !t_const_mirror +. (Unix.gettimeofday () -. t_mirror0) ;
     let visitor = object (self: 'self)
       inherit Expr.Constness.const_visitor
       method! adj (s, cx) h =
