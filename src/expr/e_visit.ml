@@ -272,99 +272,144 @@ let adj_unboundeds_unchecked scx bounds =
     List.fold_left step scx bounds
 
 
+(* [map_share f l] is [List.map f l], returning the list ITSELF when [f]
+   left every element physically unchanged -- see [E_subst.map_share] for
+   why identity is worth preserving here. *)
+let rec map_share f = function
+  | [] -> []
+  | (x :: xs) as l ->
+      let x' = f x in
+      let xs' = map_share f xs in
+      if x' == x && xs' == xs then l else x' :: xs'
+
+let opt_share f o = match o with
+  | None -> o
+  | Some x -> let x' = f x in if x' == x then o else Some x'
+
 class virtual ['s] map = object (self : 'self)
 
+  (* Every case below answers the node it was given when the visit moved
+     none of its children.  A mapping visitor is used to rewrite a handful
+     of constructs, so the overwhelming majority of the nodes it descends
+     through are rebuilt identical to themselves -- which allocates, and
+     loses the physical identity the preparation caches resume on. *)
   method expr (scx : 's scx) oe = match oe.core with
-    | Ix n ->
-        Ix n @@ oe
-    | Internal b ->
-        Internal b @@ oe
-    | Opaque o ->
-        Opaque o @@ oe
+    | Ix _ | Internal _ | Opaque _ | String _ | Num _ | At _ ->
+        oe
     | Bang (e, sels) ->
-        Bang (self#expr scx e, List.map (self#sel scx) sels) @@ oe
+        let e' = self#expr scx e and sels' = map_share (self#sel scx) sels in
+        if e' == e && sels' == sels then oe else Bang (e', sels') @@ oe
     | Lambda (vs, e) ->
         let scx = self#adjs scx
             (List.map
                 (fun (v, shp) -> Fresh (v, shp, Unknown, Unbounded) @@ v)
                 vs) in
-        Lambda (vs, self#expr scx e) @@ oe
-    | String s ->
-        String s @@ oe
-    | Num (m, n) ->
-        Num (m, n) @@ oe
+        let e' = self#expr scx e in
+        if e' == e then oe else Lambda (vs, e') @@ oe
     | Apply (op, es) ->
-        Apply (self#expr scx op, List.map (self#expr scx) es) @@ oe
+        let op' = self#expr scx op and es' = map_share (self#expr scx) es in
+        if op' == op && es' == es then oe else Apply (op', es') @@ oe
     | Sequent sq ->
-        let (_, sq) = self#sequent scx sq in
-        Sequent sq @@ oe
+        let (_, sq') = self#sequent scx sq in
+        if sq'.context == sq.context && sq'.active == sq.active then oe
+        else Sequent sq' @@ oe
     | With (e, m) ->
-        With (self#expr scx e, m) @@ oe
+        let e' = self#expr scx e in
+        if e' == e then oe else With (e', m) @@ oe
     | Let (ds, e) ->
-        let (scx, ds) = self#defns scx ds in
-        Let (ds, self#expr scx e) @@ oe
+        let (scx, ds') = self#defns scx ds in
+        let e' = self#expr scx e in
+        if ds' == ds && e' == e then oe else Let (ds', e') @@ oe
     | If (e, f, g) ->
-        If (self#expr scx e, self#expr scx f, self#expr scx g) @@ oe
+        let e' = self#expr scx e in
+        let f' = self#expr scx f in
+        let g' = self#expr scx g in
+        if e' == e && f' == f && g' == g then oe else If (e', f', g') @@ oe
     | List (q, es) ->
-        List (q, List.map (self#expr scx) es) @@ oe
+        let es' = map_share (self#expr scx) es in
+        if es' == es then oe else List (q, es') @@ oe
     | Quant (q, bs, e) ->
-        let (scx, bs) = self#bounds scx bs in
-        Quant (q, bs, self#expr scx e) @@ oe
+        let (scx, bs') = self#bounds scx bs in
+        let e' = self#expr scx e in
+        if bs' == bs && e' == e then oe else Quant (q, bs', e') @@ oe
     | Tquant (q, vs, e) ->
         let scx = self#adjs scx (List.map (fun v -> Flex v @@ v) vs) in
-        Tquant (q, vs, self#expr scx e) @@ oe
+        let e' = self#expr scx e in
+        if e' == e then oe else Tquant (q, vs, e') @@ oe
     | Choose (v, optdom, e) ->
-        let optdom = Option.map (self#expr scx) optdom in
-        let h = match optdom with
+        let optdom' = opt_share (self#expr scx) optdom in
+        let h = match optdom' with
           | None -> make_fresh v Constant
           | Some dom -> make_bounded_fresh v dom
         in
         let scx = self#adj scx h in
-        let e = self#expr scx e in
-        Choose (v, optdom, e) @@ oe
+        let e' = self#expr scx e in
+        if optdom' == optdom && e' == e then oe
+        else Choose (v, optdom', e') @@ oe
     | SetSt (v, dom, e) ->
-        let dom = self#expr scx dom in
-        let fresh = make_bounded_fresh v dom in
+        let dom' = self#expr scx dom in
+        let fresh = make_bounded_fresh v dom' in
         let scx = self#adj scx fresh in
-        let e = self#expr scx e in
-        SetSt (v, dom, e) @@ oe
+        let e' = self#expr scx e in
+        if dom' == dom && e' == e then oe else SetSt (v, dom', e') @@ oe
     | SetOf (e, bs) ->
-        let (scx, bs) = self#bounds scx bs in
-        SetOf (self#expr scx e, bs) @@ oe
+        let (scx, bs') = self#bounds scx bs in
+        let e' = self#expr scx e in
+        if bs' == bs && e' == e then oe else SetOf (e', bs') @@ oe
     | SetEnum es ->
-        SetEnum (List.map (self#expr scx) es) @@ oe
+        let es' = map_share (self#expr scx) es in
+        if es' == es then oe else SetEnum es' @@ oe
     | Fcn (bs, e) ->
-        let (scx, bs) = self#bounds scx bs in
-        Fcn (bs, self#expr scx e) @@ oe
+        let (scx, bs') = self#bounds scx bs in
+        let e' = self#expr scx e in
+        if bs' == bs && e' == e then oe else Fcn (bs', e') @@ oe
     | FcnApp (f, es) ->
-        FcnApp (self#expr scx f, List.map (self#expr scx) es) @@ oe
+        let f' = self#expr scx f and es' = map_share (self#expr scx) es in
+        if f' == f && es' == es then oe else FcnApp (f', es') @@ oe
     | Arrow (a, b) ->
-        Arrow (self#expr scx a, self#expr scx b) @@ oe
+        let a' = self#expr scx a and b' = self#expr scx b in
+        if a' == a && b' == b then oe else Arrow (a', b') @@ oe
     | Product es ->
-        Product (List.map (self#expr scx) es) @@ oe
+        let es' = map_share (self#expr scx) es in
+        if es' == es then oe else Product es' @@ oe
     | Tuple es ->
-        Tuple (List.map (self#expr scx) es) @@ oe
+        let es' = map_share (self#expr scx) es in
+        if es' == es then oe else Tuple es' @@ oe
     | Rect fs ->
-        Rect (List.map (fun (s, e) -> (s, self#expr scx e)) fs) @@ oe
+        let fs' = map_share
+            (fun ((s, e) as p) ->
+               let e' = self#expr scx e in if e' == e then p else (s, e')) fs in
+        if fs' == fs then oe else Rect fs' @@ oe
     | Record fs ->
-        Record (List.map (fun (s, e) -> (s, self#expr scx e)) fs) @@ oe
+        let fs' = map_share
+            (fun ((s, e) as p) ->
+               let e' = self#expr scx e in if e' == e then p else (s, e')) fs in
+        if fs' == fs then oe else Record fs' @@ oe
     | Except (e, xs) ->
-        Except (self#expr scx e, List.map (self#exspec scx) xs) @@ oe
+        let e' = self#expr scx e and xs' = map_share (self#exspec scx) xs in
+        if e' == e && xs' == xs then oe else Except (e', xs') @@ oe
     | Dot (e, f) ->
-        Dot (self#expr scx e, f) @@ oe
+        let e' = self#expr scx e in
+        if e' == e then oe else Dot (e', f) @@ oe
     | Sub (s, e, f) ->
-        Sub (s, self#expr scx e, self#expr scx f) @@ oe
+        let e' = self#expr scx e and f' = self#expr scx f in
+        if e' == e && f' == f then oe else Sub (s, e', f') @@ oe
     | Tsub (s, e, f) ->
-        Tsub (s, self#expr scx e, self#expr scx f) @@ oe
+        let e' = self#expr scx e and f' = self#expr scx f in
+        if e' == e && f' == f then oe else Tsub (s, e', f') @@ oe
     | Fair (fop, e, f) ->
-        Fair (fop, self#expr scx e, self#expr scx f) @@ oe
+        let e' = self#expr scx e and f' = self#expr scx f in
+        if e' == e && f' == f then oe else Fair (fop, e', f') @@ oe
     | Case (arms, oth) ->
-        Case (List.map (fun (e, f) -> (self#expr scx e, self#expr scx f)) arms,
-              Option.map (self#expr scx) oth) @@ oe
-    | At b ->
-        At b @@ oe
+        let arms' = map_share
+            (fun ((e, f) as p) ->
+               let e' = self#expr scx e and f' = self#expr scx f in
+               if e' == e && f' == f then p else (e', f')) arms in
+        let oth' = opt_share (self#expr scx) oth in
+        if arms' == arms && oth' == oth then oe else Case (arms', oth') @@ oe
     | Parens (e, pf) ->
-        Parens (self#expr scx e, self#pform scx pf) @@ oe
+        let e' = self#expr scx e and pf' = self#pform scx pf in
+        if e' == e && pf' == pf then oe else Parens (e', pf') @@ oe
     | QuantTuply _
     | ChooseTuply _
     | SetStTuply _
