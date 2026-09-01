@@ -265,6 +265,18 @@ end
    the placeholder physically shared across obligations, so the downstream
    prefix caches still resume on it. *)
 let prune_raw = lazy (Sys.getenv_opt "TLAPM_PRUNE_RAW" <> None)
+let n_praw_tail = ref 0
+let n_praw_marked = ref 0
+let n_praw_alive = ref 0
+let n_praw_opaque = ref 0
+let () = at_exit (fun () ->
+  if Lazy.force prep_times_on && !n_praw_tail > 0 then
+    Printf.eprintf
+      "[PREP_TIMES] praw: tail=%d marked=%d (%.1f%%) hidden-defn-kept=%d \
+unanalyzable=%d\n%!"
+      !n_praw_tail !n_praw_marked
+      (100.0 *. float_of_int !n_praw_marked /. float_of_int !n_praw_tail)
+      !n_praw_alive !n_praw_opaque)
 
 let dummy_hyp : hyp =
   noprops (Fact (noprops (Opaque "__pruned__"), Hidden, Always))
@@ -390,7 +402,17 @@ let expand_defs_cached ob =
           pph.(i) <- placeholder raw.(i)
         end
       done ;
-      (raw_keep raw pfvs (Some (Expr.Collect.fvs sq.active)) l, pph)
+      let keep = raw_keep raw pfvs (Some (Expr.Collect.fvs sq.active)) l in
+      if Lazy.force prep_times_on then begin
+        n_praw_tail := !n_praw_tail + (n - l) ;
+        for i = l to n - 1 do
+          if not keep.(i) then incr n_praw_marked
+          else if prunable raw.(i) then incr n_praw_alive
+        done ;
+        for i = l to n - 1 do
+          if pfvs.(i) = None then incr n_praw_opaque done
+      end ;
+      (keep, pph)
     end ()
   in
   (* The states carry memoized substitutions: index resolution through
