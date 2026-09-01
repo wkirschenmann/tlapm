@@ -266,12 +266,31 @@ end
    prefix caches still resume on it. *)
 let prune_raw = lazy (Sys.getenv_opt "TLAPM_PRUNE_RAW" <> None)
 
+let dummy_hyp : hyp =
+  noprops (Fact (noprops (Opaque "__pruned__"), Hidden, Always))
+
+(* Persistent, position-indexed and grown on demand.  Every read is checked
+   against [pr_raw] with physical equality, so an entry left over from an
+   older obligation is either still valid or simply recomputed; nothing is
+   rebuilt per obligation, which is what keeps the analysis proportional to
+   the divergent tail rather than to the whole context. *)
+let pr_raw : hyp array ref = ref [||]
+let pr_fvs : Expr.Collect.var_set option array ref = ref [||]
+let pr_ph : hyp array ref = ref [||]
+
+let pr_grow n =
+  if Array.length !pr_raw < n then begin
+    let m = max n (2 * Array.length !pr_raw) in
+    let g : 'a. 'a array -> 'a -> 'a array = fun a d ->
+      let b = Array.make m d in Array.blit a 0 b 0 (Array.length a) ; b
+    in
+    pr_raw := g !pr_raw dummy_hyp ;
+    pr_fvs := g !pr_fvs None ;
+    pr_ph := g !pr_ph dummy_hyp
+  end
+
 (* [None] marks a hypothesis whose references cannot be read off, which
    [prune_context] answers by keeping everything before it. *)
-let fvs_cache : (hyp array * Expr.Collect.var_set option array) ref
-  = ref ([||], [||])
-let ph_cache : (hyp array * hyp array) ref = ref ([||], [||])
-
 let hyp_fvs h = match h.core with
   | Defn ({core = Operator (_, e)}, _, _, _)
   | Defn ({core = Bpragma (_, e, _)}, _, _, _)
@@ -293,9 +312,6 @@ let prunable h = match h.core with
   | Defn ({core = Operator _}, _, Hidden, _) -> true
   | _ -> false
 
-let dummy_hyp : hyp =
-  noprops (Fact (noprops (Opaque "__pruned__"), Hidden, Always))
-
 (* The marker replaces the BODY only: a definition keeps its parameters, so
    its arity -- which the level computation checks on every definition of the
    context, reachable or not -- is what it was. *)
@@ -310,24 +326,29 @@ let placeholder h =
       Defn (Operator (nm, body e) @@ d, wd, vis, ex) @@ h
   | _ -> h
 
-(* [keep.(i)] over the raw context: the seed and the rear-to-front closure of
-   [prune_context], read on raw references. *)
-let raw_keep raw fvs active_fvs =
+(* [keep.(p)] for the positions of the DIVERGENT TAIL [l, n), the only ones
+   this obligation actually folds: the prefix [0, l) is resumed from the
+   cache, so replacing a hypothesis there would save nothing and cost a scan
+   of the whole context on every obligation.  Restricting the closure is
+   exact, not an approximation: a de Bruijn reference always points
+   front-ward, so no hypothesis of the prefix can reach one of the tail --
+   only later tail hypotheses and the goal can, and both are scanned. *)
+let raw_keep raw fvs active_fvs l =
   let n = Array.length raw in
   let keep = Array.make n false in
-  for p = 0 to n - 1 do
+  for p = l to n - 1 do
     if not (prunable raw.(p)) then keep.(p) <- true
   done ;
   let mark m = function
-    | None -> for q = 0 to m - 1 do keep.(q) <- true done
+    | None -> for q = l to m - 1 do keep.(q) <- true done
     | Some fv ->
         Util.Coll.Is.iter
           (fun k -> let pos = m - k in
-            if pos >= 0 && pos < n then keep.(pos) <- true)
+            if pos >= l && pos < n then keep.(pos) <- true)
           fv
   in
   mark n active_fvs ;
-  for p = n - 1 downto 0 do
+  for p = n - 1 downto l do
     if keep.(p) then mark p fvs.(p)
   done ;
   keep
@@ -360,19 +381,16 @@ let expand_defs_cached ob =
   let (keep, ph) =
     if not (Lazy.force prune_raw) then ([||], [||])
     else prep_time t_exp_discover begin fun () ->
-      let (fraw, ffvs) = !fvs_cache in
-      let (praw, pph) = !ph_cache in
-      let fl = Array.length fraw and pl = Array.length praw in
-      let fvs = Array.make n None and ph = Array.make n dummy_hyp in
-      for i = 0 to n - 1 do
-        fvs.(i) <-
-          (if i < fl && raw.(i) == fraw.(i) then ffvs.(i) else hyp_fvs raw.(i)) ;
-        ph.(i) <-
-          (if i < pl && raw.(i) == praw.(i) then pph.(i) else placeholder raw.(i))
+      pr_grow n ;
+      let praw = !pr_raw and pfvs = !pr_fvs and pph = !pr_ph in
+      for i = l to n - 1 do
+        if praw.(i) != raw.(i) then begin
+          praw.(i) <- raw.(i) ;
+          pfvs.(i) <- hyp_fvs raw.(i) ;
+          pph.(i) <- placeholder raw.(i)
+        end
       done ;
-      fvs_cache := (raw, fvs) ;
-      ph_cache := (raw, ph) ;
-      (raw_keep raw fvs (Some (Expr.Collect.fvs sq.active)), ph)
+      (raw_keep raw pfvs (Some (Expr.Collect.fvs sq.active)) l, pph)
     end ()
   in
   (* The states carry memoized substitutions: index resolution through
