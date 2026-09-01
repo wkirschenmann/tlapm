@@ -237,156 +237,6 @@ let () = at_exit begin fun () ->
   end
 end
 
-(* Early reachability, computed on the RAW context (TLAPM_PRUNE_RAW=1).
-
-   [prune_context] drops the hypotheses an obligation cannot reach -- but it
-   runs at the END of preparation, so [expand_defs] has already substituted
-   through every one of them, and [elab_normalize] has already normalized
-   them.  Measured on a 28 818-obligation specification, most of a
-   1 600-hypothesis context is dropped that way.
-
-   Deciding earlier is possible because reachability computed over the raw
-   (pre-expansion) references is a SUPERSET of the post-expansion one:
-   expansion only inlines the body of a visible definition into a hypothesis
-   that already referred to that definition, so it creates no reference the
-   raw closure does not already have.  A hypothesis the raw closure does not
-   reach is therefore dropped by [prune_context] as well, and substituting
-   through it is wasted work.
-
-   Two invariants keep this from disturbing the caches this file depends on.
-   The context KEEPS ITS SHAPE: an unreachable hypothesis is replaced in
-   place by a placeholder of the same constructor whose body is the same
-   `Opaque "__pruned__"` marker [prune_context] uses, so every de Bruijn
-   index and every fold state is what it was.  And the analysis is cached
-   POSITION-WISE, not prefix-wise (the same device as [find_meth_stable]):
-   the free-variable set of a hypothesis and its placeholder are pure
-   functions of the node, so a node physically identical to the one at the
-   same position of the previous obligation reuses both -- which also keeps
-   the placeholder physically shared across obligations, so the downstream
-   prefix caches still resume on it. *)
-let prune_raw = lazy (Sys.getenv_opt "TLAPM_PRUNE_RAW" <> None)
-let n_praw_tail = ref 0
-let n_praw_marked = ref 0
-let n_praw_alive = ref 0
-let n_praw_opaque = ref 0
-let () = at_exit (fun () ->
-  if Lazy.force prep_times_on && !n_praw_tail > 0 then
-    Printf.eprintf
-      "[PREP_TIMES] praw: tail=%d marked=%d (%.1f%%) hidden-defn-kept=%d \
-unanalyzable=%d\n%!"
-      !n_praw_tail !n_praw_marked
-      (100.0 *. float_of_int !n_praw_marked /. float_of_int !n_praw_tail)
-      !n_praw_alive !n_praw_opaque)
-
-let dummy_hyp : hyp =
-  noprops (Fact (noprops (Opaque "__pruned__"), Hidden, Always))
-
-(* Persistent, position-indexed and grown on demand.  Every read is checked
-   against [pr_raw] with physical equality, so an entry left over from an
-   older obligation is either still valid or simply recomputed; nothing is
-   rebuilt per obligation, which is what keeps the analysis proportional to
-   the divergent tail rather than to the whole context. *)
-let pr_raw : hyp array ref = ref [||]
-let pr_fvs : Expr.Collect.var_set option array ref = ref [||]
-let pr_ph : hyp array ref = ref [||]
-
-let pr_grow n =
-  if Array.length !pr_raw < n then begin
-    let m = max n (2 * Array.length !pr_raw) in
-    let g : 'a. 'a array -> 'a -> 'a array = fun a d ->
-      let b = Array.make m d in Array.blit a 0 b 0 (Array.length a) ; b
-    in
-    pr_raw := g !pr_raw dummy_hyp ;
-    pr_fvs := g !pr_fvs None ;
-    pr_ph := g !pr_ph dummy_hyp
-  end
-
-(* [None] marks a hypothesis whose references cannot be read off, which
-   [prune_context] answers by keeping everything before it. *)
-let hyp_fvs h = match h.core with
-  | Defn ({core = Operator (_, e)}, _, _, _)
-  | Defn ({core = Bpragma (_, e, _)}, _, _, _)
-  | Fact (e, _, _) -> Some (Expr.Collect.fvs e)
-  | Fresh (_, _, _, Bounded (dom, _)) -> Some (Expr.Collect.fvs dom)
-  | Fresh _ | Flex _ | Defn ({core = Recursive _}, _, _, _) ->
-      Some Util.Coll.Is.empty
-  | _ -> None
-
-(* Prunable EARLY: an unreachable HIDDEN operator definition.
-
-   Widening this to visible definitions as well -- which is what would be
-   needed for the marking to reach [prune_context]'s 79% drop rate, since a
-   visible definition is inlined and never adjoined to the kept context --
-   was measured and REJECTED: it breaks the shipped obligations on ten of
-   the fourteen specifications of the golden gate.  The reasoning below
-   records why the narrow rule is what remains.
-
-   Seeding a visible definition as live -- the obvious reading of
-   [prune_context]'s seed, which only ever sees hidden ones -- makes the
-   closure keep nearly the whole context: a module's own definitions are
-   visible, they reference each other, and the transitive closure from them
-   reaches everything.  Measured that way, the analysis marked 3.2% of the
-   tail while [prune_context] drops 79% of the slots, 1.8 million reachable
-   hidden definitions being reached from visible ones alone.
-
-   The reason [prune_context] is entitled to a smaller seed is that by the
-   time it runs, a visible definition is no longer a hypothesis at all: the
-   fold below inlines it into the substitution and never adjoins it to the
-   kept context.  What survives is its expansion, inside whatever referenced
-   it.  So in raw space a visible definition must be treated exactly like a
-   hidden one -- live only when something reaches it -- and an unreachable
-   one is worth replacing too, since its body is expanded for nothing.
-
-   Two exclusions stay.  Hidden FACTS are substituted through as before: the
-   triviality check runs before the pruning pass and discharges a support
-   obligation from a hidden fact equal to the goal, a use that follows no de
-   Bruijn reference.  Pragma definitions are never replaced: they are few,
-   and the fold inlines a `Bpragma` whatever its visibility. *)
-let prunable h = match h.core with
-  | Defn ({core = Operator _}, _, Hidden, _) -> true
-  | _ -> false
-
-(* The marker replaces the BODY only: a definition keeps its parameters, so
-   its arity -- which the level computation checks on every definition of the
-   context, reachable or not -- is what it was. *)
-let placeholder h =
-  let mk e = Opaque "__pruned__" @@ e in
-  let body e = match e.core with
-    | Lambda (vs, b) -> Lambda (vs, mk b) @@ e
-    | _ -> mk e
-  in
-  match h.core with
-  | Defn ({core = Operator (nm, e)} as d, wd, vis, ex) ->
-      Defn (Operator (nm, body e) @@ d, wd, vis, ex) @@ h
-  | _ -> h
-
-(* [keep.(p)] for the positions of the DIVERGENT TAIL [l, n), the only ones
-   this obligation actually folds: the prefix [0, l) is resumed from the
-   cache, so replacing a hypothesis there would save nothing and cost a scan
-   of the whole context on every obligation.  Restricting the closure is
-   exact, not an approximation: a de Bruijn reference always points
-   front-ward, so no hypothesis of the prefix can reach one of the tail --
-   only later tail hypotheses and the goal can, and both are scanned. *)
-let raw_keep raw fvs active_fvs l =
-  let n = Array.length raw in
-  let keep = Array.make n false in
-  for p = l to n - 1 do
-    if not (prunable raw.(p)) then keep.(p) <- true
-  done ;
-  let mark m = function
-    | None -> for q = l to m - 1 do keep.(q) <- true done
-    | Some fv ->
-        Util.Coll.Is.iter
-          (fun k -> let pos = m - k in
-            if pos >= l && pos < n then keep.(pos) <- true)
-          fv
-  in
-  mark n active_fvs ;
-  for p = n - 1 downto l do
-    if keep.(p) then mark p fvs.(p)
-  done ;
-  keep
-
 let expand_defs_cached ob =
   let sq = ob.obl.core in
   let (raw, l, states, best_k) = prep_time t_exp_discover begin fun () ->
@@ -410,33 +260,13 @@ let expand_defs_cached ob =
     (raw, l, states, !best)
   end () in
   let n = Array.length raw in
-  (* see [prune_raw]: positions the goal cannot reach are replaced by a
-     placeholder instead of being substituted through *)
-  let (keep, ph) =
-    if not (Lazy.force prune_raw) then ([||], [||])
-    else prep_time t_exp_discover begin fun () ->
-      pr_grow n ;
-      let praw = !pr_raw and pfvs = !pr_fvs and pph = !pr_ph in
-      for i = l to n - 1 do
-        if praw.(i) != raw.(i) then begin
-          praw.(i) <- raw.(i) ;
-          pfvs.(i) <- hyp_fvs raw.(i) ;
-          pph.(i) <- placeholder raw.(i)
-        end
-      done ;
-      let keep = raw_keep raw pfvs (Some (Expr.Collect.fvs sq.active)) l in
-      (keep, pph)
-    end ()
-  in
   (* The states carry memoized substitutions: index resolution through
      the deep expansion spine is cached on the substitution value, which
      the prefix cache shares across obligations (see Expr.Subst.memo). *)
   let rec fold i ((s, kept) as st) =
     if i = n then st
     else begin
-      let h =
-        if Array.length keep > 0 && not keep.(i) then ph.(i)
-        else app_hyp s raw.(i) in
+      let h = app_hyp s raw.(i) in
       (* Memoize every thirty-second level, not every one.
 
          [memo] wraps the substitution at each fold step, so a resolution that
