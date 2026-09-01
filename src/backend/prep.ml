@@ -183,20 +183,75 @@ let expand_defs ?(what = fun _ -> true) ob =
    a full (cache-refreshing) fold.  The cache pins the previous obligation's
    context and fold snapshots; everything is substructure-shared, so the
    footprint is one array of pairs per module. *)
+(* The cache holds several previous contexts, not just the last one.
+
+   Obligations arrive in proof-tree order, so consecutive ones usually share
+   almost their whole context -- but every time generation leaves one branch for
+   another, the immediately preceding context shares nothing with the new one and
+   the whole fold is redone, even though an obligation seen a few steps earlier
+   (the branch's ancestor) shares nearly all of it. Measured on a layered 28 818
+   obligation specification: with one slot, 72 % of obligations resume within four
+   hypotheses of the end while 21 % refold their entire context, and those 21 %
+   carry essentially all of the cost. Keeping the last few contexts and resuming
+   from whichever shares the longest prefix costs one physical-equality scan per
+   entry -- cheap against the fold it avoids. *)
+let expand_cache_size = 12
 let expand_cache
-    : (hyp array * (Expr.Subst.sub * hyp Deque.dq) array) ref
-  = ref ([||], [||])
+    : (hyp array * (Expr.Subst.sub * hyp Deque.dq) array) array
+  = Array.make expand_cache_size ([||], [||])
+let expand_cache_next = ref 0
+
+let exp_tail_on = lazy (Sys.getenv_opt "TLAPM_EXP_TAIL" <> None)
+let n_obl_tail = ref 0
+let sum_ctx = ref 0
+let sum_tail = ref 0
+let tail_hist = Array.make 10 0
+let n_late = ref 0
+let sum_same = ref 0
+let sum_n_late = ref 0
+let () = at_exit begin fun () ->
+  if Lazy.force exp_tail_on && !n_obl_tail > 0 then begin
+    Printf.eprintf
+      "[EXP_TAIL] obligations=%d mean_ctx=%.0f mean_tail=%.1f (%.2f%% of ctx)\n%!"
+      !n_obl_tail
+      (float_of_int !sum_ctx /. float_of_int !n_obl_tail)
+      (float_of_int !sum_tail /. float_of_int !n_obl_tail)
+      (100.0 *. float_of_int !sum_tail /. float_of_int (max 1 !sum_ctx)) ;
+    if !n_late > 0 then
+      Printf.eprintf
+        "[EXP_TAIL]   long-tail obligations=%d mean_ctx=%.0f \
+         same-node-at-same-index=%.0f (%.1f%%)\n%!"
+        !n_late
+        (float_of_int !sum_n_late /. float_of_int !n_late)
+        (float_of_int !sum_same /. float_of_int !n_late)
+        (100.0 *. float_of_int !sum_same /. float_of_int (max 1 !sum_n_late)) ;
+    Printf.eprintf "[EXP_TAIL]   tail buckets (0, then powers of four):%s\n%!"
+      (String.concat ""
+         (List.filter (fun x -> x <> "")
+            (List.mapi (fun i c ->
+                 if c = 0 then "" else Printf.sprintf "  b%d=%d" i c)
+               (Array.to_list tail_hist))))
+  end
+end
 
 let expand_defs_cached ob =
   let sq = ob.obl.core in
   let (raw, l, states) = prep_time t_exp_discover begin fun () ->
     let raw = Array.of_list (Deque.to_list sq.context) in
     let n = Array.length raw in
-    let (craw, cstates) = !expand_cache in
-    let m = min n (Array.length craw) in
-    let l = ref 0 in
-    while !l < m && raw.(!l) == craw.(!l) do incr l done;
-    let l = !l in
+    (* the entry sharing the longest prefix wins; a scan stops at the first
+       hypothesis that is not physically the same node, so an unrelated entry
+       costs one comparison *)
+    let best_l = ref 0 and best = ref 0 in
+    for k = 0 to expand_cache_size - 1 do
+      let (craw, _) = expand_cache.(k) in
+      let m = min n (Array.length craw) in
+      let i = ref 0 in
+      while !i < m && raw.(!i) == craw.(!i) do incr i done;
+      if !i > !best_l then (best_l := !i; best := k)
+    done;
+    let l = !best_l in
+    let (_, cstates) = expand_cache.(!best) in
     let states = Array.make (n + 1) (shift 0, Deque.empty) in
     Array.blit cstates 0 states 0 (min (l + 1) (Array.length cstates));
     (raw, l, states)
@@ -209,21 +264,60 @@ let expand_defs_cached ob =
     if i = n then st
     else begin
       let h = app_hyp s raw.(i) in
+      (* Memoize every thirty-second level, not every one.
+
+         [memo] wraps the substitution at each fold step, so a resolution that
+         walks i levels performs i hash-table insertions -- and on an obligation
+         that starts from an empty prefix (measured: a fifth of them, carrying
+         nearly all of the cost) every table is cold, so the memo makes the walk
+         dearer than the plain spine it was meant to save. Wrapping periodically
+         keeps the warm-resume benefit -- a resumed level still finds a table
+         within thirty-two steps -- while a cold walk pays at most one insertion
+         per thirty-two levels. *)
+      let mm i s = if i land 31 = 0 then memo s else s in
       let st = match h.core with
         | Defn ({core = Operator (_, e)}, _, Visible, _) ->
-            (memo (scons e s), kept)
+            (mm i (scons e s), kept)
         | Defn ({core = Bpragma (_, e, _)}, _, _, _) ->
-            (memo (scons e s), kept)
+            (mm i (scons e s), kept)
         | _ ->
-            (memo (bump s), Deque.snoc kept h)
+            (mm i (bump s), Deque.snoc kept h)
       in
       states.(i + 1) <- st;
       fold (i + 1) st
     end
   in
+  (* Probe (TLAPM_EXP_TAIL): the prefix cache resumes at l, so an obligation pays
+     for its divergent tail only. Whether the tail is LONG (the sharing is poor)
+     or SHORT but dear (the substitution it applies is deep) decides which of the
+     two costs is worth attacking, and they call for opposite designs. *)
+  if Lazy.force exp_tail_on then begin
+    (* When the prefix is lost, is the material still there? Count how many
+       hypotheses of this context are the SAME NODE as the one at the same
+       position in the best cache entry, ignoring the first mismatch. A high
+       count with a low l means one early divergence throws away a context that
+       is otherwise identical, and the prefix rule is what loses it. *)
+    if n - l > 1000 then begin
+      let (craw, _) = expand_cache.(0) in
+      let m = min n (Array.length craw) in
+      let same = ref 0 in
+      for i = 0 to m - 1 do if raw.(i) == craw.(i) then incr same done ;
+      n_late := !n_late + 1 ;
+      sum_same := !sum_same + !same ;
+      sum_n_late := !sum_n_late + n
+    end ;
+    n_obl_tail := !n_obl_tail + 1 ;
+    sum_ctx := !sum_ctx + n ;
+    sum_tail := !sum_tail + (n - l) ;
+    let b = if n - l = 0 then 0
+            else min 9 (1 + int_of_float (log (float_of_int (n - l))
+                                          /. log 4.0)) in
+    tail_hist.(b) <- tail_hist.(b) + 1
+  end ;
   let (s, context) = prep_time t_exp_tail (fold l) states.(l) in
   let active = prep_time t_exp_active (app_expr s) sq.active in
-  expand_cache := (raw, states);
+  expand_cache.(!expand_cache_next) <- (raw, states);
+  expand_cache_next := (!expand_cache_next + 1) mod expand_cache_size;
   { ob with obl = { ob.obl with core = { context ; active } } }
 
 (*
