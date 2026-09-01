@@ -37,10 +37,16 @@ end;;
 
 module SymbolMap = Map.Make (OrderedSymbol)
 
-let symbol_commute sym_map =
+(* [skip] answers whether a subexpression is known to contain none of the
+   symbols of [sym_map]; such a subexpression is returned as it stands,
+   which also spares the rebuild a mapping visitor performs on every node
+   it descends through. *)
+let symbol_commute ?(skip = fun _ -> false) sym_map =
   let visitor = object
     inherit [unit] Expr.Visit.map as super
     method expr scx e =
+      if skip e then e
+      else
       try
         let (ivisitor,stripper) = SymbolMap.find e sym_map in
         ivisitor#expr scx (stripper e)

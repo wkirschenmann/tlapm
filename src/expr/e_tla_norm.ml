@@ -70,10 +70,21 @@ let expand_fairness =
   fun scx e ->
     visitor#expr scx e
 
+(* An expression of TLA+ level at most 1 -- constant or state -- contains
+   no `UNCHANGED`, no `[A]_v` or `<<A>>_v` and no fairness, by definition of
+   the levels, so neither visitor below has anything to rewrite inside it.
+   Returning it as it stands also spares the rebuild that a mapping visitor
+   performs on every node it descends through.  The test is conservative:
+   an expression that carries no level annotation is visited as before. *)
+let no_action_fragment e =
+  E_levels.has_level e && E_levels.get_level e <= 1
+
 let expand_unchanged =
   let visitor = object (self : 'self)
     inherit [unit] E_visit.map as super
-    method expr scx e = match e.core with
+    method expr scx e =
+      if no_action_fragment e then e else
+      match e.core with
       | Apply ({ core = Internal B.UNCHANGED }, [e]) ->
           rewrite_unch e
       | _ -> super#expr scx e
@@ -86,6 +97,7 @@ let expand_action =
     inherit [unit] E_visit.map as super
     method expr scx e =
       let dest = e in
+      if no_action_fragment e then e else
       match e.core with
         | Sub (Box, e, v) ->
             let e = self#expr scx e in

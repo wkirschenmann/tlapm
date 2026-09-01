@@ -281,7 +281,12 @@ let process_eob ob =
   let ob = act 1 (Expr.SubstOp.compute_subst cx) ob in
   let skip = low && Lazy.force levelskip in
   let ob = if skip then ob else act 2 (expand_prime_defs scx) ob in
-  let ob = if skip then ob else act 3 (symbol_commute mymap) ob in
+  let ob =
+    if skip then ob
+    else
+      (* every symbol of [mymap] -- prime, [], <> -- is of level at least 2 *)
+      let low e = Expr.Levels.has_level e && Expr.Levels.get_level e <= 1 in
+      act 3 (symbol_commute ~skip:low mymap) ob in
   let ob = act 4 (coalesce_modal cx) ob in
   ob
 
