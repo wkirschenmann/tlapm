@@ -657,6 +657,103 @@ let process_module
               !t_ctx !max_ctx !t_defn
               !t_vis_op !t_hid_op !t_bpragma
               !t_local !t_export (!t_vis_op + !t_bpragma) ;
+            (* Probe (TLAPM_DUP_DEFS): how much of an obligation context is the
+               SAME definition arriving twice under two names. An INSTANCE copies
+               the instanced module's body in, renaming every definition to
+               "I!name"; the merge that would have collapsed a redefinition looks
+               the context up BY NAME (m_elab.ml, Definition case), so a copy that
+               the substitution left untouched -- a lemma of a module both sides
+               EXTEND, mentioning none of the instanced parameters -- never meets
+               its original and is carried, expanded and normalised a second time.
+               Bucket by the name with its instance prefixes stripped, compare
+               bodies inside a bucket with the same equality the merge uses, and
+               report what a name-blind merge would have removed. *)
+            (match Sys.getenv_opt "TLAPM_DUP_DEFS" with
+             | None -> ()
+             | Some _ ->
+                let strip nm =
+                  match String.rindex_opt nm '!' with
+                  | Some i -> String.sub nm (i + 1) (String.length nm - i - 1)
+                  | None -> nm in
+                let n_defs = ref 0 and n_dup = ref 0 and n_pref = ref 0
+                and n_obl_seen = ref 0 and sz_defs = ref 0 and sz_dup = ref 0 in
+                (* Where the material comes from: a name's number of "!" is how many
+                   INSTANCE hops copied it here. Depth 0 is the module's own, depth 1
+                   one instantiation, depth 2 an instantiation of an instantiating
+                   module. If a layered specification pays for its layers, the nodes
+                   are at the deep end. *)
+                let by_depth = Array.make 8 0 and nodes_depth = Array.make 8 0 in
+                let depth nm =
+                  let d = ref 0 in
+                  String.iter (fun c -> if c = '!' then incr d) nm ;
+                  min !d 7 in
+                (* Counting definitions understates the prize: expansion and
+                   normalisation cost what a body CONTAINS, and an instantiated
+                   library theorem is far bigger than the average definition. Walk
+                   the body once and weigh it in nodes. *)
+                let body_size e =
+                  let n = ref 0 in
+                  let v = object (self : 'self)
+                    inherit [unit] Expr.Visit.iter as super
+                    method! expr scx e = incr n ; super#expr scx e
+                  end in
+                  (try v#expr ((), Deque.empty) e with _ -> ()) ;
+                  !n in
+                Array.iter (fun ob ->
+                  incr n_obl_seen ;
+                  let ctx = ob.Proof.T.obl.core.context in
+                  let sz = Deque.size ctx in
+                  let buckets : (string, hyp list ref) Hashtbl.t =
+                    Hashtbl.create 64 in
+                  Deque.iter (fun i h ->
+                    match h.core with
+                    | Defn ({core = Operator (nm, _)}, _, _, _) ->
+                        incr n_defs ;
+                        if String.contains nm.core '!' then incr n_pref ;
+                        (* Two copies of one definition sit at two depths, so their
+                           de Bruijn indices differ and a raw comparison calls them
+                           different. Shift both to the end of the context first --
+                           the same normalisation the merge in m_elab does before
+                           it compares. *)
+                        let h = Expr.Subst.app_hyp
+                                  (Expr.Subst.shift (sz - i)) h in
+                        let k = strip nm.core in
+                        let seen =
+                          match Hashtbl.find_opt buckets k with
+                          | Some r -> r
+                          | None -> let r = ref [] in Hashtbl.add buckets k r; r in
+                        let w =
+                          match h.core with
+                          | Defn ({core = Operator (_, e)}, _, _, _) -> body_size e
+                          | _ -> 1 in
+                        sz_defs := !sz_defs + w ;
+                        let dp = depth nm.core in
+                        by_depth.(dp) <- by_depth.(dp) + 1 ;
+                        nodes_depth.(dp) <- nodes_depth.(dp) + w ;
+                        if List.exists (fun g -> Expr.Eq.hyp g h) !seen
+                        then (incr n_dup ; sz_dup := !sz_dup + w)
+                        else seen := h :: !seen
+                    | _ -> ()) ctx) fin.final_obs ;
+                Printf.eprintf
+                  "[DUP_DEFS] module=%s obligations=%d ctx_defs=%d \
+                   instance_renamed=%d duplicate_bodies=%d (%.1f%% of defs) \
+                   nodes=%d dup_nodes=%d (%.1f%% of nodes)\n%!"
+                  t.core.name.core !n_obl_seen !n_defs !n_pref !n_dup
+                  (if !n_defs = 0 then 0.0
+                   else 100.0 *. float_of_int !n_dup /. float_of_int !n_defs)
+                  !sz_defs !sz_dup
+                  (if !sz_defs = 0 then 0.0
+                   else 100.0 *. float_of_int !sz_dup /. float_of_int !sz_defs) ;
+                Printf.eprintf "[DUP_DEFS]   by instance depth:%s\n%!"
+                  (String.concat ""
+                     (List.filter_map (fun d ->
+                        if by_depth.(d) = 0 then None
+                        else Some (Printf.sprintf "  d%d: %d defs %d nodes (%.1f%%)"
+                                     d by_depth.(d) nodes_depth.(d)
+                                     (if !sz_defs = 0 then 0.0
+                                      else 100.0 *. float_of_int nodes_depth.(d)
+                                           /. float_of_int !sz_defs)))
+                        [0;1;2;3;4;5;6;7]))) ;
             if by_frag <> [] then
               Printf.eprintf
                 "[TRACE_DEFS]   by-fragment (ctx-def occurrences): %s\n%!"
