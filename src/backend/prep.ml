@@ -312,14 +312,36 @@ let hyp_fvs h = match h.core with
       Some Util.Coll.Is.empty
   | _ -> None
 
-(* Prunable EARLY: hidden operator and pragma definitions only.  The seed of
-   [prune_context] also drops unreferenced hidden facts, but that pass runs
-   after the triviality check, which discharges a support obligation from a
-   hidden fact equal to the goal -- a use that follows no de Bruijn
-   reference, so reachability does not see it.  Hidden facts are therefore
-   substituted through as before.  Pragma definitions are excluded too: the
-   fold below inlines a `Bpragma` whatever its visibility, so replacing one
-   would substitute the marker into every reference to it. *)
+(* Prunable EARLY: an unreachable HIDDEN operator definition.
+
+   Widening this to visible definitions as well -- which is what would be
+   needed for the marking to reach [prune_context]'s 79% drop rate, since a
+   visible definition is inlined and never adjoined to the kept context --
+   was measured and REJECTED: it breaks the shipped obligations on ten of
+   the fourteen specifications of the golden gate.  The reasoning below
+   records why the narrow rule is what remains.
+
+   Seeding a visible definition as live -- the obvious reading of
+   [prune_context]'s seed, which only ever sees hidden ones -- makes the
+   closure keep nearly the whole context: a module's own definitions are
+   visible, they reference each other, and the transitive closure from them
+   reaches everything.  Measured that way, the analysis marked 3.2% of the
+   tail while [prune_context] drops 79% of the slots, 1.8 million reachable
+   hidden definitions being reached from visible ones alone.
+
+   The reason [prune_context] is entitled to a smaller seed is that by the
+   time it runs, a visible definition is no longer a hypothesis at all: the
+   fold below inlines it into the substitution and never adjoins it to the
+   kept context.  What survives is its expansion, inside whatever referenced
+   it.  So in raw space a visible definition must be treated exactly like a
+   hidden one -- live only when something reaches it -- and an unreachable
+   one is worth replacing too, since its body is expanded for nothing.
+
+   Two exclusions stay.  Hidden FACTS are substituted through as before: the
+   triviality check runs before the pruning pass and discharges a support
+   obligation from a hidden fact equal to the goal, a use that follows no de
+   Bruijn reference.  Pragma definitions are never replaced: they are few,
+   and the fold inlines a `Bpragma` whatever its visibility. *)
 let prunable h = match h.core with
   | Defn ({core = Operator _}, _, Hidden, _) -> true
   | _ -> false
@@ -403,15 +425,6 @@ let expand_defs_cached ob =
         end
       done ;
       let keep = raw_keep raw pfvs (Some (Expr.Collect.fvs sq.active)) l in
-      if Lazy.force prep_times_on then begin
-        n_praw_tail := !n_praw_tail + (n - l) ;
-        for i = l to n - 1 do
-          if not keep.(i) then incr n_praw_marked
-          else if prunable raw.(i) then incr n_praw_alive
-        done ;
-        for i = l to n - 1 do
-          if pfvs.(i) = None then incr n_praw_opaque done
-      end ;
       (keep, pph)
     end ()
   in
@@ -2176,6 +2189,65 @@ let () = at_exit (fun () ->
   if Lazy.force prep_times_on then
     Printf.eprintf "[PREP_TIMES] %-18s %8.3f s\n%!" "const:mirror" !t_const_mirror)
 
+(* The constness annotation of a hypothesis does not depend on the
+   VISIBILITY of the hypotheses before it, nor on its own: the mapping
+   visitor carries [vis] through untouched (`E_visit.map#hyp`), and the
+   predicate reads a definition as `Defn (_, _, _, _)` and a fact as
+   `Fact (e, _, _)` (`Expr.Constness`).  So the prefix scan below need not
+   stop where two contexts differ only by a visibility -- which, since a
+   step's `BY DEF` flips exactly one module-level definition, is where they
+   usually first differ, at index 116 of a 1 304-hypothesis context on the
+   corpus measured.
+
+   Resuming across such a position costs one node: the annotated hypothesis
+   cached for the other visibility is re-stamped with this one's.  The
+   re-stamp is memoized by name and visibility, as `Proof.Gen.set_defn`
+   memoizes the raw rewrite, so the annotated context stays physically
+   shared across obligations and the caches downstream still resume on it. *)
+let same_but_visibility h1 h2 =
+  h1 == h2 ||
+  (h1.props == h2.props &&
+   match h1.core, h2.core with
+     | Defn (d1, wd1, _, ex1), Defn (d2, wd2, _, ex2) ->
+         d1 == d2 && wd1 = wd2 && ex1 = ex2
+     | Fact (e1, _, t1), Fact (e2, _, t2) -> e1 == e2 && t1 = t2
+     | _ -> false)
+
+let revis_memo : (string * visibility, (hyp * hyp) list) Hashtbl.t =
+  Hashtbl.create 251
+
+let revis_key raw = match raw.core with
+  | Defn ({core = (Operator (nm, _) | Bpragma (nm, _, _)
+                  | Instance (nm, _) | Recursive (nm, _))}, _, vis, _) ->
+      Some (nm.core, vis)
+  | _ -> None
+
+(* [ann] is the annotated form of a hypothesis physically equal to [raw] up
+   to visibility; return the annotated form carrying [raw]'s visibility. *)
+let revisibilize raw ann =
+  match raw.core, ann.core with
+    | Defn (_, _, v, _), Defn (d, wd, v', ex) when v <> v' ->
+        let rebuild () = Defn (d, wd, v, ex) @@ ann in
+        begin match revis_key raw with
+          | None -> rebuild ()
+          | Some key ->
+              let cands = try Hashtbl.find revis_memo key with Not_found -> [] in
+              let rec find = function
+                | (a, o) :: _ when a == ann -> Some o
+                | _ :: tl -> find tl
+                | [] -> None
+              in
+              begin match find cands with
+                | Some o -> o
+                | None ->
+                    let o = rebuild () in
+                    Hashtbl.replace revis_memo key ((ann, o) :: cands) ;
+                    o
+              end
+        end
+    | Fact (_, v, _), Fact (e, v', tm) when v <> v' -> Fact (e, v, tm) @@ ann
+    | _ -> ann
+
 let add_constness ob =
   if Params.debugging "noprepcache" then add_constness_nocache ob
   else begin
@@ -2187,17 +2259,17 @@ let add_constness ob =
       let (craw, cann) = !constness_cache in
       let m = min n (Array.length craw) in
       let l = ref 0 in
-      while !l < m && raw.(!l) == craw.(!l) do incr l done;
+      while !l < m && same_but_visibility raw.(!l) craw.(!l) do incr l done;
       let l = !l in
       if Sys.getenv_opt "TLAPM_PREP_SHARE" <> None then
         Printf.eprintf "[CONST_CACHE] hit=%d/%d\n%!" l n;
-      let rec take k lst =
+      let rec take k i lst =
         if k = 0 then []
         else match lst with
-          | x :: xs -> x :: take (k - 1) xs
+          | x :: xs -> revisibilize raw.(i) x :: take (k - 1) (i + 1) xs
           | [] -> assert false
       in
-      let ann_prefix = take l cann in
+      let ann_prefix = take l 0 cann in
       let scx = ((), Deque.of_list ann_prefix) in
       let suffix = Deque.of_list (Array.to_list (Array.sub raw l (n - l))) in
       (raw, scx, suffix, ann_prefix)
