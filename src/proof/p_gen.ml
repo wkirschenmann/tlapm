@@ -47,11 +47,71 @@ let get_stats () = {
   suppressed = List.rev !Stats.suppressed ;
 }
 
+(* Stabilizer for the visibility rewrite below.
+
+   [set_defn] is what a USE/HIDE DEF does: it replaces one hypothesis of the
+   context by the same definition with another visibility.  The rewrite is a
+   pure function of the hypothesis and the requested visibility, but a fresh
+   node per call makes the contexts of two SIBLING steps -- which apply the
+   same directive to the same module-level definition -- differ at that one
+   index, and the preparation caches, which resume on the physically shared
+   (==) prefix, then stop there and refold the whole remaining context.
+   Measured on a 28 818-obligation specification: one such rewrite at index
+   116 of a 1 304-hypothesis context, with all 1 178 following hypotheses
+   physically identical, on a fifth of the obligations.
+
+   Two hypotheses are kept: a definition already at the requested visibility
+   is returned untouched, and the node rebuilt for a previous step is reused
+   whenever the same input node is rewritten to the same visibility. *)
+let setdefn_hit = ref 0
+let setdefn_miss = ref 0
+let () = at_exit (fun () ->
+  if Sys.getenv_opt "TLAPM_RAW_SHARE" <> None then
+    Printf.eprintf "[SETDEFN] hit=%d miss=%d\n%!" !setdefn_hit !setdefn_miss)
+
+(* Keyed by the defined operator's name and the requested visibility, then
+   scanned for the physically same input node: a definition name is rewritten
+   to a given visibility by every step that names it in a BY DEF, and those
+   steps are spread over the whole module, so a bounded most-recently-used
+   table would miss exactly the repeats that matter. *)
+let setdefn_memo : (string * visibility, (hyp * hyp) list) Hashtbl.t =
+  Hashtbl.create 251
+
+let setdefn_memo_off = lazy (Sys.getenv_opt "TLAPM_NO_SDMEMO" <> None)
+
+let defn_name d = match d.core with
+  | Operator (nm, _) | Bpragma (nm, _, _)
+  | Instance (nm, _) | Recursive (nm, _) -> Some nm.core
+
+let setdefn_stable h d vis rebuild =
+  match (if Lazy.force setdefn_memo_off then None else defn_name d) with
+    | None -> rebuild ()
+    | Some nm ->
+        let key = (nm, vis) in
+        let cands = try Hashtbl.find setdefn_memo key with Not_found -> [] in
+        let rec find = function
+          | (hi, ho) :: _ when hi == h -> Some ho
+          | _ :: tl -> find tl
+          | [] -> None
+        in
+        begin match find cands with
+          | Some ho -> incr setdefn_hit ; ho
+          | None ->
+              incr setdefn_miss ;
+              let ho = rebuild () in
+              Hashtbl.replace setdefn_memo key ((h, ho) :: cands) ;
+              ho
+        end
+
 let set_defn vis l df =
   let rec doit n l = match n with
     | 0 -> begin
         match Deque.front l with
-          | Some ({core = Defn (d, wd, _, ex)} as h, l) -> Deque.cons (Defn (d, wd, vis, ex) @@ h) l
+          | Some ({core = Defn (_, _, ovis, _)} as h, l) when ovis = vis ->
+              Deque.cons h l
+          | Some ({core = Defn (d, wd, _, ex)} as h, l) ->
+              Deque.cons
+                (setdefn_stable h d vis (fun () -> Defn (d, wd, vis, ex) @@ h)) l
           | Some (e, _) ->
               if !Params.verbose then
                 Util.eprintf ~at:df "Indicated point is not a definition, but %t!\n%!"
