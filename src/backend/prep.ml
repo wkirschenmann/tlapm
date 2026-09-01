@@ -237,6 +237,16 @@ let () = at_exit begin fun () ->
   end
 end
 
+(* Period at which the expansion substitution is wrapped in a memo, a power
+   of two; 0 never wraps.  Tunable only to measure: consecutive [Bump]s
+   collapse into one (`E_subst.bumpn`), and a memo wrapper interrupts that
+   collapsing, so the period trades the depth of the spine against the cost
+   of the tables. *)
+let memo_period =
+  match Sys.getenv_opt "TLAPM_MEMO_PERIOD" with
+  | Some v -> (try max 0 (int_of_string v) with _ -> 32)
+  | None -> 32
+
 let expand_defs_cached ob =
   let sq = ob.obl.core in
   let (raw, l, states, best_k) = prep_time t_exp_discover begin fun () ->
@@ -277,7 +287,8 @@ let expand_defs_cached ob =
          keeps the warm-resume benefit -- a resumed level still finds a table
          within thirty-two steps -- while a cold walk pays at most one insertion
          per thirty-two levels. *)
-      let mm i s = if i land 31 = 0 then memo s else s in
+      let mm i s =
+        if memo_period > 0 && i land (memo_period - 1) = 0 then memo s else s in
       let st = match h.core with
         | Defn ({core = Operator (_, e)}, _, Visible, _) ->
             (mm i (scons e s), kept)
