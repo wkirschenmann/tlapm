@@ -1761,6 +1761,65 @@ let add_constness_nocache ob =
    [expand_defs_cached] effective. *)
 let constness_cache : (Expr.T.hyp array * Expr.T.hyp list) ref = ref ([||], [])
 
+(* The constness annotation of a hypothesis does not depend on the
+   VISIBILITY of the hypotheses before it, nor on its own: the mapping
+   visitor carries [vis] through untouched (`E_visit.map#hyp`), and the
+   predicate reads a definition as `Defn (_, _, _, _)` and a fact as
+   `Fact (e, _, _)` (`Expr.Constness`).  So the prefix scan below need not
+   stop where two contexts differ only by a visibility -- which, since a
+   step's `BY DEF` flips exactly one module-level definition, is where they
+   usually first differ, at index 116 of a 1 304-hypothesis context on the
+   corpus measured.
+
+   Resuming across such a position costs one node: the annotated hypothesis
+   cached for the other visibility is re-stamped with this one's.  The
+   re-stamp is memoized by name and visibility, as `Proof.Gen.set_defn`
+   memoizes the raw rewrite, so the annotated context stays physically
+   shared across obligations and the caches downstream still resume on it. *)
+let same_but_visibility h1 h2 =
+  h1 == h2 ||
+  (h1.props == h2.props &&
+   match h1.core, h2.core with
+     | Defn (d1, wd1, _, ex1), Defn (d2, wd2, _, ex2) ->
+         d1 == d2 && wd1 = wd2 && ex1 = ex2
+     | Fact (e1, _, t1), Fact (e2, _, t2) -> e1 == e2 && t1 = t2
+     | _ -> false)
+
+let revis_memo : (string * visibility, (hyp * hyp) list) Hashtbl.t =
+  Hashtbl.create 251
+
+let revis_key raw = match raw.core with
+  | Defn ({core = (Operator (nm, _) | Bpragma (nm, _, _)
+                  | Instance (nm, _) | Recursive (nm, _))}, _, vis, _) ->
+      Some (nm.core, vis)
+  | _ -> None
+
+(* [ann] is the annotated form of a hypothesis physically equal to [raw] up
+   to visibility; return the annotated form carrying [raw]'s visibility. *)
+let revisibilize raw ann =
+  match raw.core, ann.core with
+    | Defn (_, _, v, _), Defn (d, wd, v', ex) when v <> v' ->
+        let rebuild () = Defn (d, wd, v, ex) @@ ann in
+        begin match revis_key raw with
+          | None -> rebuild ()
+          | Some key ->
+              let cands = try Hashtbl.find revis_memo key with Not_found -> [] in
+              let rec find = function
+                | (a, o) :: _ when a == ann -> Some o
+                | _ :: tl -> find tl
+                | [] -> None
+              in
+              begin match find cands with
+                | Some o -> o
+                | None ->
+                    let o = rebuild () in
+                    Hashtbl.replace revis_memo key ((ann, o) :: cands) ;
+                    o
+              end
+        end
+    | Fact (_, v, _), Fact (e, v', tm) when v <> v' -> Fact (e, v, tm) @@ ann
+    | _ -> ann
+
 let add_constness ob =
   if Params.debugging "noprepcache" then add_constness_nocache ob
   else begin
@@ -1770,15 +1829,15 @@ let add_constness ob =
     let (craw, cann) = !constness_cache in
     let m = min n (Array.length craw) in
     let l = ref 0 in
-    while !l < m && raw.(!l) == craw.(!l) do incr l done;
+    while !l < m && same_but_visibility raw.(!l) craw.(!l) do incr l done;
     let l = !l in
-    let rec take k lst =
+    let rec take k i lst =
       if k = 0 then []
       else match lst with
-        | x :: xs -> x :: take (k - 1) xs
+        | x :: xs -> revisibilize raw.(i) x :: take (k - 1) (i + 1) xs
         | [] -> assert false
     in
-    let ann_prefix = take l cann in
+    let ann_prefix = take l 0 cann in
     let visitor = object (self: 'self)
       inherit Expr.Constness.const_visitor
     end in
