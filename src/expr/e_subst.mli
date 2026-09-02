@@ -8,6 +8,11 @@ open E_t
 
 type sub
 
+val memo : sub -> sub
+(* Same substitution, with an index-lookup memo attached (see the
+   implementation).  Worth it only for deep substitutions that are
+   applied to many expressions — e.g. prefix-cached expansion states. *)
+
 val shift : int -> sub
 val scons : expr -> sub -> sub
 val ssnoc : sub -> expr -> sub

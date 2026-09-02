@@ -104,13 +104,32 @@ let expand_defs_cached ob =
     if i = n then st
     else begin
       let h = app_hyp s raw.(i) in
+      (* Memoize every thirty-second level, not every one.
+
+         [memo] is an evaluation cache on the substitution (see
+         Expr.Subst.memo): it caches the resolved core of each index.
+         Wrapping at EVERY level makes a resolution that walks i levels
+         perform i hash-table insertions, and on an obligation that starts
+         from an empty prefix -- measured: a fifth of them, carrying nearly
+         all of the cost -- every table is cold, so the memo is dearer than
+         the plain spine it was meant to save.  Wrapping periodically keeps
+         the warm-resume benefit, since a resumed level still finds a table
+         within thirty-two steps, while a cold walk pays at most one
+         insertion per thirty-two levels.
+
+         The period was swept on a 28 818-obligation specification: never
+         1 986 s, every 8th 721 s, every 32nd 647 s, every 128th 762 s.
+         Consecutive [Bump]s collapse (`bumpn`) but the [Cons] entries of
+         the visible definitions do not, which is why not memoizing at all
+         is the worst of the four. *)
+      let mm i s = if i land 31 = 0 then memo s else s in
       let st = match h.core with
         | Defn ({core = Operator (_, e)}, _, Visible, _) ->
-            (scons e s, kept)
+            (mm i (scons e s), kept)
         | Defn ({core = Bpragma (_, e, _)}, _, _, _) ->
-            (scons e s, kept)
+            (mm i (scons e s), kept)
         | _ ->
-            (bump s, Deque.snoc kept h)
+            (mm i (bump s), Deque.snoc kept h)
       in
       states.(i + 1) <- st;
       fold (i + 1) st
