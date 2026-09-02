@@ -159,9 +159,19 @@ def load_sweep(path=None, boot=None):
     # end to end on a second machine, that measurement is the deliberate one, and
     # leaving the choice to dictionary order makes the document depend on which
     # row a reader's csv module happened to see first.
+    #
+    # Only a DURATION counts toward the vote, for the same reason durations are
+    # the only readings confined to their own boot: a cell the address-space cap
+    # refused, or the ceiling stopped, says the same thing on any host and is
+    # admitted from any boot below.  Counting those would let a host win the line
+    # on cells it did not actually time -- which is how a chain re-measured end to
+    # end on one machine lost to an older host that had merely watched the same
+    # nine points run out of memory.
     cover = collections.defaultdict(set)
     for r in data:
         for fld in fields_of(r):
+            if int(r[fld + "_rc"]) != 0:
+                continue
             cover[(r["corpus"], fld, r["boot"])].add(r["point"])
     line_boot = {}
     for (cp, fld, b), pts in cover.items():
