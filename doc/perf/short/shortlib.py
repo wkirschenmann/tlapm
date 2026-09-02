@@ -207,8 +207,15 @@ def load_sweep(path=None, boot=None):
             # rather than a duration. The cap is 12 GB on any machine, so "the cap
             # refused an allocation" transfers between hosts; "it finished in 1035 s"
             # does not, unless the two hosts have a shared reading that agrees.
-            if r["phase"] != "L":
-                return False
+            #
+            # What decides this is the reading, not the phase label it was filed
+            # under.  Gating it on one label was a leftover from the campaign where
+            # only phase L ever spanned two hosts; it now costs a line every time
+            # the container restarts mid-march, because the segment measured after
+            # the restart carries a different label and is refused however well its
+            # shared cell agrees.  hosts_agree is the safeguard, and it demands a
+            # reading of at least a minute agreeing within ANCHOR_TOL on EVERY cell
+            # the two hosts share -- a much stronger test than a string comparison.
             v = _verdict(int(r[fld + "_rc"]))
             if v == ABORT:
                 return True
@@ -228,10 +235,19 @@ def load_sweep(path=None, boot=None):
         out[k]["sha"] = r["sha"]
         g, grc = (int(r["gen_ms"]), int(r["gen_rc"])) if take_gen else (-2, 0)
         p_, prc = (int(r["prep_ms"]), int(r["prep_rc"])) if take_prep else (-2, 0)
-        if g != -2:
+        # A cell can end up with a reading from its own boot AND one bridged in
+        # from another host.  The bridged reading is what lets the line survive a
+        # restart, but where the line's own boot measured the cell, that is the
+        # reading the line is drawn from; otherwise which of the two appears would
+        # depend on the order the rows happen to sit in the file.
+        on_gen = r["boot"] == line_boot.get((r["corpus"], "gen"))
+        on_prep = r["boot"] == line_boot.get((r["corpus"], "prep"))
+        if g != -2 and (on_gen or not out[k].get("_gen_own")):
             out[k]["gen"] = _verdict(grc) or g
             out[k]["gen_raw"] = g
-        if p_ != -2:
+            out[k]["_gen_own"] = on_gen
+        if p_ != -2 and (on_prep or not out[k].get("_prep_own")):
+            out[k]["_prep_own"] = on_prep
             v = _verdict(prc)
             out[k]["prep"] = v or p_
             out[k]["peak"] = v or int(r["peak_kb"])
