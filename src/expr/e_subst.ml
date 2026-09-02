@@ -41,13 +41,40 @@ let bumpn n = function
 
 let bump s = bumpn 1 s
 
+(* [map_share f l] is [List.map f l], returning the list ITSELF when [f]
+   left every element physically unchanged.  Substitution is the identity on
+   most of what it traverses -- a hypothesis that refers to nothing the
+   substitution touches comes back equal to itself -- and rebuilding it
+   allocates a fresh tree that no longer compares physically equal to the
+   one the preparation caches recorded for the previous obligation. *)
+let rec map_share f = function
+  | [] -> []
+  | (x :: xs) as l ->
+      let x' = f x in
+      let xs' = map_share f xs in
+      if x' == x && xs' == xs then l else x' :: xs'
+
 let rec app_expr s oe = match oe.core with
   | ( Internal _ | Opaque _ | String _ | Num _ | At _ ) ->
       oe
   | Ix n ->
-      app_ix s (n @@ oe)
+      (* [app_ix] answers [Ix n] itself under a shift of zero and inside a
+         run of bumps; skip the two allocations that would rebuild it. *)
+      begin match s with
+        | Shift 0 -> oe
+        | Bump (k, _) when n <= k -> oe
+        | _ -> app_ix s (n @@ oe)
+      end
   | Apply (op, fs) ->
-      normalize (app_expr s op) (app_exprs s fs) @@ oe
+      let op' = app_expr s op in
+      let fs' = app_exprs s fs in
+      (* [normalize] rewrites an application whose operator is a [Lambda]
+         (beta) or an [Apply] (flattening), and one with no argument; the
+         node can only be kept when it is none of those. *)
+      if op' == op && fs' == fs && fs != []
+         && (match op.core with Lambda _ | Apply _ -> false | _ -> true)
+      then oe
+      else normalize op' fs' @@ oe
   | Bang (e, sels) ->
       Bang (app_expr s e, List.map (app_sel s) sels) @@ oe
   | Lambda (vs, e) ->
@@ -56,16 +83,21 @@ let rec app_expr s oe = match oe.core with
       let (s, ds) = app_defns s ds in
       Let (ds, app_expr s e) @@ oe
   | Sequent sq ->
-      Sequent (app_sequent s sq) @@ oe
+      let sq' = app_sequent s sq in
+      if sq'.context == sq.context && sq'.active == sq.active then oe
+      else Sequent sq' @@ oe
   | With (e, meth) ->
       With (app_expr s e, meth) @@ oe
   | If (e, f, g) ->
-      If (app_expr s e, app_expr s f, app_expr s g) @@ oe
+      let e' = app_expr s e and f' = app_expr s f and g' = app_expr s g in
+      if e' == e && f' == f && g' == g then oe else If (e', f', g') @@ oe
   | List (q, es) ->
-      List (q, app_exprs s es) @@ oe
-  | Quant (q, bs, e) ->
-      let (s, bs) = app_bounds s bs in
-      Quant (q, bs, app_expr s e) @@ oe
+      let es' = app_exprs s es in
+      if es' == es then oe else List (q, es') @@ oe
+  | Quant (q, bs0, e) ->
+      let (s, bs) = app_bounds s bs0 in
+      let e' = app_expr s e in
+      if bs == bs0 && e' == e then oe else Quant (q, bs, e') @@ oe
   | Tquant (q, vs, e) ->
       Tquant (q, vs, app_expr (bumpn (List.length vs) s) e) @@ oe
   | Choose (v, optdom, e) ->
@@ -77,18 +109,23 @@ let rec app_expr s oe = match oe.core with
       let (s, bs) = app_bounds s bs in
       SetOf (app_expr s e, bs) @@ oe
   | SetEnum es ->
-      SetEnum (app_exprs s es) @@ oe
+      let es' = app_exprs s es in
+      if es' == es then oe else SetEnum es' @@ oe
   | Arrow (a, b) ->
-      Arrow (app_expr s a, app_expr s b) @@ oe
+      let a' = app_expr s a and b' = app_expr s b in
+      if a' == a && b' == b then oe else Arrow (a', b') @@ oe
   | Fcn (bs, e) ->
       let (s, bs) = app_bounds s bs in
       Fcn (bs, app_expr s e) @@ oe
   | FcnApp (f, es) ->
-      FcnApp (app_expr s f, app_exprs s es) @@ oe
+      let f' = app_expr s f and es' = app_exprs s es in
+      if f' == f && es' == es then oe else FcnApp (f', es') @@ oe
   | Product es ->
-      Product (app_exprs s es) @@ oe
+      let es' = app_exprs s es in
+      if es' == es then oe else Product es' @@ oe
   | Tuple es ->
-      Tuple (app_exprs s es) @@ oe
+      let es' = app_exprs s es in
+      if es' == es then oe else Tuple es' @@ oe
   | Rect fs ->
       Rect (List.map (fun (v, e) -> (v, app_expr s e)) fs) @@ oe
   | Record fs ->
@@ -96,7 +133,8 @@ let rec app_expr s oe = match oe.core with
   | Except (e, xs) ->
       Except (app_expr s e, app_xs s xs) @@ oe
   | Dot (e, f) ->
-      Dot (app_expr s e, f) @@ oe
+      let e' = app_expr s e in
+      if e' == e then oe else Dot (e', f) @@ oe
   | Sub (m, e, f) ->
       Sub (m, app_expr s e, app_expr s f) @@ oe
   | Tsub (m, e, f) ->
@@ -106,7 +144,9 @@ let rec app_expr s oe = match oe.core with
   | Case (arms, oth) ->
       Case (List.map (fun (e, f) -> (app_expr s e, app_expr s f)) arms,
             Option.map (app_expr s) oth) @@ oe
-  | Parens (e, rig) -> Parens (app_expr s e, rig) @@ oe
+  | Parens (e, rig) ->
+      let e' = app_expr s e in
+      if e' == e then oe else Parens (e', rig) @@ oe
   | QuantTuply _
   | ChooseTuply _
   | SetStTuply _
@@ -114,7 +154,7 @@ let rec app_expr s oe = match oe.core with
   | FcnTuply _ -> assert false
 
 and app_exprs s es =
-  List.map (fun e -> app_expr s e) es
+  map_share (fun e -> app_expr s e) es
 
 and normalize ?(cx = Deque.empty) op args = match op.core with
   | Lambda (vs, e) ->
@@ -150,10 +190,12 @@ and app_bdom s = function
   | d -> d
 
 and app_bounds s bs =
-  let bs = List.map begin
-    fun (v, k, dom) -> match dom with
-      | Domain d -> (v, k, Domain (app_expr s d))
-      | _ -> (v, k, dom)
+  let bs = map_share begin
+    fun ((v, k, dom) as b) -> match dom with
+      | Domain d ->
+          let d' = app_expr s d in
+          if d' == d then b else (v, k, Domain d')
+      | _ -> b
   end bs in
   let s = bumpn (List.length bs) s in
   (s, bs)
@@ -202,13 +244,18 @@ and app_ix s n =
   go s n.core
 
 and app_defn s d =
-  { d with core = app_defn_ s d.core }
+  let c = app_defn_ s d.core in
+  if c == d.core then d else { d with core = c }
 
-and app_defn_ s = function
-  | Recursive (nm, shp) -> Recursive (nm, shp)
-  | Operator (nm, e) -> Operator (nm, app_expr s e)
+and app_defn_ s dc = match dc with
+  | Recursive (_, _) -> dc
+  | Operator (nm, e) ->
+      let e' = app_expr s e in
+      if e' == e then dc else Operator (nm, e')
   | Instance (nm, inst) -> Instance (nm, app_instance s inst)
-  | Bpragma (nm, e, l) -> Bpragma (nm, app_expr s e, l)
+  | Bpragma (nm, e, l) ->
+      let e' = app_expr s e in
+      if e' == e then dc else Bpragma (nm, e', l)
 
 and app_defns s = function
   | [] -> (s, [])
@@ -225,23 +272,31 @@ and app_sequent s sq =
   let (s, cx) = app_hyps s sq.context in
   { context = cx ; active = app_expr s sq.active }
 
-and app_hyps s cs = match Deque.front cs with
-  | None -> (s, Deque.empty)
+and app_hyps s cs0 = match Deque.front cs0 with
+  | None -> (s, cs0)
   | Some (c, cs) ->
-      let c = app_hyp s c in
-      let (s, cs) = app_hyps (bump s) cs in
-      (s, Deque.cons c cs)
+      let c' = app_hyp s c in
+      let (s, cs') = app_hyps (bump s) cs in
+      (s, if c' == c && cs' == cs then cs0 else Deque.cons c' cs')
 
 and app_hyp s h = match h.core with
-  | Fresh (x, shp, lv, b) -> Fresh (x, shp, lv, app_dom s b) @@ h
+  | Fresh (x, shp, lv, b) ->
+      let b' = app_dom s b in
+      if b' == b then h else Fresh (x, shp, lv, b') @@ h
   | FreshTuply _ -> assert false  (* not implemented *)
-  | Flex v -> Flex v @@ h
-  | Defn (d, wd, us, ex) -> Defn (app_defn s d, wd, us, ex) @@ h
-  | Fact (e, us,tm) -> Fact (app_expr s e, us,tm) @@ h
+  | Flex v -> h
+  | Defn (d, wd, us, ex) ->
+      let d' = app_defn s d in
+      if d' == d then h else Defn (d', wd, us, ex) @@ h
+  | Fact (e, us, tm) ->
+      let e' = app_expr s e in
+      if e' == e then h else Fact (e', us, tm) @@ h
 
-and app_dom s = function
-  | Unbounded -> Unbounded
-  | Bounded (dom, vis) -> Bounded (app_expr s dom, vis)
+and app_dom s d = match d with
+  | Unbounded -> d
+  | Bounded (dom, vis) ->
+      let dom' = app_expr s dom in
+      if dom' == dom then d else Bounded (dom', vis)
 
 let rec app_spine s = function
   | [] -> []
