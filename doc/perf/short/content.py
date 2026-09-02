@@ -56,6 +56,24 @@ PRS = [
      "Every reference to a grammar rule rebuilt the rule at every token position. "
      "Parsing is a small share of the wait on a mid-sized file and a visible one on a "
      "30k-line module, which is why this is last and why it is here at all."),
+
+    ("PR10", "Memoized expansion substitution", "t-thr", ["p18"],
+     "Expanding the visible definitions of a context folds one substitution entry per "
+     "hypothesis, and resolving a de Bruijn index walks that spine. On the contexts an "
+     "<code>INSTANCE</code>-heavy module builds &mdash; sixteen hundred hypotheses is "
+     "ordinary &mdash; that walk is the largest single cost left in preparation."),
+
+    ("PR11", "Visibility-invariant caching", "t-thr", ["p19"],
+     "The preparation caches resume on the physically shared prefix of the previous "
+     "obligation. A step's <code>BY DEF</code> flips the visibility of one module-level "
+     "definition, which stops the scan at that index and refolds everything behind it "
+     "&mdash; although the annotation being cached never reads visibility."),
+
+    ("PR12", "No identity rebuilds", "t-thr", ["p20", "p21"],
+     "Substitution and the mapping visitors rebuilt every node they walked, including "
+     "the ones they left unchanged. Beyond the allocations, that is what made a "
+     "hypothesis surviving a pass compare unequal to the one the caches had recorded, "
+     "so the two changes are one effect and ship together."),
 ]
 
 # per commit: what changes / how to validate / how to switch off
@@ -145,4 +163,24 @@ CM = {
   how="Dump identical.",
   off='No switch. The memoized rules describe the same grammar.'),
 
+
+"p18": dict(
+  what='Expanding the visible definitions of a context builds a substitution with one entry per hypothesis, and index resolution walks that spine linearly. A memo constructor is added to <code>Expr.Subst</code> &mdash; <code>Memo (tbl, s)</code> denotes the same substitution as <code>s</code> and caches the resolved core of each index &mdash; and the fold wraps the substitution every thirty-second level. Wrapping at every level makes a resolution that walks <i>i</i> levels perform <i>i</i> insertions, and on an obligation that starts from an empty prefix every table is cold, so the memo costs more than the spine it replaces.',
+  how='Dump identical. The period was swept on the two largest corpora, each sweep inside one campaign.',
+  off='<code>--debug noprepcache</code> already bypasses the whole cached path. The period is one constant in the fold.'),
+
+"p19": dict(
+  what='The constness annotation of a hypothesis does not depend on the visibility of the hypotheses before it, nor on its own: the mapping visitor carries visibility through untouched and the predicate reads a definition as <code>Defn (_, _, _, _)</code> and a fact as <code>Fact (e, _, _)</code>. The prefix scan therefore continues across a position where two contexts differ only by a visibility, re-stamping the one cached annotated node with this obligation\'s visibility.',
+  how='Dump identical. The re-stamp is memoized by name and visibility, so the annotated context stays physically shared and the caches downstream still resume on it.',
+  off='<code>--debug noprepcache</code>.'),
+
+"p20": dict(
+  what='<code>app_expr</code> rebuilt every node it walked. On an <code>Ix</code> that was two allocations even where the substitution is the identity on that index &mdash; the common case, since <code>app_ix</code> answers <code>Ix n</code> itself under a zero shift and anywhere inside a run of bumps. Every constructor whose rebuild is a pure reassembly now answers the node it was given when no child moved; <code>Apply</code> is guarded, because <code>normalize</code> beta-reduces, flattens and unwraps.',
+  how='Dump identical. The kept node is the one the rebuild would have produced, field for field.',
+  off='No switch. Reverting the commit restores the rebuilds.'),
+
+"p21": dict(
+  what='The same treatment for the generic mapping visitor. A <code>map</code> subclass exists to rewrite a handful of constructs and reaches every other node through <code>super#expr</code>, which rebuilt it identical to itself. This is the half of the pair that pays: it is what makes a subtree a pass leaves alone compare physically equal to the one the caches recorded.',
+  how='Dump identical. Every case that rewrites still rewrites.',
+  off='No switch. Reverting the commit restores the rebuilds.'),
 }

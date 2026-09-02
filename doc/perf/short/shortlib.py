@@ -23,7 +23,7 @@ FAILED = (DNC, CEIL, ABORT)
 ANCHOR_TOL = 0.05
 
 # the 17 measured points, and the pull request each commit belongs to
-POINTS = ["p%02d" % i for i in range(18)]
+POINTS = ["p%02d" % i for i in range(22)]
 PRS = [
     ("PR1", "correctness fixes",      ["p01", "p02", "p03", "p04", "p05"]),
     ("PR2", "deque lookups",          ["p06"]),
@@ -34,17 +34,21 @@ PRS = [
     ("PR7", "linear ENABLED scan",    ["p15"]),
     ("PR8", "editor obligation pool", ["p16"]),
     ("PR9", "memoized grammar rules",  ["p17"]),
+    ("PR10", "memoized expansion substitution", ["p18"]),
+    ("PR11", "visibility-invariant caching",    ["p19"]),
+    ("PR12", "no identity rebuilds",            ["p20", "p21"]),
 ]
 ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS]
 
 OBL = {"tiny": 20, "synth100": 600, "synth300": 1800, "idemo": 2703,
-       "gp2": 5957, "ffi": 9967, "mono": 29965}
+       "gp2": 5957, "ffi": 9967, "dotnet": 28818, "mono": 29965}
 
 # Every corpus this campaign knows how to measure, smallest first.  Which of
 # them actually appear on the curves is decided by the data, not by this list:
 # a corpus with no rows in the sweep would otherwise contribute an empty line
 # and a legend entry pointing at nothing.
-CORPUS_ORDER = ["tiny", "synth100", "synth300", "idemo", "gp2", "ffi", "mono"]
+CORPUS_ORDER = ["tiny", "synth100", "synth300", "idemo", "gp2", "ffi",
+                "dotnet", "mono"]
 
 
 def _corpora_present(path=None):

@@ -40,6 +40,8 @@ CORPUS_META = {
             "a public graph processing development", "graph"),
     "ffi": ("private refinement chain",
             "a private refinement chain", "chain"),
+    "dotnet": ("private binding layer",
+               "a private 28&nbsp;818-obligation binding layer", "binding"),
     "mono": ("private monolith", "a private 30k-line monolith", "monolith"),
 }
 NUMWORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",

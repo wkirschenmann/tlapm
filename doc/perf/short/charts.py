@@ -77,6 +77,10 @@ LABELS = {
     "p15": ("enabled",     True),
     "p16": ("pool",        False),
     "p17": ("grammar",     False),
+    "p18": ("memo/32",     True),
+    "p19": ("const/vis",   True),
+    "p20": ("subst/keep",  True),
+    "p21": ("visit/keep",  True),
 }
 PR_END = set(L.ENDPOINTS)
 
