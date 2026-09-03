@@ -1483,8 +1483,11 @@ def _cm_table(cm):
 
 DROPPED = [
     ("expr/Levels", "resolve de Bruijn reference levels without slicing the context",
-     "0.96&ndash;1.05", "the ratios straddle 1 on every corpus; the deque commit already "
-     "removed most of what this walk cost"),
+     "0.96&ndash;1.05", "the ratios straddle 1 on every corpus &mdash; but against "
+     "<em>main</em> the same commit takes the graph processing development's generation "
+     "from 132.7&nbsp;s to 125.2&nbsp;s, three readings each with no overlap between them. "
+     "It is a real change that this series has already absorbed: the deque commit removed "
+     "most of what the walk cost, and the level cache no longer pins a context"),
     ("backend/toolbox", "single-pass expansion in the result printer",
      "0.99&ndash;1.20", "the one large ratio is a single generation run on the monolith "
      "that the next nine points do not sustain"),
