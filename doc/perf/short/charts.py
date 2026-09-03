@@ -55,7 +55,11 @@ SERIES = [("public synthetic, " + _obl("synth300"), "synth300", PUB,  None),
           # them at this size
           ("public graph processing", "gp2",      PUB,  "1 2 7 2"),
           ("private 30k monolith",    "mono",     PRIV, None),
-          ("private refinement chain","ffi",      PRIV, "5 3")]
+          ("private refinement chain","ffi",      PRIV, "5 3"),
+          # dotted: the third private series needs a pattern that tells itself
+          # apart from a solid line and from a 5-3 dash at this size, and inside
+          # one hue that leaves the dot
+          ("private binding layer",  "dotnet",   PRIV, "1 3")]
 
 # short label per commit, and whether that commit's message cites tlaplus/tlapm#286
 LABELS = {
