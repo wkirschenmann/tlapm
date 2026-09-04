@@ -37,8 +37,14 @@ PRS = [
     ("PR10", "memoized expansion substitution", ["p18"]),
     ("PR11", "visibility-invariant caching",    ["p19"]),
     ("PR12", "no identity rebuilds",            ["p20", "p21"]),
+    # Its commit is p22, and p22 is deliberately not in POINTS: the chain's two
+    # clocks are `--noproving` and `-N`, and a counter on the escaping reports
+    # zero calls under either, because both stop before an obligation reaches a
+    # solver.  A point on those figures would be a copy of the one before it.
+    # The pull request is measured on a run that ships instead.
+    ("PR13", "compiled solver-identifier escaping", ["p22"]),
 ]
-ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS]
+ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS if c]
 
 OBL = {"tiny": 20, "synth100": 600, "synth300": 1800, "idemo": 2703,
        "gp2": 5957, "ffi": 9967, "dotnet": 28818, "mono": 29965}

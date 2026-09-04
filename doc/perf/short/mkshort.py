@@ -1322,7 +1322,7 @@ def _keystroke_caption():
     """The strongest form of the claim about the last pull requests that the data
     supports -- pair by pair, because it turned out not to hold for all of them."""
     rng = {pt: v for (cp, pt), v in L.keystroke_ranges().items() if cp == "ffi"}
-    tail = [c[-1] for _, _, c in L.PRS][-4:]          # the deque's successors at the end
+    tail = [c[-1] for _, _, c in L.PRS if c][-4:]          # the deque's successors at the end
     have = [pt for pt in tail if pt in rng]
     base = ("After the deque, this is the only metric the last pull requests move at "
             "all, and it is why they are in the series: none of them touches the "
@@ -1452,7 +1452,18 @@ LONG_CP = {cp: (n if n.replace(" ", "").isdigit()
 
 
 def _cm_table(cm):
-    """what this commit measured, on every corpus where both sides are numbers"""
+    """what this commit measured, on every corpus where both sides are numbers
+
+    A commit outside POINTS has no cell on the chain, and that is a decision
+    rather than a gap: the chain's two clocks are the preparation and
+    generation passes, and a commit that neither pass executes would draw a
+    copy of the point before it.  Such a commit carries its own measurement in
+    its card instead."""
+    if cm not in L.POINTS:
+        return ('<p style="color:var(--ink-3);font-size:14px">Not on the chain '
+                'figures: neither clock they draw reaches this code. Measured '
+                'on a run that ships to a solver &mdash; see <em>how it is '
+                'validated</em>.</p>')
     i = L.POINTS.index(cm)
     prev = L.POINTS[i - 1]
     rows = []
@@ -1496,8 +1507,7 @@ DROPPED = [
      "negative pair &mdash; not separable"),
     ("Ctx", "logarithmic index lookup", "0.97&ndash;1.06",
      "the lookup is not on a hot path at these context sizes"),
-    ("backend/Smtlib", "compile identifier-escaping regexes once", "0.94&ndash;1.06",
-     "the encoder is a rounding error next to preparation"),
+
     ("expr/Subst", "walk substitution spines in app_ix without allocating",
      "0.96&ndash;1.04", "same"),
     ("backend+encode", "skip identity rebuilds when flattening extracts nothing",

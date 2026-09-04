@@ -74,6 +74,13 @@ PRS = [
      "the ones they left unchanged. Beyond the allocations, that is what made a "
      "hypothesis surviving a pass compare unequal to the one the caches had recorded, "
      "so the two changes are one effect and ship together."),
+
+    ("PR13", "Compiled solver-identifier escaping", "t", ["p22"],
+     "Writing an obligation for a solver escapes every identifier occurrence, and the "
+     "escaping rebuilt its twenty-two regular expressions on each call. It is the one "
+     "change here that the preparation metric cannot see &mdash; that metric stops "
+     "before an obligation reaches a solver &mdash; and it is worth between four and "
+     "six per cent of a full check on a context-heavy module."),
 ]
 
 # per commit: what changes / how to validate / how to switch off
@@ -183,4 +190,9 @@ CM = {
   what='The same treatment for the generic mapping visitor. A <code>map</code> subclass exists to rewrite a handful of constructs and reaches every other node through <code>super#expr</code>, which rebuilt it identical to itself. This is the half of the pair that pays: it is what makes a subtree a pass leaves alone compare physically equal to the one the caches recorded.',
   how='Dump identical. Every case that rewrites still rewrites.',
   off='No switch. Reverting the commit restores the rebuilds.'),
+
+"p22": dict(
+  what='<code>escaped</code> rebuilt all twenty-two identifier-escaping regular expressions on every call, and a call happens once per identifier occurrence while an obligation is written for a solver. They are compiled once, and the escaping is memoized: it is a function of the string alone, and identifiers repeat heavily inside an obligation and across obligations.',
+  how='Output identical &mdash; same list, same order, same replacements. A counter on <code>format_smt</code> measures the cost directly: 23&nbsp;317 calls costing 528&nbsp;ms of a 9.2&nbsp;s check over lines 35&ndash;1200 of the private refinement chain, and 2&nbsp;293 calls costing 55&nbsp;ms of the 1.3&nbsp;s check of the public instance demo. In isolation the escaping costs 14.51&nbsp;&micro;s per call as it stands, 4.10&nbsp;&micro;s with the regexes compiled once, 0.04&nbsp;&micro;s memoized.',
+  off='No switch. The compiled regexes describe the same substitutions.'),
 }

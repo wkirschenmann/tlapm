@@ -85,6 +85,7 @@ LABELS = {
     "p19": ("const/vis",   True),
     "p20": ("subst/keep",  True),
     "p21": ("visit/keep",  True),
+    "p22": ("smt/escape", True),
 }
 PR_END = set(L.ENDPOINTS)
 
