@@ -777,7 +777,13 @@ def iter_band(cp):
     that cannot have moved this metric, or None when fewer than two of them are
     measured on this corpus."""
     d = L.load_iteration_latency()[0]
-    got = [d[(cp, pt)] for pt in NO_SURFACE if (cp, pt) in d]
+    # A ceiling is not a duration, and a band meant to bound the spread of
+    # durations cannot be computed from one.  On a corpus whose inert commits
+    # all ran out the clock -- which is what the private chain does, one edit
+    # there taking more than half an hour before the single-pass expansion --
+    # there is no band, and the metric says so rather than dividing a sentinel.
+    got = [d[(cp, pt)] for pt in NO_SURFACE
+           if (cp, pt) in d and isinstance(d[(cp, pt)][0], int)]
     if len(got) < 2:
         return None
     vals = [v[0] / 1000.0 for v in got]
