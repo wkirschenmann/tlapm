@@ -1307,7 +1307,7 @@ issue does not describe.</p>"""
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
     IT, "s", fmt_secs,
-    "",
+    _iter_caption(),
     series=_series_for(IT)))
 
     KS = keyser()
@@ -1318,7 +1318,7 @@ issue does not describe.</p>"""
         "the LSP protocol. Seconds.",
         "Keystroke to diagnostics latency per commit, one series per corpus measured.",
         KS, "s", fmt_secs,
-        "",
+        _keystroke_caption(),
         series=_series_for(KS)))
     c.append(figs_position())
     return "".join(c)
@@ -1346,24 +1346,35 @@ def _keystroke_caption():
                              for pt in have)
     clean = [p for p in pairs if p[2] > 0]
     dirty = [p for p in pairs if p[2] <= 0]
-    txt = (base + " Read as ranges rather than medians, at n&nbsp;=&nbsp;%d: %s."
-           % (n, ranges))
+    txt = (base + " Read as ranges rather than medians, on the private refinement "
+           "chain at n&nbsp;=&nbsp;%d: %s." % (n, ranges))
     if not dirty:
         return (txt + " Every consecutive pair is <strong>entirely disjoint</strong> "
                 "&mdash; each of these pull requests is below its predecessor on every "
                 "single repetition, not on average, the narrowest gap being "
                 "%.2f&nbsp;s." % min(p[2] for p in clean))
-    txt += (" %d of the %d consecutive pairs are <strong>entirely disjoint</strong> "
-            "&mdash; %s %s below the commit before it on every single repetition, not "
-            "on average."
-            % (len(clean), len(pairs),
-               " and ".join("<code>%s</code>" % b for _, b, _ in clean),
-               "is" if len(clean) == 1 else "are each"))
-    txt += (" The remaining %s does not separate that cleanly: %s, so there the claim "
-            "is a difference of medians and nothing stronger."
-            % ("pair" if len(dirty) == 1 else "%d pairs" % len(dirty),
-               "; ".join("<code>%s</code> and <code>%s</code> overlap by "
-                         "%.2f&nbsp;s" % (a_, b_, -g) for a_, b_, g in dirty)))
+    if clean:
+        txt += (" %d of the %d consecutive pairs are <strong>entirely disjoint</strong> "
+                "&mdash; %s %s below the commit before it on every single repetition, "
+                "not on average."
+                % (len(clean), len(pairs),
+                   " and ".join("<code>%s</code>" % b for _, b, _ in clean),
+                   "is" if len(clean) == 1 else "are each"))
+        txt += (" The remaining %s %s separate that cleanly: %s, so there the claim "
+                "is a difference of medians and nothing stronger."
+                % ("pair" if len(dirty) == 1 else "%d pairs" % len(dirty),
+                   "does not" if len(dirty) == 1 else "do not",
+                   "; ".join("<code>%s</code> and <code>%s</code> overlap by "
+                             "%.2f&nbsp;s" % (a_, b_, -g) for a_, b_, g in dirty)))
+    else:
+        # Every pair overlaps.  Saying "0 of the 2 are disjoint" and then listing
+        # the empty set reads as a missing word; the honest sentence is that none
+        # of them separates, followed by the same overlaps.
+        txt += (" No consecutive pair separates on every repetition: %s. On this "
+                "corpus the claim for these commits is therefore a difference of "
+                "medians and nothing stronger."
+                % "; ".join("<code>%s</code> and <code>%s</code> overlap by "
+                            "%.2f&nbsp;s" % (a_, b_, -g) for a_, b_, g in dirty))
     txt += _first_edit_note(dirty)
     return txt
 
