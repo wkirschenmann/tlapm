@@ -889,9 +889,40 @@ def _iter_caption():
            "one changed obligation is proved."
            % (len(steps), "" if len(steps) == 1 else "s", phrase(steps)))
     if worse:
-        txt += (" One place moves the wrong way &mdash; %s &mdash; and it stays at that "
-                "position because what it buys is that nothing after it can run out of "
-                "memory." % phrase(worse))
+        # "Kept because it buys memory" is true of exactly one family of commit --
+        # the two that prune context for a bounded-memory win, not of a regression
+        # this campaign cannot explain.  A re-measurement that put a second corpus
+        # into this list learned that the hard way: the sentence used to be sung
+        # for whichever commit landed here, memory-bounding or not, and it named
+        # a mechanism that does not exist on a twenty-obligation file that never
+        # comes near the cap.  So the two stories are told separately, and only
+        # the one that is actually true keeps its explanation.
+        mem_pts = {pt for pid, _, cms in L.PRS if pid in ("PR4", "PR5") for pt in cms}
+        mem = [w for w in worse if w[1] in mem_pts]
+        other = [w for w in worse if w[1] not in mem_pts]
+        if mem:
+            txt += (" %s the wrong way for a reason this campaign already knows "
+                    "&mdash; %s &mdash; kept because what %s buys is that nothing "
+                    "further in %s chain can run out of memory."
+                    % ("One place moves" if len(mem) == 1
+                       else "%s places move" % numword(len(mem)).capitalize(),
+                       phrase(mem),
+                       "it" if len(mem) == 1 else "each",
+                       "its" if len(mem) == 1 else "its own"))
+        if other:
+            bits = []
+            for cp, pt, r in other:
+                b = iter_band(cp)
+                within = b[3] if b else 0.0
+                bits.append("%s on the %s, &times;%.2f, against that corpus&rsquo;s own "
+                            "repeats of one commit spanning %.1f&nbsp;%%"
+                            % (C.LABELS[pt][0], CORPUS_NAME.get(cp, cp), r, within))
+            txt += (" %s the wrong way with no such story to tell: %s &mdash; too "
+                    "noisy at this size for one adjacent pair to settle a direction, "
+                    "so this campaign does not read it as a regression."
+                    % ("One more place moves" if len(other) == 1
+                       else "%s more places move" % numword(len(other)).capitalize(),
+                       "; ".join(bits)))
     else:
         txt += (" No commit in the series makes this metric worse by more than the "
                 "spread, the memory pull request included.")
