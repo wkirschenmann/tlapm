@@ -336,7 +336,7 @@ def iters(cp):
     ring; a memory abort is settled and keeps its cross.
     """
     d = {}
-    for pt in L.POINTS:
+    for pt in L.ITER_POINTS:
         r = iterlat.get((cp, pt))
         if not r:
             d[pt] = None
@@ -833,7 +833,7 @@ def _iter_caption():
     # to have read "either corpus".
     for cp in L.CORPORA:
         d, prev = iters(cp), None
-        for pt in L.POINTS:
+        for pt in L.ITER_POINTS:
             v = d[pt]
             if isinstance(v, float) and isinstance(prev, float):
                 r = prev / v
@@ -1308,7 +1308,7 @@ issue does not describe.</p>"""
     "private refinement chain, logarithmic axis.",
     IT, "s", fmt_secs,
     _iter_caption(),
-    series=_series_for(IT)))
+    series=_series_for(IT), points=L.ITER_POINTS))
 
     KS = keyser()
     c.append(fig(
@@ -1471,14 +1471,15 @@ LONG_CP = {cp: (n if n.replace(" ", "").isdigit()
 def _cm_table(cm):
     """what this commit measured, on every corpus where both sides are numbers
 
-    A commit outside POINTS has no cell on the chain, and that is a decision
-    rather than a gap: the chain's two clocks are the preparation and
-    generation passes, and a commit that neither pass executes would draw a
-    copy of the point before it.  Such a commit carries its own measurement in
-    its card instead."""
+    A commit outside POINTS has no cell in this table, and that is a decision
+    rather than a gap: POINTS is the axis generation and preparation share, and
+    a commit that neither pass executes would draw a copy of the point before
+    it on both.  Such a commit carries its own measurement in its card instead
+    -- and may still have a cell on iteration latency, whose own point list
+    can reach code these two clocks stop before."""
     if cm not in L.POINTS:
-        return ('<p style="color:var(--ink-3);font-size:14px">Not on the chain '
-                'figures: neither clock they draw reaches this code. Measured '
+        return ('<p style="color:var(--ink-3);font-size:14px">Not on this table: '
+                'neither clock it draws from reaches this code. Measured '
                 'on a run that ships to a solver &mdash; see <em>how it is '
                 'validated</em>.</p>')
     i = L.POINTS.index(cm)

@@ -46,6 +46,14 @@ PRS = [
 ]
 ENDPOINTS = ["p00"] + [c[-1] for _, _, c in PRS if c]
 
+# The one figure p22 does belong on.  Iteration latency proves the one changed
+# obligation with a real backend, so the escaping code runs there -- unlike
+# generation and preparation, which is why POINTS stops at p21.  A separate
+# list rather than extending POINTS itself: sweep/keystroke/TIP-based prose
+# read POINTS[-1] as the point every metric they quote has a reading at, and
+# p22 has no generation or preparation reading to give them.
+ITER_POINTS = POINTS + ["p22"]
+
 OBL = {"tiny": 20, "synth100": 600, "synth300": 1800, "idemo": 2703,
        "gp2": 5957, "ffi": 9967, "dotnet": 28818, "mono": 29965}
 
