@@ -1338,7 +1338,12 @@ issue does not describe.</p>"""
     "Iteration latency per commit on a warm fingerprint cache, public synthetic and "
     "private refinement chain, logarithmic axis.",
     IT, "s", fmt_secs,
-    _iter_caption(),
+    # No figcaption here by design: the per-commit, per-corpus reasoning this
+    # figure's numbers used to carry (which steps clear the noise floor, which
+    # corpus's repeats bound the threshold, and so on) is working analysis, not
+    # something a reader of the proposal needs under the chart.  It stays in my
+    # own notes rather than in this document.
+    "",
     series=_series_for(IT), points=L.ITER_POINTS))
 
     KS = keyser()
@@ -1349,7 +1354,11 @@ issue does not describe.</p>"""
         "the LSP protocol. Seconds.",
         "Keystroke to diagnostics latency per commit, one series per corpus measured.",
         KS, "s", fmt_secs,
-        _keystroke_caption(),
+        # Same reason as the iteration figure just above: this caption used to
+        # carry the range-vs-median argument for which pull requests separate
+        # cleanly, and that is analysis for me to have checked, not prose for
+        # this document to carry.
+        "",
         series=_series_for(KS)))
     c.append(figs_position())
     return "".join(c)
