@@ -271,20 +271,39 @@ let memo_period =
   | Some v -> (try max 0 (int_of_string v) with _ -> 32)
   | None -> 32
 
+(* A hypothesis not physically the same node can still be the same
+   definition: [Module.Elab.instantiate]'s sharing cache (issue #286) makes
+   two [Defn] hyps carry the identical [defn] payload whenever they trace
+   back to the same memoized instantiation, even though each textual
+   INSTANCE occurrence still gets its own freshly-wrapped hyp on top of it
+   (see the DEFN== probe in TLAPM_EXP_TAIL's cold-sample line). Folding
+   either one under the same accumulated substitution is then the same
+   computation -- same [defn], same wrapping fields, same input -- so the
+   scan below can walk straight through such a pair instead of stopping,
+   without weakening it to a structural or name-based comparison: this is
+   still a pointer check, just one level under the hyp node. *)
+let hyp_shares_defn h g = match h.core, g.core with
+  | Defn (d, wd, vis, ex), Defn (d', wd', vis', ex') ->
+      d == d' && wd = wd' && vis = vis' && ex = ex'
+  | _ -> false
+
 let expand_defs_cached ob =
   let sq = ob.obl.core in
   let (raw, l, states, best_k) = prep_time t_exp_discover begin fun () ->
     let raw = Array.of_list (Deque.to_list sq.context) in
     let n = Array.length raw in
     (* the entry sharing the longest prefix wins; a scan stops at the first
-       hypothesis that is not physically the same node, so an unrelated entry
-       costs one comparison *)
+       hypothesis that is neither physically the same node nor the same
+       definition underneath a freshly-rebuilt wrapper (see
+       [hyp_shares_defn]), so an unrelated entry costs one comparison *)
     let best_l = ref 0 and best = ref 0 in
     for k = 0 to expand_cache_size - 1 do
       let (craw, _) = expand_cache.(k) in
       let m = min n (Array.length craw) in
       let i = ref 0 in
-      while !i < m && raw.(!i) == craw.(!i) do incr i done;
+      while !i < m
+            && (raw.(!i) == craw.(!i) || hyp_shares_defn raw.(!i) craw.(!i))
+      do incr i done;
       if !i > !best_l then (best_l := !i; best := k)
     done;
     let l = !best_l in
