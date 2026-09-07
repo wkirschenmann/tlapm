@@ -212,6 +212,18 @@ let tail_hist = Array.make 10 0
 let n_late = ref 0
 let sum_same = ref 0
 let sum_n_late = ref 0
+(* Probe (TLAPM_EXP_TAIL, extension): at the first divergence, is what follows
+   still index-aligned (one node swapped, safe to skip) or does the two
+   contexts' lengths differ from here on (an insertion/deletion, which would
+   make skipping past the mismatch resume the fold on the wrong hypotheses --
+   silently wrong, not just slow)?  Checked for every long-tail obligation,
+   not just the twenty-five sampled in detail. *)
+let resync_window = 16
+let n_swap = ref 0      (* l+1 realigns at the same index: no shift *)
+let n_shift_pos = ref 0 (* raw has k extra entries inserted around l *)
+let n_shift_neg = ref 0 (* craw has k extra entries: raw is missing some *)
+let n_no_resync = ref 0 (* nothing realigns within the window *)
+let shift_hist : (int, int) Hashtbl.t = Hashtbl.create 16
 let () = at_exit begin fun () ->
   if Lazy.force exp_tail_on && !n_obl_tail > 0 then begin
     Printf.eprintf
@@ -220,7 +232,7 @@ let () = at_exit begin fun () ->
       (float_of_int !sum_ctx /. float_of_int !n_obl_tail)
       (float_of_int !sum_tail /. float_of_int !n_obl_tail)
       (100.0 *. float_of_int !sum_tail /. float_of_int (max 1 !sum_ctx)) ;
-    if !n_late > 0 then
+    if !n_late > 0 then begin
       Printf.eprintf
         "[EXP_TAIL]   long-tail obligations=%d mean_ctx=%.0f \
          same-node-at-same-index=%.0f (%.1f%%)\n%!"
@@ -228,6 +240,18 @@ let () = at_exit begin fun () ->
         (float_of_int !sum_n_late /. float_of_int !n_late)
         (float_of_int !sum_same /. float_of_int !n_late)
         (100.0 *. float_of_int !sum_same /. float_of_int (max 1 !sum_n_late)) ;
+      Printf.eprintf
+        "[EXP_TAIL]   resync after the first divergence: same-index=%d \
+         shift-in-raw=%d shift-in-cache=%d none-within-%d=%d\n%!"
+        !n_swap !n_shift_pos !n_shift_neg resync_window !n_no_resync ;
+      if Hashtbl.length shift_hist > 0 then begin
+        let rows = Hashtbl.fold (fun k c acc -> (k, c) :: acc) shift_hist [] in
+        let rows = List.sort ~cmp:compare rows in
+        Printf.eprintf "[EXP_TAIL]   shift magnitudes:%s\n%!"
+          (String.concat "" (List.map (fun (k, c) ->
+               Printf.sprintf "  %+d:%d" k c) rows))
+      end
+    end ;
     Printf.eprintf "[EXP_TAIL]   tail buckets (0, then powers of four):%s\n%!"
       (String.concat ""
          (List.filter (fun x -> x <> "")
@@ -319,6 +343,35 @@ let expand_defs_cached ob =
       n_late := !n_late + 1 ;
       sum_same := !sum_same + !same ;
       sum_n_late := !sum_n_late + n ;
+      (* Is l+1 the same hypothesis under the same index in both (safe to
+         skip), or do the two contexts diverge in LENGTH from here on (an
+         insertion/deletion, which no single-position skip can paper over
+         without silently misaligning everything after it)?  Search a small
+         window either side for the point where they resync. *)
+      begin
+        let eq_at a b =
+          a >= 0 && a < n && b >= 0 && b < Array.length craw
+          && (raw.(a) == craw.(b)
+              || (try Expr.Eq.hyp raw.(a) craw.(b) with _ -> false)) in
+        if eq_at (l + 1) (l + 1) then incr n_swap
+        else begin
+          let found = ref false in
+          let k = ref 1 in
+          while not !found && !k <= resync_window do
+            if eq_at (l + 1 + !k) (l + 1) then begin
+              incr n_shift_pos; found := true;
+              let c = try Hashtbl.find shift_hist !k with Not_found -> 0 in
+              Hashtbl.replace shift_hist !k (c + 1)
+            end else if eq_at (l + 1) (l + 1 + !k) then begin
+              incr n_shift_neg; found := true;
+              let c = try Hashtbl.find shift_hist (- !k) with Not_found -> 0 in
+              Hashtbl.replace shift_hist (- !k) (c + 1)
+            end;
+            incr k
+          done;
+          if not !found then incr n_no_resync
+        end
+      end ;
       if !n_late <= 25 then begin
         let kind h = match h.Property.core with
           | Fresh _ -> "Fresh" | Flex _ -> "Flex"
