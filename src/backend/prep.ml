@@ -384,12 +384,25 @@ let expand_defs_cached ob =
             (try if Expr.Eq.hyp raw.(l) craw.(l) then "EQ" else "NE"
              with _ -> "?")
           else "-" in
+        (* Is the sharing established at elaboration time (m_elab's
+           instantiate memo) reaching this far, or does something between
+           there and this obligation's own context rebuild a fresh wrapper
+           around the same defn payload?  [d == d'] on the inner [defn]
+           answers that independently of the outer hyp's identity. *)
+        let defnptr =
+          if l < m then
+            match raw.(l).Property.core, craw.(l).Property.core with
+            | Defn (d, _, _, _), Defn (d', _, _, _) ->
+                if d == d' then "DEFN==" else "defn!="
+            | _ -> "-"
+          else "-" in
         Printf.eprintf
-          "[EXP_TAIL] cold n=%d l=%d best=%d same=%d cand=%d at%d new=%s old=%s %s loc=%s\n%!"
+          "[EXP_TAIL] cold n=%d l=%d best=%d same=%d cand=%d at%d new=%s old=%s %s %s loc=%s\n%!"
           n l best_k !same (Array.length craw) l
           (if l < n then kind raw.(l) else "-")
           (if l < m then kind craw.(l) else "-")
           eqhere
+          defnptr
           (Util.location ~cap:false ob.obl)
       end
     end ;

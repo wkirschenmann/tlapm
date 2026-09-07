@@ -499,6 +499,8 @@ let rec localize body body_len iname niargs iargs not_complained inst local =
    part of the rebuild to pay for itself? *)
 let inst_keys_on = lazy (Sys.getenv_opt "TLAPM_INST_KEYS" <> None)
 let inst_key_counts : (string * int, int ref) Hashtbl.t = Hashtbl.create 64
+let inst_memo_hits = ref 0
+let inst_memo_misses = ref 0
 let () = at_exit begin fun () ->
   if Lazy.force inst_keys_on then begin
     let calls = Hashtbl.fold (fun _ c acc -> acc + !c) inst_key_counts 0 in
@@ -509,7 +511,9 @@ let () = at_exit begin fun () ->
     List.iteri (fun i ((m, s), c) ->
         if i < 20 then
           Printf.eprintf "[INST_KEYS]   %-30s shift=%-4d calls=%d\n%!" m s c)
-      rows
+      rows ;
+    Printf.eprintf "[INST_KEYS] memo hits=%d misses=%d\n%!"
+      !inst_memo_hits !inst_memo_misses
   end
 end
 
@@ -604,8 +608,9 @@ let instantiate
       let subst_eq =
         HintMap.equal (fun a b -> try Expr.Eq.expr a b with _ -> false) in
       match List.find_opt (fun (s, _) -> subst_eq s subst) !bucket with
-      | Some (_, result) -> result
+      | Some (_, result) -> incr inst_memo_hits; result
       | None ->
+          incr inst_memo_misses;
           let result = compute () in
           bucket := (subst, result) :: !bucket;
           result
