@@ -513,6 +513,34 @@ let () = at_exit begin fun () ->
   end
 end
 
+(* Sharing cache for [instantiate] (issue #286): whole-file elaboration
+   revisits the same INSTANCE occurrence once per proof-step context that
+   needs it resolved, and each visit independently re-walks and
+   re-substitutes the ENTIRE instantiated module's body -- including
+   whatever that module itself EXTENDS, transitively (that transitive
+   pull-in, not a difference in the WITH substitution, is why the same
+   generation of content keeps reappearing: see TLAPM_INST_KEYS above).
+   [module_name], [cx_shift] (the depth the body lands at), the instance's
+   own arity [niargs], the local alias [iname], the export mode [local],
+   and the actual (already-anonymized) substitution [subst] together
+   determine the result completely -- nothing else [instantiate] touches
+   can vary it.  So when a later call matches an earlier one on all of
+   these, hand back the modunits already built instead of re-walking and
+   re-substituting the whole module again: not just faster, but the
+   returned nodes are then the SAME nodes, which is what lets
+   [Prep.expand_defs_cached]'s physical-equality prefix scan actually hit
+   (see TLAPM_EXP_TAIL) instead of finding a structurally-identical-but-
+   freshly-allocated context every time.  [subst] can only take as many
+   shapes as the instantiated module has parameters, so comparing it in
+   full (structurally, per entry) costs nothing next to the body walk it
+   spares.  TLAPM_INST_MEMO=0 disables this, to A/B against the
+   unmemoized path. *)
+let inst_memo_on = lazy (Sys.getenv_opt "TLAPM_INST_MEMO" <> Some "0")
+let inst_memo
+    : (string * int * int * string * export,
+       (expr HintMap.t * modunit list) list ref) Hashtbl.t
+  = Hashtbl.create 16
+
 let instantiate
         anon
         (mcx: M_t.modctx)
@@ -547,21 +575,41 @@ let instantiate
       | Some c -> incr c
       | None -> Hashtbl.add inst_key_counts key (ref 1)
     end;
-    let body = tla_module.core.body in
-
-
-    let body = List.map remove_pf body in
-    let (_, body) = M_subst.app_modunits (shift cx_shift) body in
-    (* lambdify `ENABLED` and `\cdot` *)
-    let body = lambdify_enabled_cdot cx body in
-    (* apply the substitution *)
-    let body = apply_subst [] 0 subst body in
     let niargs = List.length inst.core.inst_args in
-    let iargs = List.init niargs (fun k -> Ix (niargs - k) @@ inst) in
-    let not_complained = ref true in
-    let body = localize [] 0 iname niargs iargs not_complained inst local body
+    let compute () =
+      let body = tla_module.core.body in
+      let body = List.map remove_pf body in
+      let (_, body) = M_subst.app_modunits (shift cx_shift) body in
+      (* lambdify `ENABLED` and `\cdot` *)
+      let body = lambdify_enabled_cdot cx body in
+      (* apply the substitution *)
+      let body = apply_subst [] 0 subst body in
+      let iargs = List.init niargs (fun k -> Ix (niargs - k) @@ inst) in
+      let not_complained = ref true in
+      let body =
+        localize [] 0 iname niargs iargs not_complained inst local body
+      in
+      localize_axioms body
     in
-    localize_axioms body
+    if not (Lazy.force inst_memo_on) then compute ()
+    else begin
+      let key = (module_name, cx_shift, niargs, iname.core, local) in
+      let bucket = match Hashtbl.find_opt inst_memo key with
+        | Some b -> b
+        | None ->
+            let b = ref [] in
+            Hashtbl.add inst_memo key b;
+            b
+      in
+      let subst_eq =
+        HintMap.equal (fun a b -> try Expr.Eq.expr a b with _ -> false) in
+      match List.find_opt (fun (s, _) -> subst_eq s subst) !bucket with
+      | Some (_, result) -> result
+      | None ->
+          let result = compute () in
+          bucket := (subst, result) :: !bucket;
+          result
+    end
 
 
 (******************************************************************************)
