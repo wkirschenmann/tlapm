@@ -343,6 +343,17 @@ let hyp_shares_defn h g = match h.core, g.core with
       d == d' && wd = wd' && vis = vis' && ex = ex'
   | _ -> false
 
+(* Probe (TLAPM_PREFIX_CURVE): one compact line per obligation, in
+   generation order, so the prefix-cache reuse rate (l/n) can be plotted
+   against position and compared directly to the existing
+   doc/perf/short/rate_by_position CSVs (also one row per obligation
+   generated, same order) -- do the reuse-rate dips fall where the
+   seconds-per-obligation dips do?  Separate from TLAPM_EXP_TAIL (which
+   samples/aggregates) because this one is unconditional, every
+   obligation, and its whole point is the position axis. *)
+let prefix_curve_on = lazy (Sys.getenv_opt "TLAPM_PREFIX_CURVE" <> None)
+let prefix_curve_n = ref 0
+
 let expand_defs_cached ob =
   let sq = ob.obl.core in
   let (raw, l, states, best_k) = prep_time t_exp_discover begin fun () ->
@@ -369,6 +380,12 @@ let expand_defs_cached ob =
     (raw, l, states, !best)
   end () in
   let n = Array.length raw in
+  if Lazy.force prefix_curve_on then begin
+    incr prefix_curve_n ;
+    Printf.eprintf "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f\n%!"
+      !prefix_curve_n n l
+      (if n = 0 then 1.0 else float_of_int l /. float_of_int n)
+  end ;
   (* The states carry memoized substitutions: index resolution through
      the deep expansion spine is cached on the substitution value, which
      the prefix cache shares across obligations (see Expr.Subst.memo). *)
