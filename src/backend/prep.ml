@@ -380,13 +380,6 @@ let expand_defs_cached ob =
     (raw, l, states, !best)
   end () in
   let n = Array.length raw in
-  if Lazy.force prefix_curve_on then begin
-    incr prefix_curve_n ;
-    Printf.eprintf "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f loc=%s\n%!"
-      !prefix_curve_n n l
-      (if n = 0 then 1.0 else float_of_int l /. float_of_int n)
-      (Util.location ~cap:false ob.obl)
-  end ;
   (* The states carry memoized substitutions: index resolution through
      the deep expansion spine is cached on the substitution value, which
      the prefix cache shares across obligations (see Expr.Subst.memo). *)
@@ -535,7 +528,16 @@ let expand_defs_cached ob =
     tail_hist.(b) <- tail_hist.(b) + 1
   end ;
   tail_probe_active := Lazy.force exp_tail_on && n - l > 1000 ;
+  let curve_t0 = if Lazy.force prefix_curve_on then Sys.time () else 0.0 in
   let (s, context) = prep_time t_exp_tail (fold l) states.(l) in
+  if Lazy.force prefix_curve_on then begin
+    incr prefix_curve_n ;
+    Printf.eprintf "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f fold_s=%.6f loc=%s\n%!"
+      !prefix_curve_n n l
+      (if n = 0 then 1.0 else float_of_int l /. float_of_int n)
+      (Sys.time () -. curve_t0)
+      (Util.location ~cap:false ob.obl)
+  end ;
   tail_probe_active := false ;
   let active = prep_time t_exp_active (app_expr s) sq.active in
   expand_cache.(!expand_cache_next) <- (raw, states);
