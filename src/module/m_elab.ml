@@ -492,6 +492,27 @@ let rec localize body body_len iname niargs iargs not_complained inst local =
  * straightforward. Do not be awed by its length, but instead try to
  * understand it piece by piece. *)
 
+(* Measurement probe (TLAPM_INST_KEYS): distinct (module, cx_shift) pairs
+   instantiate is called with, and how often each repeats.  Throwaway --
+   answers one question before any caching design is chosen: does the same
+   pair recur enough, on a real corpus, for memoizing the shift-independent
+   part of the rebuild to pay for itself? *)
+let inst_keys_on = lazy (Sys.getenv_opt "TLAPM_INST_KEYS" <> None)
+let inst_key_counts : (string * int, int ref) Hashtbl.t = Hashtbl.create 64
+let () = at_exit begin fun () ->
+  if Lazy.force inst_keys_on then begin
+    let calls = Hashtbl.fold (fun _ c acc -> acc + !c) inst_key_counts 0 in
+    let distinct = Hashtbl.length inst_key_counts in
+    Printf.eprintf "[INST_KEYS] calls=%d distinct=%d\n%!" calls distinct;
+    let rows = Hashtbl.fold (fun k c acc -> (k, !c) :: acc) inst_key_counts [] in
+    let rows = List.sort ~cmp:(fun (_, a) (_, b) -> compare b a) rows in
+    List.iteri (fun i ((m, s), c) ->
+        if i < 20 then
+          Printf.eprintf "[INST_KEYS]   %-30s shift=%-4d calls=%d\n%!" m s c)
+      rows
+  end
+end
+
 let instantiate
         anon
         (mcx: M_t.modctx)
@@ -520,6 +541,12 @@ let instantiate
     (* bring mule body to here *)
     let cx_shift = Deque.size cx - tla_module.core.defdepth in
     assert (cx_shift >= 0);
+    if Lazy.force inst_keys_on then begin
+      let key = (module_name, cx_shift) in
+      match Hashtbl.find_opt inst_key_counts key with
+      | Some c -> incr c
+      | None -> Hashtbl.add inst_key_counts key (ref 1)
+    end;
     let body = tla_module.core.body in
 
 
