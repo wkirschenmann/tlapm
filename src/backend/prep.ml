@@ -234,6 +234,17 @@ let bump_div_kind k =
   match Hashtbl.find_opt div_kind_counts k with
   | Some c -> incr c
   | None -> Hashtbl.add div_kind_counts k (ref 1)
+(* For a long-tail obligation, how much of the refold from [l] onward is
+   real work -- [app_hyp] found something to actually rewrite, e.g. a
+   reference to the toggled definition itself -- versus a hypothesis whose
+   own [app_hyp] is a physical no-op (nothing in it depends on what
+   changed at [l], so [app_expr]'s identity-preserving fast path returns
+   it unchanged) and the only cost paid is the fresh [Cons]/[Bump] wrapper
+   node built to hold the (otherwise reused) result?  Tallied over every
+   long-tail obligation's tail, not just sampled. *)
+let tail_probe_active = ref false
+let n_tail_hyp_noop = ref 0  (* app_hyp was a physical no-op *)
+let n_tail_hyp_real = ref 0  (* app_hyp actually rewrote something *)
 let () = at_exit begin fun () ->
   if Lazy.force exp_tail_on && !n_obl_tail > 0 then begin
     Printf.eprintf
@@ -275,7 +286,14 @@ let () = at_exit begin fun () ->
          (List.filter (fun x -> x <> "")
             (List.mapi (fun i c ->
                  if c = 0 then "" else Printf.sprintf "  b%d=%d" i c)
-               (Array.to_list tail_hist))))
+               (Array.to_list tail_hist)))) ;
+    if !n_tail_hyp_noop + !n_tail_hyp_real > 0 then
+      Printf.eprintf
+        "[EXP_TAIL]   long-tail refold: physical-noop=%d real-rewrite=%d \
+         (%.1f%% real)\n%!"
+        !n_tail_hyp_noop !n_tail_hyp_real
+        (100.0 *. float_of_int !n_tail_hyp_real
+         /. float_of_int (max 1 (!n_tail_hyp_noop + !n_tail_hyp_real)))
   end
 end
 
@@ -358,6 +376,8 @@ let expand_defs_cached ob =
     if i = n then st
     else begin
       let h = app_hyp s raw.(i) in
+      if !tail_probe_active then
+        (if h == raw.(i) then incr n_tail_hyp_noop else incr n_tail_hyp_real) ;
       (* Memoize every thirty-second level, not every one.
 
          [memo] wraps the substitution at each fold step, so a resolution that
@@ -496,7 +516,9 @@ let expand_defs_cached ob =
                                           /. log 4.0)) in
     tail_hist.(b) <- tail_hist.(b) + 1
   end ;
+  tail_probe_active := Lazy.force exp_tail_on && n - l > 1000 ;
   let (s, context) = prep_time t_exp_tail (fold l) states.(l) in
+  tail_probe_active := false ;
   let active = prep_time t_exp_active (app_expr s) sq.active in
   expand_cache.(!expand_cache_next) <- (raw, states);
   expand_cache_next := (!expand_cache_next + 1) mod expand_cache_size;
