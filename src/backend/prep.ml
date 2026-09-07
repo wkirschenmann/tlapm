@@ -382,9 +382,10 @@ let expand_defs_cached ob =
   let n = Array.length raw in
   if Lazy.force prefix_curve_on then begin
     incr prefix_curve_n ;
-    Printf.eprintf "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f\n%!"
+    Printf.eprintf "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f loc=%s\n%!"
       !prefix_curve_n n l
       (if n = 0 then 1.0 else float_of_int l /. float_of_int n)
+      (Util.location ~cap:false ob.obl)
   end ;
   (* The states carry memoized substitutions: index resolution through
      the deep expansion spine is cached on the substitution value, which
