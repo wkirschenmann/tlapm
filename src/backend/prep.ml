@@ -299,8 +299,28 @@ let memo_period =
    computation -- same [defn], same wrapping fields, same input -- so the
    scan below can walk straight through such a pair instead of stopping,
    without weakening it to a structural or name-based comparison: this is
-   still a pointer check, just one level under the hyp node. *)
+   still a pointer check, just one level under the hyp node.
+
+   Measured (TLAPM_EXP_TAIL): with only [d == d'] required, EVERY
+   remaining long-tail divergence turned out to be exactly this case with
+   the wrapping [wd]/[vis]/[ex] fields differing (typically because the
+   two occurrences pass through independent [localize] calls, which
+   stamp their own [wd]/[ex] regardless of the shared payload) -- never a
+   different underlying [defn]. Whether the wrapping actually matters
+   depends on what [fold] below does with it: for an [Operator] with both
+   sides [Visible], and for any [Bpragma], [fold]'s own match ignores
+   [wd] and [ex] outright (and, for [Bpragma], ignores [vis] too) -- the
+   hyp is folded into the substitution either way, never retained in the
+   context, so a differing [wd]/[ex] there can never surface in the
+   published obligation. Only the fallback case (anything else -- a
+   [Hidden] or non-[Visible] [Operator], a [Recursive], ...) actually
+   keeps [h] itself in the context, where its exact [wd]/[vis]/[ex] do
+   show up; that path still requires the full match. *)
 let hyp_shares_defn h g = match h.core, g.core with
+  | Defn (({core = Operator _} as d), _, Visible, _),
+    Defn (({core = Operator _} as d'), _, Visible, _) -> d == d'
+  | Defn (({core = Bpragma _} as d), _, _, _),
+    Defn (({core = Bpragma _} as d'), _, _, _) -> d == d'
   | Defn (d, wd, vis, ex), Defn (d', wd', vis', ex') ->
       d == d' && wd = wd' && vis = vis' && ex = ex'
   | _ -> false
@@ -415,11 +435,16 @@ let expand_defs_cached ob =
           | Flex _, Flex _ -> "Flex"
           | Fact _, Fact _ -> "Fact"
           | Defn (d, wd, vis, ex), Defn (d', wd', vis', ex') ->
-              if d == d' && wd = wd' && vis = vis' && ex = ex' then
+              if d != d' then "Defn:different-defn"
+              else if wd = wd' && vis = vis' && ex = ex' then
                 "Defn:shares-defn (bug? scan should not have stopped)"
-              else if d == d' then
-                "Defn:shares-defn-but-wrapper-differs"
-              else "Defn:different-defn"
+              else
+                Printf.sprintf
+                  "Defn:shares-defn-but-wrapper-differs (wd:%B vis:%B ex:%B kind:%s)"
+                  (wd <> wd') (vis <> vis') (ex <> ex')
+                  (match d.core with
+                   | Operator _ -> "Operator" | Bpragma _ -> "Bpragma"
+                   | Recursive _ -> "Recursive" | Instance _ -> "Instance")
           | _ -> "kind-mismatch"
         in
         bump_div_kind cat
