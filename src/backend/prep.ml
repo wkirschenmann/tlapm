@@ -354,6 +354,17 @@ let hyp_shares_defn h g = match h.core, g.core with
 let prefix_curve_on = lazy (Sys.getenv_opt "TLAPM_PREFIX_CURVE" <> None)
 let prefix_curve_n = ref 0
 
+(* Companion probe: is the dip's higher exp:tail cost-per-position explained
+   by BIGGER definitions being threaded through the substitution in that
+   region, rather than by more positions?  [Obj.reachable_words] gives a
+   cheap, safe (no marshaling of closures/properties) proxy for a value's
+   AST size without printing any of its content.  Reset per obligation
+   alongside [tail_probe_active] (see there), read back at the
+   TLAPM_PREFIX_CURVE print. *)
+let size_probe_sum = ref 0
+let size_probe_max = ref 0
+let size_probe_calls = ref 0
+
 let expand_defs_cached ob =
   let sq = ob.obl.core in
   let (raw, l, states, best_k) = prep_time t_exp_discover begin fun () ->
@@ -387,8 +398,16 @@ let expand_defs_cached ob =
     if i = n then st
     else begin
       let h = app_hyp s raw.(i) in
-      if !tail_probe_active then
-        (if h == raw.(i) then incr n_tail_hyp_noop else incr n_tail_hyp_real) ;
+      if !tail_probe_active then begin
+        if h == raw.(i) then incr n_tail_hyp_noop
+        else begin
+          incr n_tail_hyp_real ;
+          let words = Obj.reachable_words (Obj.repr h) in
+          size_probe_sum := !size_probe_sum + words ;
+          incr size_probe_calls ;
+          if words > !size_probe_max then size_probe_max := words
+        end
+      end ;
       (* Memoize every thirty-second level, not every one.
 
          [memo] wraps the substitution at each fold step, so a resolution that
@@ -528,14 +547,18 @@ let expand_defs_cached ob =
     tail_hist.(b) <- tail_hist.(b) + 1
   end ;
   tail_probe_active := Lazy.force exp_tail_on && n - l > 1000 ;
+  size_probe_sum := 0 ; size_probe_max := 0 ; size_probe_calls := 0 ;
   let curve_t0 = if Lazy.force prefix_curve_on then Sys.time () else 0.0 in
   let (s, context) = prep_time t_exp_tail (fold l) states.(l) in
   if Lazy.force prefix_curve_on then begin
     incr prefix_curve_n ;
-    Printf.eprintf "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f fold_s=%.6f loc=%s\n%!"
+    Printf.eprintf
+      "[PREFIX_CURVE] n=%d ctx=%d l=%d reuse=%.4f fold_s=%.6f \
+       rw_calls=%d rw_words_sum=%d rw_words_max=%d loc=%s\n%!"
       !prefix_curve_n n l
       (if n = 0 then 1.0 else float_of_int l /. float_of_int n)
       (Sys.time () -. curve_t0)
+      !size_probe_calls !size_probe_sum !size_probe_max
       (Util.location ~cap:false ob.obl)
   end ;
   tail_probe_active := false ;
