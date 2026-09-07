@@ -224,6 +224,16 @@ let n_shift_pos = ref 0 (* raw has k extra entries inserted around l *)
 let n_shift_neg = ref 0 (* craw has k extra entries: raw is missing some *)
 let n_no_resync = ref 0 (* nothing realigns within the window *)
 let shift_hist : (int, int) Hashtbl.t = Hashtbl.create 16
+(* Tally of what the divergence itself IS, over every long-tail obligation
+   (not just the twenty-five sampled in detail): now that [Defn] hyps
+   sharing the same [defn] payload no longer stop the scan (the
+   instantiate memo + hyp_shares_defn), what kind of hypothesis is left
+   stopping it? *)
+let div_kind_counts : (string, int ref) Hashtbl.t = Hashtbl.create 16
+let bump_div_kind k =
+  match Hashtbl.find_opt div_kind_counts k with
+  | Some c -> incr c
+  | None -> Hashtbl.add div_kind_counts k (ref 1)
 let () = at_exit begin fun () ->
   if Lazy.force exp_tail_on && !n_obl_tail > 0 then begin
     Printf.eprintf
@@ -250,6 +260,14 @@ let () = at_exit begin fun () ->
         Printf.eprintf "[EXP_TAIL]   shift magnitudes:%s\n%!"
           (String.concat "" (List.map (fun (k, c) ->
                Printf.sprintf "  %+d:%d" k c) rows))
+      end ;
+      if Hashtbl.length div_kind_counts > 0 then begin
+        let rows = Hashtbl.fold (fun k c acc -> (k, !c) :: acc)
+                     div_kind_counts [] in
+        let rows = List.sort ~cmp:(fun (_, a) (_, b) -> compare b a) rows in
+        Printf.eprintf "[EXP_TAIL]   what's left stopping the scan:%s\n%!"
+          (String.concat "" (List.map (fun (k, c) ->
+               Printf.sprintf "  %s:%d" k c) rows))
       end
     end ;
     Printf.eprintf "[EXP_TAIL]   tail buckets (0, then powers of four):%s\n%!"
@@ -390,6 +408,21 @@ let expand_defs_cached ob =
           done;
           if not !found then incr n_no_resync
         end
+      end ;
+      if l < m then begin
+        let cat = match raw.(l).core, craw.(l).core with
+          | Fresh _, Fresh _ -> "Fresh"
+          | Flex _, Flex _ -> "Flex"
+          | Fact _, Fact _ -> "Fact"
+          | Defn (d, wd, vis, ex), Defn (d', wd', vis', ex') ->
+              if d == d' && wd = wd' && vis = vis' && ex = ex' then
+                "Defn:shares-defn (bug? scan should not have stopped)"
+              else if d == d' then
+                "Defn:shares-defn-but-wrapper-differs"
+              else "Defn:different-defn"
+          | _ -> "kind-mismatch"
+        in
+        bump_div_kind cat
       end ;
       if !n_late <= 25 then begin
         let kind h = match h.Property.core with
