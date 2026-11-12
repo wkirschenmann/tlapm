@@ -1,6 +1,9 @@
 OS_TYPE=$(patsubst CYGWIN%,Cygwin,$(shell uname))
 
-LS4_VERS=1.0
+# LS4 1.1: the tag ls4_v1.1 (0293895) and the commit after it (530d67a),
+# which compiles with current C++ compilers.  Since 1.0 it fixes the leap
+# index computation (c5e907e).
+LS4_VERS=530d67a8dc838c849b3406eda638c1b0c6a59795
 LS4_URL_PREFIX=https://github.com/quickbeam123/ls4/archive
 LS4_BASE_NAME=ls4-$(LS4_VERS)
 
@@ -16,14 +19,14 @@ endif
 
 all: ls4
 
-v$(LS4_VERS).zip:
+$(LS4_VERS).zip:
 	wget --progress=dot:giga $(LS4_URL_PREFIX)/$@
 
-$(LS4_BASE_NAME): v$(LS4_VERS).zip
+$(LS4_BASE_NAME): $(LS4_VERS).zip
 	rm -rf $@
 	unzip $<
 	touch $@ # To avoid rebuilds.
-	( set -x && patch -p0 <ls4.patch )
+	( set -x && patch -d $@ -p1 <ls4.patch )
 	cd $(LS4_BASE_NAME)/core && cc -c aiger.c
 	make -C $(LS4_BASE_NAME)/core
 
@@ -31,6 +34,6 @@ ls4: $(LS4_BASE_NAME)
 	cp -f $</core/$(LS4_EXEC) $@
 
 clean:
-	rm -rf ls4 $(LS4_BASE_NAME) v$(LS4_VERS).zip
+	rm -rf ls4 $(LS4_BASE_NAME) $(LS4_VERS).zip
 
 .PHONY: all clean
