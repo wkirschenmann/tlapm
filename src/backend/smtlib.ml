@@ -262,9 +262,12 @@ and fmt_expr cx oe =
         ) es
       in
       pp_print_sexpr begin fun ff () ->
-        fprintf ff "!@ %a@ %a"
+        fprintf ff "!@ %a@ %a%s"
         (pp_box @@@ pp_print_expr cx) (remove_pats oe)
         (pp_print_delimited ~sep:pp_print_space pp_print_pat) pats
+        (match query oe weight_prop with
+         | Some w -> Printf.sprintf " :weight %d" w
+         | None -> "")
       end ff ())
   else
   match oe.core with

@@ -291,6 +291,9 @@ let special_data tla_smb =
   | ExtTrig ->
           ("SetExtTrigger",
                         [ t_cst t_idv ; t_cst t_idv ],        t_bol)
+  | FunExtTrig ->
+          ("FunExtTrigger",
+                        [ t_cst t_idv ; t_cst t_idv ],        t_bol)
   | IsSetOf ->
           ("IsSetOf",   [ t_cst t_idv ],                      t_bol)
 
@@ -324,7 +327,7 @@ let get_data tla_smb =
       ; dat_kind = Typed
       ; dat_tver = Some tver
       }
-  | Cast _ | Proj _ | True _ | Anon _ | ExtTrigEq _ | ExtTrig | IsSetOf ->
+  | Cast _ | Proj _ | True _ | Anon _ | ExtTrigEq _ | ExtTrig | FunExtTrig | IsSetOf ->
       let (nm, tins, tout) = special_data tla_smb in
       { dat_name = "TLA__" ^ nm
       ; dat_ty2  = Ty2 (tins, tout)
@@ -492,6 +495,9 @@ let untyped_deps ~solver ~disable_arithmetic ~smt_set_extensionality tla_smb s =
   | IntRange ->
       ([ Mem ; IntSet ; IntLteq ],            [ IntRangeDef ])
   (* Functions *)
+  | FunIsafcn when ext ->
+      ([ Mem ; FunDom ; FunConstr ; FunApp ; FunExtTrig ],
+                                  [ FunExt ])
   | FunIsafcn ->
       ([ Mem ; FunDom ; FunConstr ; FunApp ],
                                   [ FunExt ])
@@ -658,9 +664,13 @@ let special_deps tla_smb =
       ([], [])
   | ExtTrigEq (TSet ty01 as ty0) ->
       ([ ExtTrig ],       [ ExtTrigEqDef ty0 ; ExtTrigEqTrigger ty01 ])
+  | ExtTrigEq (TFun _ as ty0) ->
+      ([ FunExtTrig ],    [ ExtTrigEqDef ty0 ; ExtTrigEqFunTrigger ])
   | ExtTrigEq ty0 ->
       ([],                [ ExtTrigEqDef ty0 ])
   | ExtTrig ->
+      ([], [])
+  | FunExtTrig ->
       ([], [])
   | IsSetOf ->
       ([], [])
@@ -694,7 +704,7 @@ let get_deps ~solver ~disable_arithmetic ~smt_set_extensionality tla_smb s =
       { dat_deps = smbs
       ; dat_axms = axms
       }
-  | Cast _ | Proj _ | True _ | Anon _ | ExtTrigEq _ | ExtTrig | IsSetOf ->
+  | Cast _ | Proj _ | True _ | Anon _ | ExtTrigEq _ | ExtTrig | FunExtTrig | IsSetOf ->
       let s, (smbs, axms) = special_deps tla_smb s in
       s,
       { dat_deps = smbs

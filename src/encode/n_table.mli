@@ -124,6 +124,7 @@ type tla_smb =
   | Anon of string * ty2
   | ExtTrigEq of ty
   | ExtTrig
+  | FunExtTrig
   | IsSetOf
 
 (** Inventory of the axioms that may be used in the Zipperposition encoding. *)
@@ -249,6 +250,7 @@ type tla_axm =
   | Typing of tla_smb (** Only for typed symbols *)
   | ExtTrigEqDef of ty
   | ExtTrigEqTrigger of ty
+  | ExtTrigEqFunTrigger
   | DisjointTrigger
   | EmptyComprehensionTrigger
   | AssertIsSetOf of int

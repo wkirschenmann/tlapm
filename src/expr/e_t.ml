@@ -495,6 +495,8 @@ type pat = expr list
 
 let pattern_prop = make "Expr.T.pattern_prop"
 
+let weight_prop = make "Expr.T.weight_prop"
+
 
 let add_pats oe pats =
   match query oe pattern_prop with

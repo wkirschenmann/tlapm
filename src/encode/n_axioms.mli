@@ -45,6 +45,7 @@ val op_intremainder_typing : unit -> expr
 
 val exttrigeq_def : ty0 -> expr
 val exttrigeq_trigger : ty0 -> expr
+val exttrigeq_fun_trigger : unit -> expr
 val disjoint_trigger : unit -> expr
 val emptycomprehension_trigger : unit -> expr
 val assert_issetof : int -> expr
@@ -94,7 +95,7 @@ val setof_elim : int -> expr
 
 (* {4 Functions} *)
 
-val fcn_ext : unit -> expr
+val fcn_ext : smt_set_extensionality:bool -> expr
 
 val fcnconstr_isafcn : unit -> expr
 val fcndom_def : unit -> expr

@@ -246,6 +246,9 @@ type pat = expr list
 val pattern_prop :
     pat list pfuncs
 
+(** SMT-LIB [:weight], attached next to the patterns *)
+val weight_prop : int pfuncs
+
 val add_pats :
     expr -> pat list -> expr
 val remove_pats :

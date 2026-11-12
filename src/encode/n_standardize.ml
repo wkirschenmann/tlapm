@@ -47,6 +47,30 @@ let is_set e =
       end
   | _ -> false
 
+(* An expression built by a function constructor: its equality with another
+   is a function equality, which FunExt decides. *)
+(* A variable bound by a quantifier inside the current formula: keep an
+   equality on it unmarked, so that Z3 can still eliminate the variable
+   (destructive equality resolution, needed by ENABLED goals).  [depth0] is
+   the size of the context where the formula starts; indices beyond the
+   local binders denote the sequent's declarations (VARIABLE, CONSTANT). *)
+let is_local_bvar depth0 hx e =
+  match e.core with
+  | Ix n -> n <= Deque.size hx - depth0
+  | _ -> false
+
+let is_fcn e =
+  match e.core with
+  | Apply ({ core = Opaque s } as op, _) when has op smb_prop ->
+      let smb = get op smb_prop in
+      begin match get_defn smb with
+      | FunConstr | FunExcept | Tuple _ | Rec _ | SeqCat | SeqAppend
+      | SeqTail | SeqSubSeq | SeqSelectSeq ->
+          true
+      | _ -> false
+      end
+  | _ -> false
+
 
 (* {3 Main} *)
 
@@ -411,39 +435,73 @@ let inv = function
   | Negative -> Positive
   | Neither -> Neither
 
+let is_lit e = match e.core with
+  | String _ | Num _ | Internal (B.TRUE | B.FALSE | B.BOOLEAN | B.STRING) -> true
+  | Opaque _ when has e smb_prop ->
+      begin match get_defn (get e smb_prop) with
+      | StrLit _ | IntLit _ | TIntLit _ | StrSet | IntSet | NatSet -> true
+      | _ -> false end
+  | Apply ({ core = Internal (B.Conj | B.Disj | B.Implies | B.Equiv | B.Neg
+                             | B.Eq | B.Neq | B.Mem | B.Notmem | B.Subseteq) }, _)
+  | Quant _ -> true
+  | _ -> false
+
+(* Whether an equality may need extensionality.  Sets and functions known
+   by their type or their constructor, as before; and, at strict polarity
+   (an equality to prove, a disequality assumed), an equality of unknown
+   type between two non-literals, such as [f' = f] where nothing tells
+   that [f] is a function. *)
+let ext_cand depth0 hx strict op e f =
+  let bound = is_local_bvar depth0 hx e || is_local_bvar depth0 hx f in
+  match query op Props.tpars_prop with
+  | Some [ TSet _ ] -> true
+  | Some [ TFun _ ] -> not bound
+  | Some [ TAtm TAIdv ] | Some [] | None ->
+      is_set e || is_set f
+      || (not bound
+          && (is_fcn e || is_fcn f
+              || (strict && not (is_lit e || is_lit f))))
+  | Some _ -> is_set e || is_set f
+
 let set_extensionality_visitor = object (self : 'self)
   inherit [pol] Expr.Visit.map as super
+
+  val mutable depth0 = 0
+
+  method! hyp ((_, hx) as scx) h =
+    depth0 <- Deque.size hx;
+    super#hyp scx h
 
   method expr (pol, hx as scx) oe =
     match oe.core with
     | Apply ({ core = Internal B.Eq } as op, [ e ; f ])
       when ((pol = Positive) || (pol = Neither))
-        && (match query op Props.tpars_prop with
-            | Some [ TSet _ ] -> true
-            | _ -> is_set e || is_set f) ->
-        let e = self#expr scx e in
-        let f = self#expr scx f in
+        && ext_cand depth0 hx (pol = Positive) op e f ->
         let ty0 =
           match query op Props.tpars_prop with
           | Some [ TSet ty0 ] -> TSet ty0
-          | _ -> TSet (TAtm TAIdv)
+          | Some [ TFun _ ] -> TFun (TAtm TAIdv, TAtm TAIdv)
+          | _ when is_set e || is_set f -> TSet (TAtm TAIdv)
+          | _ -> TFun (TAtm TAIdv, TAtm TAIdv)
         in
+        let e = self#expr scx e in
+        let f = self#expr scx f in
         let smb = mk_smb (ExtTrigEq ty0) in
         let opq = mk_opq smb $$ op in
         Apply (opq, [ e ; f ]) @@ oe
 
     | Apply ({ core = Internal B.Neq } as op, [ e ; f ])
       when ((pol = Negative) || (pol = Neither))
-        && (match query op Props.tpars_prop with
-            | Some [ TSet _ ] -> true
-            | _ -> is_set e || is_set f) ->
-        let e = self#expr scx e in
-        let f = self#expr scx f in
+        && ext_cand depth0 hx (pol = Negative) op e f ->
         let ty0 =
           match query op Props.tpars_prop with
           | Some [ TSet ty0 ] -> TSet ty0
-          | _ -> TSet (TAtm TAIdv)
+          | Some [ TFun _ ] -> TFun (TAtm TAIdv, TAtm TAIdv)
+          | _ when is_set e || is_set f -> TSet (TAtm TAIdv)
+          | _ -> TFun (TAtm TAIdv, TAtm TAIdv)
         in
+        let e = self#expr scx e in
+        let f = self#expr scx f in
         let smb = mk_smb (ExtTrigEq ty0) in
         let opq = mk_opq smb $$ op in
         Apply (Internal B.Neg %% [],
@@ -463,6 +521,12 @@ let set_extensionality_visitor = object (self : 'self)
         let e = self#expr (inv pol, hx) e in
         Apply (op, [ e ]) @@ oe
 
+    | If (c, e, f) ->
+        let c = self#expr (Neither, hx) c in
+        let e = self#expr scx e in
+        let f = self#expr scx f in
+        If (c, e, f) @@ oe
+
     | Apply (op, es) ->
         let es = List.map (self#expr (Neither, hx)) es in
         Apply (op, es) @@ oe
@@ -471,6 +535,7 @@ let set_extensionality_visitor = object (self : 'self)
 
   method sequent (pol, hx) sq =
     let (_, hx), hs = self#hyps (inv pol, hx) sq.context in
+    depth0 <- Deque.size hx;
     let e = self#expr (pol, hx) sq.active in
     (pol, hx), { context = hs ; active = e }
 end

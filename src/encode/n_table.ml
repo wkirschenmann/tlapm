@@ -105,6 +105,7 @@ type tla_smb =
   | Anon of string * ty2
   | ExtTrigEq of ty
   | ExtTrig
+  | FunExtTrig
   | IsSetOf
 
 type tla_axm =
@@ -229,6 +230,7 @@ type tla_axm =
   | Typing of tla_smb (** Only for typed symbols *)
   | ExtTrigEqDef of ty
   | ExtTrigEqTrigger of ty
+  | ExtTrigEqFunTrigger
   | DisjointTrigger
   | EmptyComprehensionTrigger
   | AssertIsSetOf of int
@@ -316,6 +318,7 @@ let tla_smb_desc = function
   | Anon (s, ty2) -> "Anon " ^ s ^ " " ^ ty2_to_string ty2
   | ExtTrigEq ty -> "ExtTrigEq " ^ ty_to_string ty
   | ExtTrig -> "ExtTrig"
+  | FunExtTrig -> "FunExtTrig"
   | IsSetOf -> "IsSetOf"
 
 let axm_desc = function
@@ -430,6 +433,7 @@ let axm_desc = function
   | Typing tla_smb -> "Typing " ^ tla_smb_desc tla_smb
   | ExtTrigEqDef ty -> "ExtTrigEqDef " ^ ty_to_string ty
   | ExtTrigEqTrigger ty -> "ExtTrigEqTrigger " ^ ty_to_string ty
+  | ExtTrigEqFunTrigger -> "ExtTrigEqFunTrigger"
   | DisjointTrigger -> "DisjointTrigger"
   | EmptyComprehensionTrigger -> "EmptyComprehensionTrigger"
   | AssertIsSetOf n -> Format.sprintf "AssertIsSetOf %d" n

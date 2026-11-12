@@ -45,7 +45,7 @@ let apps tla_smb es =
   let opq = assign opq smb_prop smb in
   app opq es
 
-let quant q xs ty0s ?pats e =
+let quant q xs ty0s ?pats ?wgt e =
   if xs <> [] then
     let xs =
       List.map2 begin fun x ty0 ->
@@ -53,6 +53,7 @@ let quant q xs ty0s ?pats e =
       end xs ty0s
     in
     let e = maybe_assign pattern_prop e pats in
+    let e = maybe_assign weight_prop e wgt in
     Quant (q, xs, e)
   else
     e.core
@@ -422,8 +423,12 @@ let op_typing t_smb =
   let n = List.length t_ty0s in
   let is_pred = (t_ty0 = t_bol) in
 
+  (* Weight 3 on the typing of + and <=: Z3 >= 4.8.10 otherwise loops on
+     them (each new Int term becomes a new Idv term and back).  Not on - and
+     *, where the weight costs more than it saves. *)
   quant Forall
   (gen "x" n) t_ty0s
+  ?wgt:(match t_smb with T.TIntPlus | T.TIntLteq -> Some 3 | _ -> None)
   ~pats:[ [
     apps i_smb
     (List.map2 begin fun e ty0 ->
@@ -1480,17 +1485,29 @@ let setof_elim n =
 
 (* {4 Functions} *)
 
-let fcn_ext () =
+(* With smt_set_extensionality, FunExt is guarded as SetExt is: it fires on
+   the pairs whose equality is in question (FunExtTrigger, set by
+   ExtTrigEqFunTrigger on the function equalities n_standardize marks),
+   instead of on every pair of functions. *)
+let exttrigeq_fun_trigger () =
   quant Forall
-  [ "f" ; "g" ] [ t_idv ; t_idv ]
+  [ "x" ; "y" ] [ t_idv ; t_idv ]
   ~pats:[ [
-    apps T.FunIsafcn
+    apps (T.ExtTrigEq (TFun (TAtm TAIdv, TAtm TAIdv)))
     [ Ix 2 %% []
-    ] %% []
-  ; apps T.FunIsafcn
-    [ Ix 1 %% []
+    ; Ix 1 %% []
     ] %% []
   ] ]
+  ( apps T.FunExtTrig
+    [ Ix 2 %% []
+    ; Ix 1 %% []
+    ] %% []
+  ) %% []
+
+let fcn_ext_q ?wgt pats =
+  quant Forall
+  [ "f" ; "g" ] [ t_idv ; t_idv ]
+  ?wgt ~pats
   ( appb B.Implies
     [ List (And,
       [ apps T.FunIsafcn
@@ -1535,6 +1552,19 @@ let fcn_ext () =
       ] %% []
     ] %% []
   ) %% []
+
+(* With set extensionality on, FunExt is instantiated eagerly on the pairs
+   that the standardizer marked (FunExtTrigger), and on every pair of
+   functions only at weight 12, as a fallback for equalities Z3 creates
+   itself (e.g. the components of vars' # vars under ENABLED). *)
+let fcn_ext ~smt_set_extensionality =
+  if smt_set_extensionality then
+    List (And,
+      [ fcn_ext_q [ [ apps T.FunExtTrig [ Ix 2 %% [] ; Ix 1 %% [] ] %% [] ] ]
+      ; fcn_ext_q ~wgt:12 [ [ apps T.FunIsafcn [ Ix 2 %% [] ] %% [] ; apps T.FunIsafcn [ Ix 1 %% [] ] %% [] ] ]
+      ]) %% []
+  else
+    fcn_ext_q [ [ apps T.FunIsafcn [ Ix 2 %% [] ] %% [] ; apps T.FunIsafcn [ Ix 1 %% [] ] %% [] ] ]
 
 let fcnconstr_isafcn () =
   seq
@@ -5001,7 +5031,7 @@ let get_axm ~solver ?(disable_arithmetic=false) ?(smt_set_extensionality=false) 
   | T.LteqReflexive -> lteq_reflexive ()
   | T.LteqTransitive -> lteq_transitive ()
   | T.LteqAntisym -> lteq_antisym ()
-  | T.FunExt -> fcn_ext ()
+  | T.FunExt -> fcn_ext ~smt_set_extensionality
   | T.FunConstrIsafcn -> fcnconstr_isafcn () |> mark T.FunConstr
   | T.FunSetDef -> fcnset_def ()
   | T.FunSetIntro -> fcnset_intro ()
@@ -5070,6 +5100,7 @@ let get_axm ~solver ?(disable_arithmetic=false) ?(smt_set_extensionality=false) 
   | T.Typing tla_smb -> op_typing tla_smb
   | T.ExtTrigEqDef ty0 -> exttrigeq_def ty0
   | T.ExtTrigEqTrigger ty0 -> exttrigeq_trigger ty0
+  | T.ExtTrigEqFunTrigger -> exttrigeq_fun_trigger ()
   | T.DisjointTrigger -> disjoint_trigger ()
   | T.EmptyComprehensionTrigger -> emptycomprehension_trigger ()
   | T.AssertIsSetOf n -> assert_issetof n |> mark (T.SetOf n)

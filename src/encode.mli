@@ -104,6 +104,7 @@ module Table : sig
     | Anon of string * ty2
     | ExtTrigEq of ty
     | ExtTrig
+    | FunExtTrig
     | IsSetOf
 end
 
