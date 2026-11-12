@@ -105,15 +105,19 @@ $(ISABELLE_DIR)/src/TLA+: $(ISABELLE_DIR)
 # The layer also defines use_thy (tlapm_use_thy.ML), which Params.isabelle
 # calls and Isabelle2026 no longer provides.
 # etc/ml_paths.txt records ML_HOME (Poly/ML's directory) and the heaps'
-# directory, both of which name Poly/ML's version and platform.
+# directory, both of which name Poly/ML's version and platform.  Since
+# Isabelle2026, "isabelle env" and "isabelle getenv" no longer define
+# ML_HOME and ML_IDENTIFIER: the ML process itself reports them.
 $(ISABELLE_DIR)/etc/ml_paths.txt: $(ISABELLE_DIR)/src/TLA+ tlapm_use_thy.ML
+	rm -f $@ $@.tmp
 	cd $(ISABELLE_DIR) \
-		&& ./bin/isabelle env sh -c 'echo "$$ML_HOME"; echo "heaps/$$ML_IDENTIFIER"' > etc/ml_paths.txt
-	cd $(ISABELLE_DIR) \
-		&& HEAPS=$$(sed -n 2p etc/ml_paths.txt) \
 		&& ./bin/isabelle ML_process -d src/TLA+ -l TLA+ \
 			-f ../tlapm_use_thy.ML \
-			-e 'ML_Heap.save_child "'"$$HEAPS"'/Options";'
+			-e 'let val heaps = "heaps/" ^ getenv "ML_SYSTEM" ^ "_" ^ ML_System.platform in File.write (Path.explode "'"$$PWD"'/etc/ml_paths.txt.tmp") (getenv "ML_HOME" ^ "\n" ^ heaps ^ "\n"); ML_Heap.save_child (heaps ^ "/Options") end;'
+	ML_HOME=$$(sed -n 1p $@.tmp) && HEAPS=$$(sed -n 2p $@.tmp) \
+		&& test -n "$$ML_HOME" && test -d "$$ML_HOME" \
+		&& test -f "$(ISABELLE_DIR)/$$HEAPS/Options" \
+		&& mv $@.tmp $@
 
 # Assemble the minimal subset of the built distribution that tlapm actually
 # needs at runtime.
@@ -123,7 +127,8 @@ Isabelle-install: $(ISABELLE_DIR)/etc/ml_paths.txt
 	cp -a $(ISABELLE_DIR)/etc/ISABELLE_IDENTIFIER $@/etc/ISABELLE_IDENTIFIER
 	ML_HOME=$$(sed -n 1p $(ISABELLE_DIR)/etc/ml_paths.txt) \
 		&& HEAPS=$(ISABELLE_DIR)/$$(sed -n 2p $(ISABELLE_DIR)/etc/ml_paths.txt) \
-		&& cp -a $$ML_HOME/. $@/poly/ \
+		&& test -n "$$ML_HOME" && test -d "$$ML_HOME" \
+		&& cp -a "$$ML_HOME"/. $@/poly/ \
 		&& cp -a $$HEAPS/Pure $@/heaps/Pure \
 		&& cp -a $$HEAPS/TLA+ $@/heaps/TLA+ \
 		&& cp -a $$HEAPS/Options $@/heaps/Options
