@@ -1246,7 +1246,7 @@ ML_file "simplifier_setup.ML"
 ML \<open>open Simpdata\<close>
 
 setup \<open>
-  map_theory_simpset (put_simpset PL_basic_ss) #>
+  Simplifier.map_theory_simpset (put_simpset PL_basic_ss) #>
   Simplifier.method_setup Splitter.split_modifiers
 \<close>
 
@@ -1739,7 +1739,7 @@ ML \<open>
 \<close>
 
 declaration \<open>
-  fn _ => Simplifier.map_ss (fn ss => ss
+  fn _ => Simplifier.map_simpset (fn ss => ss
     |> Simplifier.set_mksimps (fn ctxt =>
         Simpdata.mksimps Simpdata.mksimps_pairs ctxt))
 \<close>

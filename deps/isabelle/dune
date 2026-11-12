@@ -5,6 +5,7 @@
  (alias default)
  (deps
   "dune.mk"
+  "tlapm_use_thy.ML"
   (source_tree ../../isabelle)
   (sandbox none))
  (targets

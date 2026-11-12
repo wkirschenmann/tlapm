@@ -131,20 +131,20 @@ struct
     (fn i => REPEAT_DETERM (match_tac ctxt @{thms simp_impliesI} i)) THEN' sol_tac
   end;
 
-  val unsafe_solver = mk_solver "PredicateLogic unsafe" unsafe_solver_tac;
+  val unsafe_solver = Simplifier.mk_solver "PredicateLogic unsafe" unsafe_solver_tac;
 
   (*No premature instantiation of variables during simplification*)
   fun safe_solver_tac ctxt =
     (fn i => REPEAT_DETERM (match_tac ctxt @{thms simp_impliesI} i)) THEN'
     FIRST' [match_tac ctxt (reflexive_thm :: @{thm trueI} :: @{thm refl} :: @{thm iff_refl} :: @{thm notFalseI} :: Simplifier.prems_of ctxt),
             eq_assume_tac, ematch_tac ctxt [@{thm falseE}, @{thm not_refl_False}]];
-  val safe_solver = mk_solver "PredicateLogic safe" safe_solver_tac;
+  val safe_solver = Simplifier.mk_solver "PredicateLogic safe" safe_solver_tac;
 
   (* Basic infrastructure for simplification *)
   val PL_basic_ss =
-    empty_simpset @{context}
-    setSSolver safe_solver
-    setSolver unsafe_solver
+    Simplifier.empty_simpset @{context}
+    |> Simplifier.set_safe_solver safe_solver
+    |> Simplifier.set_unsafe_solver unsafe_solver
     |> Simplifier.set_subgoaler asm_simp_tac
     |> Simplifier.set_mksimps (mksimps mksimps_pairs)
     |> Simplifier.set_mkeqTrue mk_eq_True
@@ -181,7 +181,7 @@ struct
   open Clasimp;
 
   fun unfold_tac ctxt ths =
-    ALLGOALS (full_simp_tac (clear_simpset (put_simpset PL_basic_ss ctxt) addsimps ths))
+    ALLGOALS (full_simp_tac (Simplifier.add_simps ths (Simplifier.clear_simpset (put_simpset PL_basic_ss ctxt))))
 
 end;  (* structure Simpdata *)
 

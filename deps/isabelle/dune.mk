@@ -4,22 +4,35 @@
 OS_TYPE=$(patsubst CYGWIN%,Cygwin,$(shell uname))
 HOST_CPU=$(shell uname -m)
 
-ISABELLE_VSN=Isabelle2025
+ISABELLE_VSN=Isabelle2026
 
+# Isabelle2026 ships one archive per OS and CPU (Isabelle2025's macOS
+# archive held both CPUs).
 ifeq ($(OS_TYPE),Linux)
-	ISABELLE_SHA256=3d1d66de371823fe31aa8ae66638f73575bac244f00b31aee1dcb62f38147c56
+ifeq ($(HOST_CPU),aarch64)
+	ISABELLE_SHA256=edfb1670d8bdfa42488829ca0379c219b874a1e7548340c9951ffd2250da5a7f
+	ISABELLE_ARCHIVE=$(ISABELLE_VSN)_linux_arm.tar.gz
+else
+	ISABELLE_SHA256=858c995b32216b3876bf395c3be843147d1f1eee404bc6c958d7534ee335e48d
 	ISABELLE_ARCHIVE=$(ISABELLE_VSN)_linux.tar.gz
+endif
 	ISABELLE_ARCHIVE_TYPE=tgz
 	ISABELLE_ARCHIVE_DIR=$(ISABELLE_VSN)
 endif
 ifeq ($(OS_TYPE),Darwin)
-	ISABELLE_SHA256=ea5754c228857f5d9d3ae254ec9814797f2453ea290df20b2f6dcb2ef0e2e7f8
+ifeq ($(HOST_CPU),arm64)
+	ISABELLE_SHA256=7244e596d44ee9fbb8b988ef2990474b3385fa4a7ec1343867b224a13b6ddc28
+	ISABELLE_ARCHIVE=$(ISABELLE_VSN)_macos_arm.tar.gz
+else
+	ISABELLE_SHA256=ac750bf2a124005109df686177405551c9c3a61ad0d1064d5958b0a27af3f079
 	ISABELLE_ARCHIVE=$(ISABELLE_VSN)_macos.tar.gz
+endif
 	ISABELLE_ARCHIVE_TYPE=tgz
 	ISABELLE_ARCHIVE_DIR=$(ISABELLE_VSN).app
 endif
 ifeq ($(OS_TYPE),Cygwin)
-	# TODO: Fix this.
+	# TODO: Fix this.  Isabelle2026 publishes no Cygwin bundle (only
+	# Isabelle2026.exe); these lines still name Isabelle2025's.
 	ISABELLE_SHA256=ab449a85c0f7c483027c2000889ec93b3f7df565d9d0c6902af2d666b3b58220
 	ISABELLE_ARCHIVE=$(ISABELLE_VSN)_bundle_x86-cygwin.tar.gz
 	ISABELLE_ARCHIVE_TYPE=tgz
@@ -61,14 +74,12 @@ ifeq ($(ISABELLE_ARCHIVE_TYPE),tgz)
 	tar -xzf $<
 	mv $(ISABELLE_ARCHIVE_DIR) $(ISABELLE_DIR)
 endif
-	cd $(ISABELLE_DIR) && rm -rf ./contrib/e-3.1-1/src/lib/
+	cd $(ISABELLE_DIR) && rm -rf ./contrib/e-*/src/lib/
 ifeq ($(OS_TYPE),Darwin)
-	cd $(ISABELLE_DIR) && cd contrib/jdk-21.0.6/arm64-darwin/ \
-		&& (find . -type link | xargs rm) \
-		&& mv zulu-21.jdk/Contents/Home/* ./
-	cd $(ISABELLE_DIR) && cd contrib/jdk-21.0.6/x86_64-darwin/ \
-		&& (find . -type link | xargs rm) \
-		&& mv zulu-21.jdk/Contents/Home/* ./
+	cd $(ISABELLE_DIR) && for d in contrib/jdk-*/*-darwin; do \
+		( cd $$d && (find . -type link | xargs rm) \
+			&& mv zulu-*.jdk/Contents/Home/* ./ ) || exit 1; \
+	done
 endif
 	cp -r $(ISABELLE_DIR) $(ISABELLE_TEST)
 
@@ -88,29 +99,34 @@ $(ISABELLE_DIR)/src/TLA+: $(ISABELLE_DIR)
 		&& ./bin/isabelle build -o system_heaps -o document=false -b -c -v -d src/TLA+ TLA+ \
 		&& rm -rf ./heaps/polyml-*/log/*
 
-# Bake the options "isabelle process -l TLA+" would otherwise reload via the
-# JVM on every invocation into a small extra heap layer on top of TLA+, so
-# Params.isabelle (src/params.ml) can just load that layer instead.
-$(ISABELLE_DIR)/etc/ml_platform.txt: $(ISABELLE_DIR)/src/TLA+
+# Bake the options "isabelle ML_process -l TLA+" would otherwise reload via
+# the JVM on every invocation into a small extra heap layer on top of TLA+,
+# so Params.isabelle (src/params.ml) can just load that layer instead.
+# The layer also defines use_thy (tlapm_use_thy.ML), which Params.isabelle
+# calls and Isabelle2026 no longer provides.
+# etc/ml_paths.txt records ML_HOME (Poly/ML's directory) and the heaps'
+# directory, both of which name Poly/ML's version and platform.
+$(ISABELLE_DIR)/etc/ml_paths.txt: $(ISABELLE_DIR)/src/TLA+ tlapm_use_thy.ML
 	cd $(ISABELLE_DIR) \
-		&& ./bin/isabelle env sh -c 'basename "$$ML_HOME"' > etc/ml_platform.txt
+		&& ./bin/isabelle env sh -c 'echo "$$ML_HOME"; echo "heaps/$$ML_IDENTIFIER"' > etc/ml_paths.txt
 	cd $(ISABELLE_DIR) \
-		&& PLATFORM=$$(cat etc/ml_platform.txt) \
-		&& ./bin/isabelle process \
-			-e 'ML_Heap.save_child "heaps/polyml-5.9.1_'"$$PLATFORM"'/Options";' \
-			-d src/TLA+ -l TLA+
+		&& HEAPS=$$(sed -n 2p etc/ml_paths.txt) \
+		&& ./bin/isabelle ML_process -d src/TLA+ -l TLA+ \
+			-f ../tlapm_use_thy.ML \
+			-e 'ML_Heap.save_child "'"$$HEAPS"'/Options";'
 
 # Assemble the minimal subset of the built distribution that tlapm actually
 # needs at runtime.
-Isabelle-install: $(ISABELLE_DIR)/etc/ml_platform.txt
+Isabelle-install: $(ISABELLE_DIR)/etc/ml_paths.txt
 	rm -rf $@
 	mkdir -p $@/poly $@/etc $@/heaps
 	cp -a $(ISABELLE_DIR)/etc/ISABELLE_IDENTIFIER $@/etc/ISABELLE_IDENTIFIER
-	PLATFORM=$$(cat $(ISABELLE_DIR)/etc/ml_platform.txt) \
-		&& cp -a $(ISABELLE_DIR)/contrib/polyml-5.9.1/$$PLATFORM/. $@/poly/ \
-		&& cp -a $(ISABELLE_DIR)/heaps/polyml-5.9.1_$$PLATFORM/Pure $@/heaps/Pure \
-		&& cp -a $(ISABELLE_DIR)/heaps/polyml-5.9.1_$$PLATFORM/TLA+ $@/heaps/TLA+ \
-		&& cp -a $(ISABELLE_DIR)/heaps/polyml-5.9.1_$$PLATFORM/Options $@/heaps/Options
+	ML_HOME=$$(sed -n 1p $(ISABELLE_DIR)/etc/ml_paths.txt) \
+		&& HEAPS=$(ISABELLE_DIR)/$$(sed -n 2p $(ISABELLE_DIR)/etc/ml_paths.txt) \
+		&& cp -a $$ML_HOME/. $@/poly/ \
+		&& cp -a $$HEAPS/Pure $@/heaps/Pure \
+		&& cp -a $$HEAPS/TLA+ $@/heaps/TLA+ \
+		&& cp -a $$HEAPS/Options $@/heaps/Options
 
 clean:
 	rm -rf $(ISABELLE_ARCHIVE) $(ISABELLE_DIR) $(ISABELLE_TEST) Isabelle-install
